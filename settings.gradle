@@ -3,13 +3,16 @@ pluginManagement {
         gradlePluginPortal()
         mavenCentral()
     }
+    includeBuild("jazzer-plugin")
 }
 
 plugins {
     id 'io.micronaut.build.shared.settings' version '5.2.1'
 }
 
-rootProject.name = 'project-template-parent'
+include("fuzzing-tests")
+
+rootProject.name = 'fuzzing-parent'
 
 include 'project-template'
 include 'project-template-bom'

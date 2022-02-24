@@ -1,0 +1,16 @@
+plugins {
+    id "java-gradle-plugin"
+}
+
+repositories {
+    mavenCentral()
+}
+
+gradlePlugin {
+    plugins {
+        jazzer {
+            id = "io.micronaut.internal.jazzer"
+            implementationClass = "io.micronaut.internal.jazzer.JazzerPlugin"
+        }
+    }
+}
