@@ -1,6 +1,6 @@
 # Contributing Code or Documentation to Micronaut
 
-Sign the [Contributor License Agreement (CLA)](https://cla-assistant.io/micronaut-projects/micronaut-fuzzing). This is required before any of your code or pull-requests are accepted.
+Sign the [Contributor License Agreement (CLA)](https://cla-assistant.io/micronaut-projects/micronaut-project-template). This is required before any of your code or pull-requests are accepted.
 
 ## Finding Issues to Work on
 
@@ -8,15 +8,15 @@ If you are interested in contributing to Micronaut and are looking for issues to
 
 ## JDK Setup
 
-Micronaut fuzzing currently requires JDK 8.
+Micronaut project-template currently requires JDK 17.
 
 ## IDE Setup
 
-Micronaut fuzzing can be imported into IntelliJ IDEA by opening the `build.gradle` file.
+Micronaut project-template can be imported into IntelliJ IDEA by opening the `build.gradle` file.
 
 ## Docker Setup
 
-Micronaut fuzzing tests currently require Docker to be installed.
+Micronaut project-template tests currently require Docker to be installed.
 
 ## Running Tests
 
@@ -57,6 +57,22 @@ Once you are satisfied with your changes:
 - Push your changes to your remote branch on GitHub
 - Send us a [pull request](https://help.github.com/articles/creating-a-pull-request)
 
+## Merging a pull request
+
+Before we merge into a module's `master` branch a PR, we have to consider.
+
+Can this PR be merged into a patch release (e.g. documentation fixes, bug fix, patch transitive dependency upgrade, breaking change due to security, GitHub actions sync, Micronaut Build Plugin upgrade)?
+
+Should this PR be merged into the next minor version of the module? For example, a new feature, a new module, or a minor transitive dependency upgrade.
+
+If the PR is going into the next minor version of the module, we need to release a patch version, and branch off `master` a new branch for the current minor module's version. If the `gradle.properties`'s `projectVersion` is 3.1.2-SNAPSHOT the branch should be named 3.1.x, and we push it to GitHub. If `master` contains only commits such as GitHub actions sync (no commits with benefits to users), we can branch off without doing a patch release.
+
+When you merge a PR which will go into the next Module's minor.
+
+- Update `gradle.properties`'s `githubCoreBranch` to point to the next minor branch of Micronaut Core.
+- Update `gradle.properties`'s `projectVersion` to the next minor snapshot.
+- Upgrade the module to the latest version of Micronaut.
+
 ## Checkstyle
 
 We want to keep the code clean, following good practices about organization, Javadoc, and style as much as possible.
@@ -77,6 +93,6 @@ In this case, to fix the issues, we need to:
 
 - Add one empty line before `package` in line 16
 - Add the Javadoc for the constructor in line 27
-- Add an space after `if` in line 34
+- Add a space after `if` in line 34
 
 The plugin also adds a new tab in the bottom of the IDE to run Checkstyle and show errors and warnings. We recommend that you run the report and fix all issues before submitting a pull request.

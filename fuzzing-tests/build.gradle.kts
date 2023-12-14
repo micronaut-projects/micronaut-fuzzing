@@ -1,5 +1,5 @@
 plugins {
-    id("io.micronaut.build.internal.module")
+    id("io.micronaut.build.internal.fuzzing-module")
     id("io.micronaut.internal.jazzer")
 }
 
@@ -13,19 +13,12 @@ group = "io.micronaut.fuzzing"
 dependencies {
     //api(mn.micronaut.json.core)
 
-    implementation("io.micronaut:micronaut-http-server-netty:3.4.0-SNAPSHOT")
-    implementation("io.projectreactor:reactor-core:3.4.14")
+    implementation(mn.micronaut.http.server.netty)
+    implementation(mn.reactor)
 
-    implementation("ch.qos.logback:logback-classic")
+    implementation("ch.qos.logback:logback-classic:1.4.14")
 
     implementation("com.code-intelligence:jazzer-api:0.10.0")
-
-    implementation("io.netty:netty-common:4.1.75.Final-SNAPSHOT")
-}
-
-micronautBuild {
-    sourceCompatibility.set("17")
-    targetCompatibility.set("17")
 }
 
 tasks.named<io.micronaut.internal.jazzer.JazzerTask>("jazzer") {

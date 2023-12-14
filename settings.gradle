@@ -7,12 +7,15 @@ pluginManagement {
 }
 
 plugins {
-    id 'io.micronaut.build.shared.settings' version '5.2.1'
+    id 'io.micronaut.build.shared.settings' version '6.6.1'
 }
-
-include("fuzzing-tests")
 
 rootProject.name = 'fuzzing-parent'
 
-include 'project-template'
-include 'project-template-bom'
+include("fuzzing-tests")
+
+enableFeaturePreview 'TYPESAFE_PROJECT_ACCESSORS'
+
+micronautBuild {
+    importMicronautCatalog()
+}

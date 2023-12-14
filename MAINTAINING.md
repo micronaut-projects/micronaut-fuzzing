@@ -88,7 +88,7 @@ follow a slightly different strategy.
 
 All Micronaut repos have 2 dependency upgrade checking mechanism:
 
-1. Dependabot: it has the advantage that it performs dependency upgrades not only on build dependencies, but also on
+1. Renovate: it has the advantage that it performs dependency upgrades not only on build dependencies, but also on
    GitHub Actions workflows. On the other hand, its biggest downside is that it's unable to find newer versions for
    those defined in `gradle.properties`. It will also send different PRs for the same version upgrade if the artifact ID
    is different. For example, if you have `com.example:client:1.0` and `com.example:server:1.0`, and a new 1.1 version
@@ -99,34 +99,34 @@ All Micronaut repos have 2 dependency upgrade checking mechanism:
    during weekdays.
 
 The consequence of having both approaches in place is that we get multiple dependency upgrade PRs: one created by
-`micronaut-build` via our automation, and one or many (one per dependency) created by Dependabot. When merging those, it
+`micronaut-build` via our automation, and one or many (one per dependency) created by Renovate. When merging those, it
 is better to prefer the `micronaut-build` ones, if possible, for 2 reasons: a) they attempt to upgrade multiple dependencies
-in a single PR, which creates less noise in the Git history; b) Once you merge that, Dependabot will react and automatically
-close its own PRs if the dependecy is up-to-date.
+in a single PR, which creates less noise in the Git history; b) Once you merge that, Renovate will react and automatically
+close its own PRs if the dependency is up-to-date.
 
 When an upgrade to a new version arrives, we need to be careful when merging, so that we don't introduce an
 unnecessary upgrade burden on our users. Read the
 [Module Upgrade Strategy](https://github.com/micronaut-projects/micronaut-core/wiki/Module-Upgrade-Strategy) for more
 information.
 
-Note that if a new version arrives and we are not ready yet to do the upgrade, you need to
+Note that if a new version arrives, and we are not ready yet to do the upgrade, you need to
 [pin the old version](https://github.com/micronaut-projects/micronaut-build/#configuration-options), because otherwise,
-Dependabot and our workflow will keep sending PRs. You should also create an issue to upgrade so that it's not forgotten.
+Renovate and our workflow will keep sending PRs. You should also create an issue to upgrade so that it's not forgotten.
 
 #### Files sync
 
-We have a [template repo](https://github.com/micronaut-projects/micronaut-fuzzing) that we use as the single
+We have a [template repo](https://github.com/micronaut-projects/micronaut-project-template) that we use as the single
 source of truth for certain files. It is used as a template to create new repos, and changes to certain files in the
 template repo will get propagated automatically. The files propagated are:
 
 * Workflow files (`.github/workflows/*`). They are copied using rsync"
-  * `central-sync.yml`.
-  * `dependency-update.yml`.
-  * `graalvm.yml`.
-  * `gradle.yml`.
-  * `release.yml`.
-  * `release-notes.yml`.
-* Dependabot configuration (`.github/dependabot.yml`).
+    * `central-sync.yml`.
+    * `dependency-update.yml`.
+    * `graalvm.yml`.
+    * `gradle.yml`.
+    * `release.yml`.
+    * `release-notes.yml`.
+* Renovate configuration (`.github/renovate.json`).
 * Gradle wrapper.
 * `.gitignore`.
 * `ISSUE_TEMPLATE.md`, `LICENSE`, `MAINTAINING.md`, `config/HEADER` and `config/spotless.license.java`.
@@ -162,14 +162,14 @@ First of all, all the repos have an automatic changelog generation mechanism: wh
 release notes will contain pull requests merged and issues closed since the last release.
 
 When the module is ready for a new release, check the generated release notes, and make changes if needed (for example,
-you can add an introduction paragraph highligting some items included in the release). If the version you are going to
+you can add an introduction paragraph highlighting some items included in the release). If the version you are going to
 publish is not a new patch version, but a new minor or major, update the release notes text to reflect the new version.
 If you are publishing a milestone or release candidate, check the pre-release checkbox.
 
 Note that the release tags must be preceded with `v`, e.g.: `v1.2.3`.
 
 Once you publish the GitHub release, the
-[Release GitHub Action workflow](https://github.com/micronaut-projects/micronaut-fuzzing/blob/master/.github/workflows/release.yml)
+[Release GitHub Action workflow](https://github.com/micronaut-projects/micronaut-project-template/blob/master/.github/workflows/release.yml)
 will kick off, performing the following steps:
 
 * Pre-release: sets the `projectVersion` property in `gradle.properties` to the release version, and commit and pushes
@@ -177,8 +177,8 @@ will kick off, performing the following steps:
 * Generates documentation guide and publishes it to the `gh-pages` branch.
 * Sends a pull request to Core to update the BOM.
 * Post-release:
-  * Determines the next patch version, and sets it as a `SNAPSHOT` version.
-  * Closes the milestone that matches the release version, and creates a new one for the next patch.
+    * Determines the next patch version, and sets it as a `SNAPSHOT` version.
+    * Closes the milestone that matches the release version, and creates a new one for the next patch.
 
 If everything goes well, you now need to manually trigger the Maven Central publishing workflow via the GitHub UI.
 
@@ -197,14 +197,14 @@ Micronaut `2.2.0` BOM. If the next version you want to publish is:
 
 * A new patch release (`1.0.1`): simply publish the existing draft release.
 * A new minor release (`1.1.0`):
-  * Before the release, push a `1.0.x` branch off `master`.
-  * Bump the version in master to `1.1.0-SNAPSHOT`.
-  * Set the `githubCoreBranch` property to `2.3.x` (or `3.0.x` if it will be the next one).
-  * Edit the draft release setting the version to `1.1.0` in the release title, body, tag, etc.
-  * Publish the release.
+    * Before the release, push a `1.0.x` branch off `master`.
+    * Bump the version in master to `1.1.0-SNAPSHOT`.
+    * Set the `githubCoreBranch` property to `2.3.x` (or `3.0.x` if it will be the next one).
+    * Edit the draft release setting the version to `1.1.0` in the release title, body, tag, etc.
+    * Publish the release.
 * A new major release (`2.0.0`):
-  * Before the release, push a `1.0.x` branch off `master`.
-  * Bump the version in master to `2.0.0-SNAPSHOT`.
-  * Set the `githubCoreBranch` property to `3.0.x` (or `2.3.x` if this new major version doesn't introduce breaking changes).
-  * Edit the draft release setting the version to `2.0.0` in the release title, body, tag, etc.
-  * Publish the release.
+    * Before the release, push a `1.0.x` branch off `master`.
+    * Bump the version in master to `2.0.0-SNAPSHOT`.
+    * Set the `githubCoreBranch` property to `3.0.x` (or `2.3.x` if this new major version doesn't introduce breaking changes).
+    * Edit the draft release setting the version to `2.0.0` in the release title, body, tag, etc.
+    * Publish the release.
