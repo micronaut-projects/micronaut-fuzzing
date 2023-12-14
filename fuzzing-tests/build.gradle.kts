@@ -23,11 +23,6 @@ dependencies {
     implementation("io.netty:netty-common:4.1.75.Final-SNAPSHOT")
 }
 
-micronautBuild {
-    sourceCompatibility.set("17")
-    targetCompatibility.set("17")
-}
-
 tasks.named<io.micronaut.internal.jazzer.JazzerTask>("jazzer") {
     // todo: fetch on-demand from gh releases
     jazzerBinary.set(File("/home/yawkat/dev/scratch/jazzer/jazzer"))
