@@ -62,10 +62,19 @@ public abstract class JazzerTask extends DefaultTask {
     @Optional
     public abstract Property<Integer> getJobs();
 
+    @Input
+    @Optional
+    public abstract Property<Boolean> getOnlyAscii();
+
     @InputFile
     @Nonnull
     @Optional
     public abstract RegularFileProperty getMinimizeCrashFile();
+
+    @InputFile
+    @Nonnull
+    @Optional
+    public abstract RegularFileProperty getDictionaryFile();
 
     @Inject
     protected abstract ExecOperations getExecOperations();
@@ -93,6 +102,12 @@ public abstract class JazzerTask extends DefaultTask {
                 }
                 if (getInstrumentationExcludes().isPresent() && !getInstrumentationExcludes().get().isEmpty()) {
                     args.add("--instrumentation_excludes=" + joinPlatform(getInstrumentationExcludes().get()));
+                }
+                if (getOnlyAscii().isPresent()) {
+                    args.add("-only_ascii=" + (getOnlyAscii().get() ? "1" : "0"));
+                }
+                if (getDictionaryFile().isPresent()) {
+                    args.add("-dict=" + getMinimizeCrashFile().getAsFile().get().getPath());
                 }
                 if (getMinimizeCrashFile().isPresent()) {
                     args.add("-minimize_crash=1");
