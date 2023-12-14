@@ -1,5 +1,5 @@
 plugins {
-    id("io.micronaut.build.internal.module")
+    id("io.micronaut.build.internal.fuzzing-module")
     id("io.micronaut.internal.jazzer")
 }
 
@@ -25,20 +25,24 @@ dependencies {
 
 tasks.named<io.micronaut.internal.jazzer.JazzerTask>("jazzer") {
     // todo: fetch on-demand from gh releases
-    jazzerBinary.set(File("/home/yawkat/dev/scratch/jazzer/jazzer"))
+    jazzerBinary.set(File("/home/yawkat/Downloads/jazzer"))
     targetClasses.set(listOf(
         //"io.micronaut.fuzzing.toml.TomlTarget",
         //"io.micronaut.fuzzing.http.HttpTarget",
-        "io.micronaut.fuzzing.http.EmbeddedHttpTarget",
+        //"io.micronaut.fuzzing.http.EmbeddedHttpTarget",
+        //"io.micronaut.fuzzing.CastTarget",
+        //"io.micronaut.fuzzing.json.JsonCounterTarget",
+        "io.micronaut.fuzzing.json.JsonCounterSplitTarget",
+        //"io.micronaut.fuzzing.json.JsonCounterSplitUnwrappedTarget",
     ))
     jvmArgs.set(listOf(
         "-Xmx512M",
-        "-Dio.netty.leakDetection.level=paranoid",
-        "-Dio.netty.leakDetection.targetRecords=100"
     ))
-    instrumentationIncludes.set(listOf("io.micronaut.**"))
-    //forks.set(8)
+    instrumentationIncludes.set(listOf("io.micronaut.fuzzing.json.**", "com.fasterxml.jackson.core.json.**"))
+    forks.set(16)
     // todo: store in repo
-    corpus.set(File("/home/yawkat/dev/scratch/go-fuzz-corpus/httpreq/corpus"))
+    //corpus.set(File("/home/yawkat/dev/scratch/go-fuzz-corpus/httpreq/corpus"))
+    //corpus.set(File("../compile-corpus"))
+    //onlyAscii.set(true)
     //minimizeCrashFile.set(File("crash-cca31614e76829eed48909625efe6b36c150efbe"))
 }
