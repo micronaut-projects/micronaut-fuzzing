@@ -14,13 +14,13 @@ dependencies {
     //api(mn.micronaut.json.core)
 
     implementation("io.micronaut:micronaut-http-server-netty:3.4.0-SNAPSHOT")
-    implementation("io.projectreactor:reactor-core:3.4.14")
+    implementation("io.projectreactor:reactor-core:3.6.4")
 
     implementation("ch.qos.logback:logback-classic")
 
-    implementation("com.code-intelligence:jazzer-api:0.10.0")
+    implementation("com.code-intelligence:jazzer-api:0.22.1")
 
-    implementation("io.netty:netty-common:4.1.75.Final-SNAPSHOT")
+    implementation("io.netty:netty-common:4.1.108.Final")
 }
 
 micronautBuild {
