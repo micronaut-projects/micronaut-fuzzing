@@ -1,4 +1,4 @@
-root = true
+oot = true
 
 [*]
 trim_trailing_whitespace = true
@@ -11,6 +11,9 @@ end_of_line = lf
 
 [{*.bat,*.cmd}]
 end_of_line = crlf
+
+[{*.mustache,*.ftl}]
+insert_final_newline = false
 
 [*.java]
 indent_size = 4

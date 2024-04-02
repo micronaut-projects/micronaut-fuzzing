@@ -8,6 +8,7 @@ import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.Classpath;
 import org.gradle.api.tasks.Input;
+import org.gradle.api.tasks.InputDirectory;
 import org.gradle.api.tasks.InputFile;
 import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.Nested;
@@ -39,7 +40,7 @@ public abstract class JazzerTask extends DefaultTask {
     @Optional
     public abstract ListProperty<String> getJvmArgs();
 
-    @Input
+    @InputDirectory
     @Optional
     public abstract DirectoryProperty getCorpus();
 
@@ -94,7 +95,6 @@ public abstract class JazzerTask extends DefaultTask {
                 args.add("--cp=" + getClasspath().getAsPath());
                 args.add("--target_class=" + targetClass);
                 if (getJvmArgs().isPresent() && !getJvmArgs().get().isEmpty()) {
-                    // todo: ':' won't work on windows
                     args.add("--jvm_args=" + joinPlatform(getJvmArgs().get()));
                 }
                 if (getInstrumentationIncludes().isPresent() && !getInstrumentationIncludes().get().isEmpty()) {
