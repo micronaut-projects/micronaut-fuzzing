@@ -43,6 +43,7 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
             collectArgs(args, targetClass);
             String sh = """
                 #!/bin/bash
+                # LLVMFuzzerTestOneInput <-- for fuzzer detection (see test_all.py)
                 this_dir=$(dirname "$0")
                 exec java -cp $this_dir'/libs/*' com.code_intelligence.jazzer.Jazzer %s $@
                 """.formatted(String.join(" ", args));
