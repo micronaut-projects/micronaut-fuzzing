@@ -5,7 +5,6 @@ plugins {
 
 repositories {
     mavenCentral()
-    mavenLocal() // TODO
 }
 
 group = "io.micronaut.fuzzing"
@@ -20,6 +19,15 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:1.4.14")
 
     implementation("com.code-intelligence:jazzer-api:0.22.1")
+}
+
+tasks.named<io.micronaut.internal.jazzer.PrepareClusterFuzzTask>("prepareClusterFuzz") {
+    agent.set(File("/home/yawkat/bin/jazzer/0.22.1/jazzer_standalone.jar"))
+    targetClasses.set(listOf(
+        //"io.micronaut.fuzzing.http.HttpTarget",
+        "io.micronaut.fuzzing.http.EmbeddedHttpTarget",
+        "io.micronaut.fuzzing.http.MediaTypeTarget"
+    ))
 }
 
 tasks.named<io.micronaut.internal.jazzer.JazzerTask>("jazzer") {
