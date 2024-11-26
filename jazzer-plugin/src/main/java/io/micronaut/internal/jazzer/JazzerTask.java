@@ -13,12 +13,14 @@ import org.gradle.api.tasks.InputFile;
 import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.Nested;
 import org.gradle.api.tasks.Optional;
+import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.jvm.toolchain.JavaInstallationMetadata;
 import org.gradle.process.ExecOperations;
 
 import javax.annotation.Nonnull;
 import javax.inject.Inject;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -77,6 +79,19 @@ public abstract class JazzerTask extends DefaultTask {
     @Optional
     public abstract RegularFileProperty getDictionaryFile();
 
+    @OutputFile
+    @Nonnull
+    @Optional
+    public abstract RegularFileProperty getCoverageDumpFile();
+
+    @Input
+    @Optional
+    public abstract Property<Integer> getRssLimitMb();
+
+    @Input
+    @Optional
+    public abstract Property<Duration> getMaxTotalTime();
+
     @Inject
     protected abstract ExecOperations getExecOperations();
 
@@ -94,6 +109,16 @@ public abstract class JazzerTask extends DefaultTask {
                 }
                 args.add("--cp=" + getClasspath().getAsPath());
                 args.add("--target_class=" + targetClass);
+                args.add("--coverage_report=cov-report.txt");
+                if (getCoverageDumpFile().isPresent()) {
+                    args.add("--coverage_dump=" + getCoverageDumpFile().getAsFile().get().getPath());
+                }
+                if (getRssLimitMb().isPresent()) {
+                    args.add("-rss_limit_mb=" + getRssLimitMb().get());
+                }
+                if (getMaxTotalTime().isPresent()) {
+                    args.add("-max_total_time=" + getMaxTotalTime().get().toSeconds());
+                }
                 if (getJvmArgs().isPresent() && !getJvmArgs().get().isEmpty()) {
                     args.add("--jvm_args=" + joinPlatform(getJvmArgs().get()));
                 }
@@ -107,13 +132,13 @@ public abstract class JazzerTask extends DefaultTask {
                     args.add("-only_ascii=" + (getOnlyAscii().get() ? "1" : "0"));
                 }
                 if (getDictionaryFile().isPresent()) {
-                    args.add("-dict=" + getMinimizeCrashFile().getAsFile().get().getPath());
+                    args.add("-dict=" + getDictionaryFile().getAsFile().get().getPath());
                 }
                 if (getMinimizeCrashFile().isPresent()) {
                     args.add("-minimize_crash=1");
                     args.add(getMinimizeCrashFile().getAsFile().get().getPath());
                 }
-                if (getCorpus().isPresent()) {
+                if (getCorpus().isPresent() && !getMinimizeCrashFile().isPresent()) {
                     args.add(getCorpus().getAsFile().get().getPath());
                 }
                 spec.setArgs(args);

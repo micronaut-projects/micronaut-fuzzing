@@ -15,13 +15,11 @@ public class SimpleController {
 
     @Get
     public String index() {
-        LOG.info("HIT! GET");
         return "index";
     }
 
     @Post
     public Publisher<String> index(Publisher<String> foo) {
-        LOG.info("HIT! POST");
         return foo;
     }
 }
