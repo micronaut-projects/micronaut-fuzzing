@@ -2,5 +2,7 @@
 
 set -e
 
+echo "auto.include.git.dirs=$(pwd)" >> ~/.gradle/gradle.properties
+
 cd micronaut-fuzzing
-./gradlew fuzzing-tests:prepareClusterFuzz
+./gradlew micronaut-fuzzing-tests:prepareClusterFuzz
