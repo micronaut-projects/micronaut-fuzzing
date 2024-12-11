@@ -1,8 +1,10 @@
+import io.micronaut.fuzzing.jazzer.JazzerTask
+import io.micronaut.fuzzing.jazzer.PrepareClusterFuzzTask
 import java.time.Duration
 
 plugins {
     id("io.micronaut.build.internal.fuzzing-module")
-    id("io.micronaut.internal.jazzer")
+    id("io.micronaut.fuzzing.jazzer")
 }
 
 repositories {
@@ -23,7 +25,7 @@ dependencies {
     implementation("com.code-intelligence:jazzer-api:0.22.1")
 }
 
-tasks.named<io.micronaut.internal.jazzer.PrepareClusterFuzzTask>("prepareClusterFuzz") {
+tasks.named<PrepareClusterFuzzTask>("prepareClusterFuzz") {
     targetClasses.set(listOf(
         //"io.micronaut.fuzzing.http.HttpTarget",
         "io.micronaut.fuzzing.http.EmbeddedHttpTarget",
@@ -31,7 +33,7 @@ tasks.named<io.micronaut.internal.jazzer.PrepareClusterFuzzTask>("prepareCluster
     ))
 }
 
-tasks.named<io.micronaut.internal.jazzer.JazzerTask>("jazzer") {
+tasks.named<JazzerTask>("jazzer") {
     // todo: fetch on-demand from gh releases
     jazzerBinary.set(File("/home/yawkat/bin/jazzer/0.22.1/jazzer"))
     targetClasses.set(listOf(

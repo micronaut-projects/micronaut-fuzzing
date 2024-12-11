@@ -1,4 +1,4 @@
-package io.micronaut.internal.jazzer;
+package io.micronaut.fuzzing.jazzer;
 
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.file.RegularFileProperty;
@@ -32,8 +32,6 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
         } catch (IOException ignored) {
         }
         CopyOption[] copyOptions = new CopyOption[]{StandardCopyOption.REPLACE_EXISTING};
-        System.out.println(getClasspath().getAsPath());
-        System.out.println(getClasspath().getFiles());
         for (File library : getClasspath().getFiles()) {
             Files.copy(library.toPath(), libs.resolve(library.getName()), copyOptions);
         }

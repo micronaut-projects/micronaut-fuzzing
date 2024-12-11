@@ -9,8 +9,8 @@ repositories {
 gradlePlugin {
     plugins {
         jazzer {
-            id = "io.micronaut.internal.jazzer"
-            implementationClass = "io.micronaut.internal.jazzer.JazzerPlugin"
+            id = "io.micronaut.fuzzing.jazzer"
+            implementationClass = "io.micronaut.fuzzing.jazzer.JazzerPlugin"
         }
     }
 }

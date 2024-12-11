@@ -1,4 +1,4 @@
-package io.micronaut.internal.jazzer;
+package io.micronaut.fuzzing.jazzer;
 
 import org.gradle.api.DefaultTask;
 import org.gradle.api.file.ConfigurableFileCollection;

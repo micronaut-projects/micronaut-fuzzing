@@ -1,4 +1,4 @@
-package io.micronaut.internal.jazzer;
+package io.micronaut.fuzzing.jazzer;
 
 import org.gradle.api.JavaVersion;
 import org.gradle.api.Plugin;
@@ -42,7 +42,6 @@ public abstract class JazzerPlugin implements Plugin<Project> {
             task.getAgent().set(new File("/usr/local/bin/jazzer_agent_deploy.jar"));
             String out = System.getenv("OUT");
             if (out != null) {
-                //throw new IllegalStateException("No OUT environment variable found. This task should run on OSS-Fuzz only!");
                 task.getOutputDirectory().set(new File(out));
             }
         });
