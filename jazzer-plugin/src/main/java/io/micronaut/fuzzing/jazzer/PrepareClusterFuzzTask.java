@@ -43,7 +43,7 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                 #!/bin/bash
                 # LLVMFuzzerTestOneInput <-- for fuzzer detection (see test_all.py)
                 this_dir=$(dirname "$0")
-                exec java -cp $this_dir'/libs/*' com.code_intelligence.jazzer.Jazzer %s $@
+                exec $this_dir/jazzer_driver --agent_path=$this_dir/jazzer_agent_deploy.jar --cp=$this_dir'/libs/*' %s $@
                 """.formatted(String.join(" ", args));
             Path targetPath = getOutputDirectory().file(targetClass).get().getAsFile().toPath();
             Files.writeString(targetPath, sh);
