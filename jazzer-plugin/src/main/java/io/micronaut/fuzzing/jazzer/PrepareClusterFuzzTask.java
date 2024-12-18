@@ -32,18 +32,20 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
         } catch (IOException ignored) {
         }
         CopyOption[] copyOptions = new CopyOption[]{StandardCopyOption.REPLACE_EXISTING};
+        List<String> cp = new ArrayList<>();
         for (File library : getClasspath().getFiles()) {
             Files.copy(library.toPath(), libs.resolve(library.getName()), copyOptions);
+            cp.add("$this_dir/libs/" + library.getName());
         }
-        Files.copy(getAgent().get().getAsFile().toPath(), libs.resolve("jazzer_agent_deploy.jar"), copyOptions);
         for (String targetClass : getTargetClasses().get()) {
             List<String> args = new ArrayList<>();
             collectArgs(args, targetClass);
+            args.add("--cp=" + String.join(":", cp));
             String sh = """
                 #!/bin/bash
                 # LLVMFuzzerTestOneInput <-- for fuzzer detection (see test_all.py)
                 this_dir=$(dirname "$0")
-                exec $this_dir/jazzer_driver --agent_path=$this_dir/jazzer_agent_deploy.jar --cp=$this_dir'/libs/*' %s $@
+                exec $this_dir/jazzer_driver --agent_path=$this_dir/jazzer_agent_deploy.jar %s $@
                 """.formatted(String.join(" ", args));
             Path targetPath = getOutputDirectory().file(targetClass).get().getAsFile().toPath();
             Files.writeString(targetPath, sh);
