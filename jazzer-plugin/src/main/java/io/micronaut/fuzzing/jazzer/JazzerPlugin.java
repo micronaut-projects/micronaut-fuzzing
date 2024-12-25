@@ -39,7 +39,6 @@ public abstract class JazzerPlugin implements Plugin<Project> {
             task.setDescription("Prepare run scripts of the different fuzz targets for ClusterFuzz (OSS-Fuzz) execution");
 
             task.getClasspath().setFrom(jazzerClasspath);
-            task.getAgent().set(new File("/usr/local/bin/jazzer_agent_deploy.jar"));
             String out = System.getenv("OUT");
             if (out != null) {
                 task.getOutputDirectory().set(new File(out));

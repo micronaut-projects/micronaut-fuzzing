@@ -21,9 +21,6 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
     @OutputDirectory
     public abstract DirectoryProperty getOutputDirectory();
 
-    @InputFile
-    public abstract RegularFileProperty getAgent();
-
     @TaskAction
     public void run() throws IOException {
         Path libs = getOutputDirectory().dir("libs").get().getAsFile().toPath();
@@ -40,12 +37,12 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
         for (String targetClass : getTargetClasses().get()) {
             List<String> args = new ArrayList<>();
             collectArgs(args, targetClass);
-            args.add("--cp=" + String.join(":", cp));
+            args.add("--cp=" + String.join(":", cp) + "::$this_dir");
             String sh = """
                 #!/bin/bash
                 # LLVMFuzzerTestOneInput <-- for fuzzer detection (see test_all.py)
                 this_dir=$(dirname "$0")
-                exec $this_dir/jazzer_driver --agent_path=$this_dir/jazzer_agent_deploy.jar %s $@
+                LD_LIBRARY_PATH="$JVM_LD_LIBRARY_PATH":$this_dir $this_dir/jazzer_driver --agent_path=$this_dir/jazzer_agent_deploy.jar %s $@
                 """.formatted(String.join(" ", args));
             Path targetPath = getOutputDirectory().file(targetClass).get().getAsFile().toPath();
             Files.writeString(targetPath, sh);
