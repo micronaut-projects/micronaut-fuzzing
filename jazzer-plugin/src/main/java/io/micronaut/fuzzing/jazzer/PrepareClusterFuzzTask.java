@@ -44,7 +44,7 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                 this_dir=$(dirname "$0")
                 LD_LIBRARY_PATH="$JVM_LD_LIBRARY_PATH":$this_dir $this_dir/jazzer_driver --agent_path=$this_dir/jazzer_agent_deploy.jar %s $@
                 """.formatted(String.join(" ", args));
-            Path targetPath = getOutputDirectory().file(targetClass).get().getAsFile().toPath();
+            Path targetPath = getOutputDirectory().file(targetClass.substring(targetClass.indexOf('.') + 1)).get().getAsFile().toPath();
             Files.writeString(targetPath, sh);
             Files.setPosixFilePermissions(targetPath, Set.of(
                 PosixFilePermission.OWNER_READ,
