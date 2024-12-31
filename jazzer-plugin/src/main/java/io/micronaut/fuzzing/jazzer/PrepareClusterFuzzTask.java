@@ -12,7 +12,10 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
@@ -32,7 +35,8 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
             Files.copy(library.toPath(), libs.resolve(library.getName()), copyOptions);
             cp.add("$this_dir/libs/" + library.getName());
         }
-        for (String targetClass : getTargetClasses().get()) {
+        for (Map.Entry<String, String> entry : assignTargetNames(getTargetClasses().get()).entrySet()) {
+            String targetClass = entry.getKey();
             List<String> args = new ArrayList<>();
             collectArgs(args, targetClass);
             args.add("--cp=" + String.join(":", cp) + "::$this_dir");
@@ -42,7 +46,7 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                 this_dir=$(dirname "$0")
                 LD_LIBRARY_PATH="$JVM_LD_LIBRARY_PATH":$this_dir $this_dir/jazzer_driver --agent_path=$this_dir/jazzer_agent_deploy.jar %s $@
                 """.formatted(String.join(" ", args));
-            Path targetPath = getOutputDirectory().file(targetClass.substring(targetClass.lastIndexOf('.') + 1)).get().getAsFile().toPath();
+            Path targetPath = getOutputDirectory().file(entry.getValue()).get().getAsFile().toPath();
             Files.writeString(targetPath, sh);
             Files.setPosixFilePermissions(targetPath, Set.of(
                 PosixFilePermission.OWNER_READ,
@@ -56,5 +60,35 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                 PosixFilePermission.OTHERS_EXECUTE
             ));
         }
+    }
+
+    static Map<String, String> assignTargetNames(Collection<String> targetClasses) {
+        Map<String, List<String>> bySimpleName = new HashMap<>();
+        for (String targetClass : targetClasses) {
+            bySimpleName.computeIfAbsent(targetClass.substring(targetClass.lastIndexOf('.') + 1), k -> new ArrayList<>())
+                .add(targetClass);
+        }
+        Map<String, String> targetNames = new HashMap<>();
+        for (Map.Entry<String, List<String>> entry : bySimpleName.entrySet()) {
+            if (entry.getValue().size() > 1) {
+                // multiple targets with the same simple name. remove any common prefix
+                String first = entry.getValue().get(0);
+                int splitIndex = first.lastIndexOf('.') + 1;
+                while (true) {
+                    String common = first.substring(0, splitIndex);
+                    if (entry.getValue().stream().allMatch(s -> s.startsWith(common))) {
+                        break;
+                    } else {
+                        splitIndex = first.lastIndexOf('.', splitIndex - 2) + 1;
+                    }
+                }
+                for (String targetClass : entry.getValue()) {
+                    targetNames.put(targetClass, targetClass.substring(splitIndex).replace('.', '_'));
+                }
+            } else {
+                targetNames.put(entry.getValue().get(0), entry.getKey());
+            }
+        }
+        return targetNames;
     }
 }

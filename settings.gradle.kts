@@ -7,23 +7,16 @@ pluginManagement {
 }
 
 plugins {
-    id "io.micronaut.build.shared.settings" version "7.3.0"
+    id("io.micronaut.build.shared.settings") version "7.3.0"
 }
 
 rootProject.name = "fuzzing-parent"
 
 include("fuzzing-tests")
 
-dependencyResolutionManagement {
-    repositories {
-        mavenCentral()
-        mavenLocal()
-    }
-}
-
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
-micronautBuild {
+configure<io.micronaut.build.MicronautBuildSettingsExtension> {
     useStandardizedProjectNames = true
 
     importMicronautCatalog()
