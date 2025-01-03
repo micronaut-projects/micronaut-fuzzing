@@ -46,6 +46,7 @@ final class CustomResourceLeakDetector<T> extends ResourceLeakDetector<T> {
     private static volatile ResourceLeakHint currentHint = new FixedHint(null);
 
     static void register() {
+        ResourceLeakDetector.setLevel(Level.PARANOID);
         ResourceLeakDetectorFactory.setResourceLeakDetectorFactory(new ResourceLeakDetectorFactory() {
             @Override
             public <T> ResourceLeakDetector<T> newResourceLeakDetector(Class<T> resource, int samplingInterval, long maxActive) {

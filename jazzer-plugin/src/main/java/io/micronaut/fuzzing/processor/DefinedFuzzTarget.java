@@ -1,0 +1,1 @@
+../../../../../../../../fuzzing-annotation-processor/src/main/java/io/micronaut/fuzzing/processor/DefinedFuzzTarget.java

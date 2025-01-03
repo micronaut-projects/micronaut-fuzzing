@@ -1,11 +1,14 @@
 package io.micronaut.fuzzing.jazzer;
 
+import io.micronaut.fuzzing.processor.DefinedFuzzTarget;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -35,30 +38,43 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
             Files.copy(library.toPath(), libs.resolve(library.getName()), copyOptions);
             cp.add("$this_dir/libs/" + library.getName());
         }
-        for (Map.Entry<String, String> entry : assignTargetNames(getTargetClasses().get()).entrySet()) {
-            String targetClass = entry.getKey();
-            List<String> args = new ArrayList<>();
-            collectArgs(args, targetClass);
-            args.add("--cp=" + String.join(":", cp) + "::$this_dir");
-            String sh = """
+        try (ClasspathAccess classpathAccess = new ClasspathAccess()) {
+            List<DefinedFuzzTarget> targets = findFuzzTargets(classpathAccess);
+            Map<String, String> targetNames = assignTargetNames(targets.stream().map(DefinedFuzzTarget::targetClass).toList());
+            for (DefinedFuzzTarget target : targets) {
+                List<String> args = new ArrayList<>();
+                collectArgs(args, target);
+                args.add("--cp=" + String.join(":", cp));
+                String fileName = targetNames.get(target.targetClass());
+                if (target.dictionary() != null || target.dictionaryResources() != null) {
+                    File dictFile = getOutputDirectory().file("dict/" + fileName).get().getAsFile();
+                    //noinspection ResultOfMethodCallIgnored
+                    dictFile.getParentFile().mkdirs();
+                    try (OutputStream os = new FileOutputStream(dictFile)) {
+                        buildDictionary(classpathAccess, os, target);
+                    }
+                    args.add("-dict=$this_dir/" + fileName);
+                }
+                String sh = """
                 #!/bin/bash
                 # LLVMFuzzerTestOneInput <-- for fuzzer detection (see test_all.py)
                 this_dir=$(dirname "$0")
                 LD_LIBRARY_PATH="$JVM_LD_LIBRARY_PATH":$this_dir $this_dir/jazzer_driver --agent_path=$this_dir/jazzer_agent_deploy.jar %s $@
                 """.formatted(String.join(" ", args));
-            Path targetPath = getOutputDirectory().file(entry.getValue()).get().getAsFile().toPath();
-            Files.writeString(targetPath, sh);
-            Files.setPosixFilePermissions(targetPath, Set.of(
-                PosixFilePermission.OWNER_READ,
-                PosixFilePermission.OWNER_WRITE,
-                PosixFilePermission.OWNER_EXECUTE,
+                Path targetPath = getOutputDirectory().file(fileName).get().getAsFile().toPath();
+                Files.writeString(targetPath, sh);
+                Files.setPosixFilePermissions(targetPath, Set.of(
+                    PosixFilePermission.OWNER_READ,
+                    PosixFilePermission.OWNER_WRITE,
+                    PosixFilePermission.OWNER_EXECUTE,
 
-                PosixFilePermission.GROUP_READ,
-                PosixFilePermission.GROUP_EXECUTE,
+                    PosixFilePermission.GROUP_READ,
+                    PosixFilePermission.GROUP_EXECUTE,
 
-                PosixFilePermission.OTHERS_READ,
-                PosixFilePermission.OTHERS_EXECUTE
-            ));
+                    PosixFilePermission.OTHERS_READ,
+                    PosixFilePermission.OTHERS_EXECUTE
+                ));
+            }
         }
     }
 

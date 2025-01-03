@@ -17,6 +17,8 @@ package io.micronaut.fuzzing.http;
 
 import io.micronaut.context.ApplicationContext;
 import io.micronaut.core.annotation.NonNull;
+import io.micronaut.fuzzing.FuzzTarget;
+import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.http.netty.channel.EventLoopGroupConfiguration;
 import io.micronaut.http.netty.channel.EventLoopGroupRegistry;
 import io.micronaut.runtime.server.EmbeddedServer;
@@ -36,6 +38,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+@FuzzTarget(enableImplicitly = false) // we prefer EmbeddedHttpTarget for now
+@HttpDict
 public class HttpTarget {
     private static EmbeddedServer embeddedServer;
     private static Bootstrap clientBootstrap;

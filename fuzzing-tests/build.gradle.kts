@@ -1,5 +1,4 @@
 import io.micronaut.fuzzing.jazzer.JazzerTask
-import io.micronaut.fuzzing.jazzer.PrepareClusterFuzzTask
 import java.time.Duration
 
 plugins {
@@ -14,29 +13,24 @@ repositories {
 group = "io.micronaut.fuzzing"
 
 dependencies {
-    //api(mn.micronaut.json.core)
-
     implementation(mn.micronaut.http.server.netty)
     implementation(mn.micronaut.jackson.databind)
     implementation(mn.reactor)
 
     implementation("ch.qos.logback:logback-classic:1.4.14")
 
-    implementation("com.code-intelligence:jazzer-api:0.22.1")
-}
+    implementation(projects.micronautFuzzingApi)
 
-tasks.named<PrepareClusterFuzzTask>("prepareClusterFuzz") {
-    targetClasses.set(listOf(
-        //"io.micronaut.fuzzing.http.HttpTarget",
-        "io.micronaut.fuzzing.http.EmbeddedHttpTarget",
-        "io.micronaut.fuzzing.http.MediaTypeTarget"
-    ))
+    annotationProcessor(mn.micronaut.inject.java)
+    annotationProcessor(projects.micronautFuzzingAnnotationProcessor)
+
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:5.11.4")
 }
 
 tasks.named<JazzerTask>("jazzer") {
     // todo: fetch on-demand from gh releases
     jazzerBinary.set(File("/home/yawkat/bin/jazzer/0.22.1/jazzer"))
-    targetClasses.set(listOf(
+    targets.set(listOf(
         //"io.micronaut.fuzzing.toml.TomlTarget",
         //"io.micronaut.fuzzing.http.HttpTarget",
         "io.micronaut.fuzzing.http.EmbeddedHttpTarget",
@@ -45,7 +39,6 @@ tasks.named<JazzerTask>("jazzer") {
     ))
     jvmArgs.set(listOf(
         "-Xmx512M",
-        "-Dio.netty.leakDetection.level=paranoid",
         "-Dio.netty.leakDetection.targetRecords=100",
         "-XX:+ExitOnOutOfMemoryError",
         "-XX:+HeapDumpOnOutOfMemoryError",
@@ -53,9 +46,8 @@ tasks.named<JazzerTask>("jazzer") {
     rssLimitMb.set(8192)
     instrumentationIncludes.set(listOf("io.micronaut.**", "io.netty.**"))
     //forks.set(8)
-    // todo: store in repo
-    corpus.set(File("/home/yawkat/dev/scratch/go-fuzz-corpus/httpreq/corpus"))
-    //minimizeCrashFile.set(File("crash-f8c58ba04554c9659bc85f1e750334a5138396e2"))
+    //corpus.set(File("/home/yawkat/dev/scratch/go-fuzz-corpus/httpreq/corpus"))
+    //minimizeCrashFile.set(File("crash-161cd5ffd4f8b5b5d9a7e7f19784ac446343c142"))
     maxTotalTime.set(Duration.ofHours(2))
     //maxTotalTime.set(Duration.ofSeconds(10))
     coverageDumpFile.set(layout.buildDirectory.file("cov-report.exec"))

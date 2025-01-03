@@ -16,11 +16,13 @@
 package io.micronaut.fuzzing.http;
 
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
+import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.http.MediaType;
 
 import java.util.ArrayList;
 import java.util.List;
 
+@FuzzTarget
 public class MediaTypeTarget {
     public static void fuzzerTestOneInput(FuzzedDataProvider input) throws Exception {
         List<String> strings = new ArrayList<>();

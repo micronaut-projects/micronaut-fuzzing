@@ -16,21 +16,26 @@
 package io.micronaut.fuzzing.http;
 
 import io.micronaut.context.ApplicationContext;
+import io.micronaut.fuzzing.Dict;
 import io.micronaut.fuzzing.FlagAppender;
+import io.micronaut.fuzzing.FuzzTarget;
+import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.http.server.netty.NettyHttpServer;
 import io.micronaut.runtime.server.EmbeddedServer;
-import io.netty.buffer.Unpooled;
+import io.netty.buffer.ByteBuf;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.util.ReferenceCountUtil;
 import org.slf4j.LoggerFactory;
 
 import java.lang.management.ManagementFactory;
 
+@FuzzTarget
+@HttpDict
+@Dict(ByteSeparator.SEPARATOR)
 public class EmbeddedHttpTarget {
     private static NettyHttpServer nettyHttpServer;
 
     public static void fuzzerInitialize() {
-        System.setProperty("io.netty.leakDetection.level", "paranoid");
         System.setProperty("io.netty.leakDetection.targetRecords", "100");
 
         String vmName = ManagementFactory.getRuntimeMXBean().getName();
@@ -48,8 +53,15 @@ public class EmbeddedHttpTarget {
 
         EmbeddedChannel embeddedChannel = nettyHttpServer.buildEmbeddedChannel(false);
 
-        embeddedChannel.writeOneInbound(Unpooled.wrappedBuffer(input));
-        embeddedChannel.runPendingTasks();
+        ByteBuf joint = embeddedChannel.alloc().buffer(input.length);
+        joint.writeBytes(input);
+        ByteSeparator.forEachPiece(joint, msg -> {
+            if (embeddedChannel.isOpen()) {
+                embeddedChannel.writeInbound(msg);
+            } else {
+                msg.release();
+            }
+        });
 
         embeddedChannel.releaseOutbound();
         // don't release inbound, that doesn't happen normally either
