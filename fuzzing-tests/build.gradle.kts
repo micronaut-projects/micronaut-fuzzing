@@ -25,6 +25,10 @@ dependencies {
     annotationProcessor(projects.micronautFuzzingAnnotationProcessor)
 
     testImplementation("org.junit.jupiter:junit-jupiter-engine:5.11.4")
+    testImplementation("org.junit.jupiter:junit-jupiter-params:5.11.4")
+    testImplementation(mn.micronaut.http.client)
+    testImplementation(mnTest.micronaut.test.junit5)
+    testAnnotationProcessor(mn.micronaut.inject.java)
 }
 
 tasks.named<JazzerTask>("jazzer") {

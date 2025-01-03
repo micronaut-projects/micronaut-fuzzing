@@ -15,6 +15,9 @@
  */
 package io.micronaut.fuzzing.http;
 
+import io.micronaut.http.MediaType;
+import io.micronaut.http.annotation.Body;
+import io.micronaut.http.annotation.Consumes;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.Post;
@@ -28,13 +31,37 @@ import org.slf4j.LoggerFactory;
 public class SimpleController {
     private static final Logger LOG = LoggerFactory.getLogger(SimpleController.class);
 
+    static final String ECHO_PUBLISHER = "/echo-publisher";
+    static final String ECHO_ARRAY = "/echo-array";
+    static final String ECHO_STRING = "/echo-string";
+    static final String ECHO_PIECE_JSON = "/echo-piece-json";
+
     @Get
     public String index() {
         return "index";
     }
 
-    @Post
-    public Publisher<String> index(Publisher<String> foo) {
+    @Post(ECHO_PUBLISHER)
+    public Publisher<byte[]> echo(@Body Publisher<byte[]> foo) {
+        return foo;
+    }
+
+    @Post(ECHO_ARRAY)
+    public byte[] echo(@Body byte[] foo) {
+        return foo;
+    }
+
+    @Post(ECHO_STRING)
+    public String echo(@Body String foo) {
+        return foo;
+    }
+
+    @Post(ECHO_PIECE_JSON)
+    @Consumes({
+        MediaType.APPLICATION_JSON,
+        MediaType.APPLICATION_FORM_URLENCODED
+    })
+    public String echoPieceJson(@Body("foo") String foo) {
         return foo;
     }
 }

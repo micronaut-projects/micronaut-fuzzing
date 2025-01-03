@@ -31,7 +31,13 @@ import java.lang.management.ManagementFactory;
 
 @FuzzTarget
 @HttpDict
-@Dict(ByteSeparator.SEPARATOR)
+@Dict({
+    ByteSeparator.SEPARATOR,
+    SimpleController.ECHO_ARRAY,
+    SimpleController.ECHO_PUBLISHER,
+    SimpleController.ECHO_STRING,
+    SimpleController.ECHO_PIECE_JSON,
+})
 public class EmbeddedHttpTarget {
     private static NettyHttpServer nettyHttpServer;
 
