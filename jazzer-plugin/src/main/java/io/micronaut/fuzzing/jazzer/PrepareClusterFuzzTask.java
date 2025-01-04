@@ -4,15 +4,21 @@ import io.micronaut.fuzzing.processor.DefinedFuzzTarget;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.nio.file.CopyOption;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -20,8 +26,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
+    private static final Logger LOG = LoggerFactory.getLogger(PrepareClusterFuzzTask.class);
+
     @OutputDirectory
     public abstract DirectoryProperty getOutputDirectory();
 
@@ -32,11 +41,42 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
 
         CopyOption[] copyOptions = new CopyOption[]{StandardCopyOption.REPLACE_EXISTING};
         List<String> cp = new ArrayList<>();
+        List<File> copiedFiles = new ArrayList<>();
         for (File library : getClasspath().getFiles()) {
-            Files.copy(library.toPath(), libs.resolve(library.getName()), copyOptions);
+            Path dst = libs.resolve(library.getName());
+            copiedFiles.add(dst.toFile());
+            Files.copy(library.toPath(), dst, copyOptions);
             cp.add("$this_dir/" + library.getName());
         }
-        try (ClasspathAccess classpathAccess = new ClasspathAccess()) {
+        try (ClasspathAccess classpathAccess = new ClasspathAccess(copiedFiles)) {
+            // hack: remove class files with versions > java 17 so that the introspector doesn't hiccup
+            for (Path versionsDir : classpathAccess.resolve("META-INF/versions")) {
+                try (Stream<Path> versions = Files.list(versionsDir)) {
+                    versions
+                        .filter(p -> {
+                            try {
+                                return Integer.parseInt(p.getFileName().toString()) > 17;
+                            } catch (NumberFormatException e) {
+                                return false;
+                            }
+                        })
+                        .forEach(dir -> {
+                            LOG.info("For oss-fuzz introspector compatibility, deleting class files from: {}", dir);
+                            try {
+                                Files.walkFileTree(dir, new SimpleFileVisitor<>() {
+                                    @Override
+                                    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                                        Files.delete(file);
+                                        return FileVisitResult.CONTINUE;
+                                    }
+                                });
+                            } catch (IOException e) {
+                                throw new UncheckedIOException(e);
+                            }
+                        });
+                }
+            }
+
             List<DefinedFuzzTarget> targets = findFuzzTargets(classpathAccess);
             Map<String, String> targetNames = assignTargetNames(targets.stream().map(DefinedFuzzTarget::targetClass).toList());
             for (DefinedFuzzTarget target : targets) {

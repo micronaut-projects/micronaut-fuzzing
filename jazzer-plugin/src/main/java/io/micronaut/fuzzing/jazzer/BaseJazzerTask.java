@@ -154,7 +154,11 @@ public abstract class BaseJazzerTask extends DefaultTask {
         private final List<Path> roots = new ArrayList<>();
 
         public ClasspathAccess() throws IOException {
-            for (File f : getClasspath()) {
+            this(getClasspath());
+        }
+
+        public ClasspathAccess(Iterable<File> files) throws IOException {
+            for (File f : files) {
                 Path p = f.toPath();
                 if (Files.isDirectory(p)) {
                     roots.add(p);
@@ -166,7 +170,7 @@ public abstract class BaseJazzerTask extends DefaultTask {
             }
         }
 
-        private List<Path> resolve(String p) {
+        List<Path> resolve(String p) {
             List<Path> result = new ArrayList<>();
             for (Path root : roots) {
                 Path resolved = root.resolve(p).normalize();
