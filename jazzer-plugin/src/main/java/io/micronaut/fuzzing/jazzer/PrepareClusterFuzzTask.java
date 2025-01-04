@@ -27,16 +27,14 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
 
     @TaskAction
     public void run() throws IOException {
-        Path libs = getOutputDirectory().dir("libs").get().getAsFile().toPath();
-        try {
-            Files.createDirectories(libs);
-        } catch (IOException ignored) {
-        }
+        // has to be the top-level /out directory for the fuzz introspector to find the jars
+        Path libs = getOutputDirectory().get().getAsFile().toPath();
+
         CopyOption[] copyOptions = new CopyOption[]{StandardCopyOption.REPLACE_EXISTING};
         List<String> cp = new ArrayList<>();
         for (File library : getClasspath().getFiles()) {
             Files.copy(library.toPath(), libs.resolve(library.getName()), copyOptions);
-            cp.add("$this_dir/libs/" + library.getName());
+            cp.add("$this_dir/" + library.getName());
         }
         try (ClasspathAccess classpathAccess = new ClasspathAccess()) {
             List<DefinedFuzzTarget> targets = findFuzzTargets(classpathAccess);
