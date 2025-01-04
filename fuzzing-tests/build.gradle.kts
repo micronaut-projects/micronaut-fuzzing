@@ -1,4 +1,5 @@
 import io.micronaut.fuzzing.jazzer.JazzerTask
+import io.micronaut.fuzzing.jazzer.PrepareClusterFuzzTask
 import java.time.Duration
 
 plugins {
@@ -29,6 +30,10 @@ dependencies {
     testImplementation(mn.micronaut.http.client)
     testImplementation(mnTest.micronaut.test.junit5)
     testAnnotationProcessor(mn.micronaut.inject.java)
+}
+
+tasks.withType<PrepareClusterFuzzTask> {
+    introspectorIncludes = listOf("io.micronaut.*")
 }
 
 tasks.named<JazzerTask>("jazzer") {

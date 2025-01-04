@@ -2,6 +2,9 @@ package io.micronaut.fuzzing.jazzer;
 
 import io.micronaut.fuzzing.processor.DefinedFuzzTarget;
 import org.gradle.api.file.DirectoryProperty;
+import org.gradle.api.provider.SetProperty;
+import org.gradle.api.tasks.Input;
+import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
 import org.slf4j.Logger;
@@ -11,8 +14,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.io.UncheckedIOException;
 import java.nio.file.CopyOption;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,10 +26,10 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Stream;
 
 public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
     private static final Logger LOG = LoggerFactory.getLogger(PrepareClusterFuzzTask.class);
@@ -34,49 +37,30 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
     @OutputDirectory
     public abstract DirectoryProperty getOutputDirectory();
 
+    /**
+     * Class name patterns to include in the introspector report. By default, all dependencies are
+     * included, but this can be too much for the report.
+     */
+    @Input
+    @Optional
+    public abstract SetProperty<String> getIntrospectorIncludes();
+
     @TaskAction
     public void run() throws IOException {
-        // has to be the top-level /out directory for the fuzz introspector to find the jars
-        Path libs = getOutputDirectory().get().getAsFile().toPath();
+        Path libs = getOutputDirectory().dir("libs").get().getAsFile().toPath();
+        try {
+            Files.createDirectories(libs);
+        } catch (FileAlreadyExistsException ignored) {
+        }
 
         CopyOption[] copyOptions = new CopyOption[]{StandardCopyOption.REPLACE_EXISTING};
         List<String> cp = new ArrayList<>();
-        List<File> copiedFiles = new ArrayList<>();
         for (File library : getClasspath().getFiles()) {
-            Path dst = libs.resolve(library.getName());
-            copiedFiles.add(dst.toFile());
-            Files.copy(library.toPath(), dst, copyOptions);
-            cp.add("$this_dir/" + library.getName());
+            Files.copy(library.toPath(), libs.resolve(library.getName()), copyOptions);
+            cp.add("$this_dir/libs/" + library.getName());
         }
-        try (ClasspathAccess classpathAccess = new ClasspathAccess(copiedFiles)) {
-            // hack: remove class files with versions > java 17 so that the introspector doesn't hiccup
-            for (Path versionsDir : classpathAccess.resolve("META-INF/versions")) {
-                try (Stream<Path> versions = Files.list(versionsDir)) {
-                    versions
-                        .filter(p -> {
-                            try {
-                                return Integer.parseInt(p.getFileName().toString()) > 17;
-                            } catch (NumberFormatException e) {
-                                return false;
-                            }
-                        })
-                        .forEach(dir -> {
-                            LOG.info("For oss-fuzz introspector compatibility, deleting class files from: {}", dir);
-                            try {
-                                Files.walkFileTree(dir, new SimpleFileVisitor<>() {
-                                    @Override
-                                    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                                        Files.delete(file);
-                                        return FileVisitResult.CONTINUE;
-                                    }
-                                });
-                            } catch (IOException e) {
-                                throw new UncheckedIOException(e);
-                            }
-                        });
-                }
-            }
 
+        try (ClasspathAccess classpathAccess = new ClasspathAccess()) {
             List<DefinedFuzzTarget> targets = findFuzzTargets(classpathAccess);
             Map<String, String> targetNames = assignTargetNames(targets.stream().map(DefinedFuzzTarget::targetClass).toList());
             for (DefinedFuzzTarget target : targets) {
@@ -113,6 +97,83 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                     PosixFilePermission.OTHERS_EXECUTE
                 ));
             }
+        }
+    }
+
+    @TaskAction
+    public void prepareIntrospectorJars() throws IOException {
+        // prepare a separate set of jars in the top-level /out directory, just for the
+        // introspector to find.
+
+        List<File> forIntrospector = new ArrayList<>();
+        for (File library : getClasspath().getFiles()) {
+            File dst = getOutputDirectory().file(library.getName()).get().getAsFile();
+            Files.copy(library.toPath(), dst.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            forIntrospector.add(dst);
+        }
+        try (ClasspathAccess classpathAccess = new ClasspathAccess(forIntrospector)) {
+            Set<String> patterns = getIntrospectorIncludes().getOrNull();
+            Set<String> introspectorIncludesExactMatch;
+            List<String> introspectorIncludesPrefixes;
+            if (patterns == null || patterns.isEmpty()) {
+                introspectorIncludesExactMatch = null;
+                introspectorIncludesPrefixes = null;
+            } else {
+                introspectorIncludesExactMatch = new HashSet<>();
+                introspectorIncludesPrefixes = new ArrayList<>();
+                for (String pattern : patterns) {
+                    if (pattern.endsWith(".*")) {
+                        introspectorIncludesPrefixes.add(pattern.substring(0, pattern.length() - 1));
+                    } else {
+                        introspectorIncludesExactMatch.add(pattern);
+                    }
+                }
+            }
+            classpathAccess.walkFileTree(root -> new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                    visit(file);
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                    if (exc == null) {
+                        visit(dir);
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+
+                private void visit(Path file) throws IOException {
+                    Path relative = root.relativize(file);
+                    boolean delete = false;
+                    if (relative.startsWith("META-INF/versions") && relative.getNameCount() >= 3) {
+                        try {
+                            int version = Integer.parseInt(relative.getName(2).toString());
+                            if (version > 17) {
+                                // hack: remove class files with versions > java 17 so that the introspector doesn't hiccup
+                                LOG.info("For oss-fuzz introspector compatibility, deleting class file: {}", relative);
+                                delete = true;
+                            }
+                        } catch (NumberFormatException ignored) {
+                        }
+                        if (relative.getNameCount() > 3) {
+                            relative = relative.subpath(3, relative.getNameCount());
+                        }
+                    }
+                    String p = relative.toString();
+                    if (introspectorIncludesPrefixes != null && p.endsWith(".class")) {
+                        String className = p.substring(0, p.length() - 6).replace('/', '.');
+                        if (!introspectorIncludesExactMatch.contains(className) &&
+                            introspectorIncludesPrefixes.stream().noneMatch(className::startsWith)) {
+                            delete = true;
+                        }
+                    }
+                    if (delete) {
+                        Files.delete(file);
+                    }
+                }
+            });
         }
     }
 

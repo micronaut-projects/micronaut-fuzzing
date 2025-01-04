@@ -22,11 +22,13 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
+import java.nio.file.FileVisitor;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -170,7 +172,13 @@ public abstract class BaseJazzerTask extends DefaultTask {
             }
         }
 
-        List<Path> resolve(String p) {
+        public void walkFileTree(Function<Path, FileVisitor<Path>> visitor) throws IOException {
+            for (Path root : roots) {
+                Files.walkFileTree(root, visitor.apply(root));
+            }
+        }
+
+        private List<Path> resolve(String p) {
             List<Path> result = new ArrayList<>();
             for (Path root : roots) {
                 Path resolved = root.resolve(p).normalize();

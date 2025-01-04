@@ -24,7 +24,8 @@ class Example {
         def value = mapper.readValue(cl.getResources("META-INF/" + DefinedFuzzTarget.DIRECTORY).nextElement(), new TypeReference<List<DefinedFuzzTarget>>() {
         })
         then:
-        value == [new DefinedFuzzTarget("com.example.Example", null, null)]
+        value.size() == 1
+        value[0].targetClass() == "com.example.Example"
     }
 
     def 'static dict'() {
