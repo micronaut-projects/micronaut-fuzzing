@@ -33,8 +33,14 @@ dependencies {
 }
 
 tasks.withType<PrepareClusterFuzzTask> {
-    introspectorIncludes = listOf("io.micronaut.*")
-    introspectorExcludes = listOf("io.micronaut.context.*")
+    introspector {
+        includes = listOf("io.micronaut.*")
+        excludes = listOf(
+            "io.micronaut.context.*",
+            "io.micronaut.core.util.clhm.ConcurrentLinkedHashMap*",
+            "io.micronaut.core.util.clhm.ConcurrentLinkedHashMap*",
+        )
+    }
 }
 
 tasks.named<JazzerTask>("jazzer") {

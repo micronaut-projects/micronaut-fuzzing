@@ -14,7 +14,7 @@ final class ClassNameMatcher {
         exactMatch = new HashSet<>();
         prefixes = new ArrayList<>();
         for (String pattern : patterns) {
-            if (pattern.endsWith(".*")) {
+            if (pattern.endsWith("*")) {
                 prefixes.add(pattern.substring(0, pattern.length() - 1));
             } else {
                 exactMatch.add(pattern);

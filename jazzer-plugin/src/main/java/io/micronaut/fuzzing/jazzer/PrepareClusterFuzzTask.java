@@ -1,10 +1,11 @@
 package io.micronaut.fuzzing.jazzer;
 
 import io.micronaut.fuzzing.processor.DefinedFuzzTarget;
+import org.gradle.api.Action;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.provider.SetProperty;
 import org.gradle.api.tasks.Input;
-import org.gradle.api.tasks.Optional;
+import org.gradle.api.tasks.Nested;
 import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
 import org.slf4j.Logger;
@@ -37,21 +38,19 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
     public abstract DirectoryProperty getOutputDirectory();
 
     /**
-     * Class name patterns to include in the introspector report. By default, all dependencies are
-     * included, but this can be too much for the report.
+     * Introspector-specific settings. Note that these don't affect the actual fuzzing, only the
+     * introspector report.
      */
-    @Input
-    @Optional
-    public abstract SetProperty<String> getIntrospectorIncludes();
+    @Nested
+    public abstract Introspector getIntrospector();
 
     /**
-     * Class name patterns to exclude in the introspector report. By default, all dependencies are
-     * included, but this can be too much for the report.
-     * <p>This takes precedence over {@link #getIntrospectorIncludes()}.
+     * Introspector-specific settings. Note that these don't affect the actual fuzzing, only the
+     * introspector report.
      */
-    @Input
-    @Optional
-    public abstract SetProperty<String> getIntrospectorExcludes();
+    public final void introspector(Action<? super Introspector> action) {
+        action.execute(getIntrospector());
+    }
 
     @TaskAction
     public void run() throws IOException {
@@ -120,14 +119,14 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
             forIntrospector.add(dst);
         }
         try (ClasspathAccess classpathAccess = new ClasspathAccess(forIntrospector)) {
-            Set<String> includePatterns = getIntrospectorIncludes().getOrNull();
+            Set<String> includePatterns = getIntrospector().getIncludes().getOrNull();
             ClassNameMatcher introspectorIncludes;
             if (includePatterns == null || includePatterns.isEmpty()) {
                 introspectorIncludes = null;
             } else {
                 introspectorIncludes = new ClassNameMatcher(includePatterns);
             }
-            ClassNameMatcher introspectorExcludes = new ClassNameMatcher(getIntrospectorExcludes().orElse(Set.of()).get());
+            ClassNameMatcher introspectorExcludes = new ClassNameMatcher(getIntrospector().getExcludes().orElse(Set.of()).get());
             classpathAccess.walkFileTree(root -> new SimpleFileVisitor<>() {
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
@@ -206,5 +205,22 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
             }
         }
         return targetNames;
+    }
+
+    public interface Introspector {
+        /**
+         * Class name patterns to include in the introspector report. By default, all dependencies are
+         * included, but this can be too much for the report.
+         */
+        @Input
+        SetProperty<String> getIncludes();
+
+        /**
+         * Class name patterns to exclude in the introspector report. By default, all dependencies are
+         * included, but this can be too much for the report.
+         * <p>This takes precedence over {@link #getIncludes()}.
+         */
+        @Input
+        SetProperty<String> getExcludes();
     }
 }
