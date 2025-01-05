@@ -26,7 +26,6 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -44,6 +43,15 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
     @Input
     @Optional
     public abstract SetProperty<String> getIntrospectorIncludes();
+
+    /**
+     * Class name patterns to exclude in the introspector report. By default, all dependencies are
+     * included, but this can be too much for the report.
+     * <p>This takes precedence over {@link #getIntrospectorIncludes()}.
+     */
+    @Input
+    @Optional
+    public abstract SetProperty<String> getIntrospectorExcludes();
 
     @TaskAction
     public void run() throws IOException {
@@ -112,23 +120,14 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
             forIntrospector.add(dst);
         }
         try (ClasspathAccess classpathAccess = new ClasspathAccess(forIntrospector)) {
-            Set<String> patterns = getIntrospectorIncludes().getOrNull();
-            Set<String> introspectorIncludesExactMatch;
-            List<String> introspectorIncludesPrefixes;
-            if (patterns == null || patterns.isEmpty()) {
-                introspectorIncludesExactMatch = null;
-                introspectorIncludesPrefixes = null;
+            Set<String> includePatterns = getIntrospectorIncludes().getOrNull();
+            ClassNameMatcher introspectorIncludes;
+            if (includePatterns == null || includePatterns.isEmpty()) {
+                introspectorIncludes = null;
             } else {
-                introspectorIncludesExactMatch = new HashSet<>();
-                introspectorIncludesPrefixes = new ArrayList<>();
-                for (String pattern : patterns) {
-                    if (pattern.endsWith(".*")) {
-                        introspectorIncludesPrefixes.add(pattern.substring(0, pattern.length() - 1));
-                    } else {
-                        introspectorIncludesExactMatch.add(pattern);
-                    }
-                }
+                introspectorIncludes = new ClassNameMatcher(includePatterns);
             }
+            ClassNameMatcher introspectorExcludes = new ClassNameMatcher(getIntrospectorExcludes().orElse(Set.of()).get());
             classpathAccess.walkFileTree(root -> new SimpleFileVisitor<>() {
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
@@ -162,10 +161,12 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                         }
                     }
                     String p = relative.toString();
-                    if (introspectorIncludesPrefixes != null && p.endsWith(".class")) {
+                    if ((introspectorIncludes != null || !introspectorExcludes.isEmpty()) && p.endsWith(".class")) {
                         String className = p.substring(0, p.length() - 6).replace('/', '.');
-                        if (!introspectorIncludesExactMatch.contains(className) &&
-                            introspectorIncludesPrefixes.stream().noneMatch(className::startsWith)) {
+                        if (introspectorIncludes != null && !introspectorIncludes.matches(className)) {
+                            delete = true;
+                        }
+                        if (introspectorExcludes.matches(className)) {
                             delete = true;
                         }
                     }

@@ -34,6 +34,7 @@ dependencies {
 
 tasks.withType<PrepareClusterFuzzTask> {
     introspectorIncludes = listOf("io.micronaut.*")
+    introspectorExcludes = listOf("io.micronaut.context.*")
 }
 
 tasks.named<JazzerTask>("jazzer") {
