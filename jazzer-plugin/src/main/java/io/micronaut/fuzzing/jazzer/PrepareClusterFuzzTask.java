@@ -75,7 +75,7 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                     try (OutputStream os = new FileOutputStream(dictFile)) {
                         buildDictionary(classpathAccess, os, target);
                     }
-                    args.add("-dict=$this_dir/" + fileName);
+                    args.add("-dict=$this_dir/dict/" + fileName);
                 }
                 String sh = """
                 #!/bin/bash
