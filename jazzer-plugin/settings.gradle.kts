@@ -1,7 +1,7 @@
-rootProject.name = "jazzer-plugin"
+rootProject.name = "micronaut-jazzer-plugin"
 
 plugins {
-    id("io.micronaut.build.shared.settings") version "7.3.0"
+    id("io.micronaut.build.shared.settings") version "7.3.1"
 }
 
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
