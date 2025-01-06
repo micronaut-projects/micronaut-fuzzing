@@ -121,15 +121,15 @@ final class CustomResourceLeakDetector<T> extends ResourceLeakDetector<T> {
     private record Leak(String resourceType, String records) {}
 
     private static class FixedHint implements ResourceLeakHint {
-        private final byte[] associatedInput;
+        private final String msg;
 
         private FixedHint(byte[] associatedInput) {
-            this.associatedInput = associatedInput;
+            this.msg = "Associated input: " + (associatedInput == null ? "<none>" : Base64.getEncoder().encodeToString(associatedInput));
         }
 
         @Override
         public String toHintString() {
-            return "Associated input: " + (associatedInput == null ? "<none>" : Base64.getEncoder().encodeToString(associatedInput));
+            return msg;
         }
     }
 }
