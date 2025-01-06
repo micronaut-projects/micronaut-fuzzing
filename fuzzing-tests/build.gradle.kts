@@ -41,6 +41,9 @@ tasks.withType<PrepareClusterFuzzTask> {
             "io.micronaut.core.util.clhm.ConcurrentLinkedHashMap*",
         )
     }
+    jvmArgs = listOf(
+        "-XX:+ExitOnOutOfMemoryError"
+    )
 }
 
 tasks.named<JazzerTask>("jazzer") {
