@@ -4,15 +4,13 @@ plugins {
 }
 
 dependencies {
-    implementation(mn.micronaut.core.processor)
+    implementation(libs.managed.jazzer.standalone)
     implementation(mn.jackson.databind)
     implementation(projects.micronautFuzzingApi)
-
-    testImplementation(mn.micronaut.inject.java.test)
 }
 
 tasks {
     generateModel {
-        packageName = "io.micronaut.fuzzing.processor"
+        packageName = "io.micronaut.fuzzing.runner"
     }
 }

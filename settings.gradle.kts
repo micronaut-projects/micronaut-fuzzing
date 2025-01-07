@@ -17,6 +17,7 @@ rootProject.name = "fuzzing-parent"
 
 include("fuzzing-annotation-processor")
 include("fuzzing-api")
+include("fuzzing-runner")
 include("fuzzing-tests")
 
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")

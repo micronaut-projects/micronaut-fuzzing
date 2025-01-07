@@ -16,6 +16,7 @@
 package io.micronaut.fuzzing;
 
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
+import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 
 @FuzzTarget(enableImplicitly = false)
 public class TestTarget {
@@ -28,5 +29,9 @@ public class TestTarget {
                 throw new RuntimeException("failure");
             }
         }
+    }
+
+    public static void main(String[] args) {
+        LocalJazzerRunner.create(TestTarget.class).fuzz();
     }
 }

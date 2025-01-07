@@ -20,6 +20,7 @@ import io.micronaut.fuzzing.Dict;
 import io.micronaut.fuzzing.FlagAppender;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
+import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 import io.micronaut.http.server.netty.NettyHttpServer;
 import io.micronaut.runtime.server.EmbeddedServer;
 import io.netty.buffer.ByteBuf;
@@ -85,5 +86,9 @@ public class EmbeddedHttpTarget {
 
     public static void fuzzerTearDown() {
         //CustomResourceLeakDetector.reportStillOpen();
+    }
+
+    public static void main(String[] args) {
+        LocalJazzerRunner.create(EmbeddedHttpTarget.class).fuzz();
     }
 }

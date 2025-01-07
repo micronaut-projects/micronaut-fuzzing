@@ -49,6 +49,7 @@ micronaut-logging = { module = "io.micronaut.logging:micronaut-logging-bom", ver
 # jdoctor = { module = "me.champeau.jdoctor:jdoctor-core", version.ref="jdoctor" }
 
 managed-jazzer-api = { module = 'com.code-intelligence:jazzer-api', version.ref = 'managed-jazzer' }
+managed-jazzer-standalone = { module = 'com.code-intelligence:jazzer', version.ref = 'managed-jazzer' }
 
 [bundles]
 

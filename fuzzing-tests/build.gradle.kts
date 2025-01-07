@@ -21,6 +21,7 @@ dependencies {
     implementation(mnLogging.logback.classic)
 
     implementation(projects.micronautFuzzingApi)
+    implementation(projects.micronautFuzzingRunner)
 
     annotationProcessor(mn.micronaut.inject.java)
     annotationProcessor(projects.micronautFuzzingAnnotationProcessor)

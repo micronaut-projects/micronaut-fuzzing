@@ -19,7 +19,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.FileVisitor;
@@ -93,31 +92,7 @@ public abstract class BaseJazzerTask extends DefaultTask {
     }
 
     protected final void buildDictionary(ClasspathAccess cp, OutputStream out, DefinedFuzzTarget target) throws IOException {
-        if (target.dictionary() != null) {
-            out.write("# Manually defined dictionary entries\n".getBytes(StandardCharsets.UTF_8));
-            for (String s : target.dictionary()) {
-                out.write('"');
-                for (byte b : s.getBytes(StandardCharsets.UTF_8)) {
-                    if (b == '"' || b == '\\') {
-                        // escape \ and "
-                        out.write('\\');
-                        out.write(b);
-                    } else if (b >= ' ' && b <= '~') {
-                        // printable ascii char
-                        out.write((char) b);
-                    } else {
-                        out.write('\\');
-                        out.write('x');
-                        if ((b & 0xff) < 0x10) {
-                            out.write('0');
-                        }
-                        out.write(Integer.toHexString(b & 0xff).getBytes(StandardCharsets.UTF_8));
-                    }
-                }
-                out.write('"');
-                out.write('\n');
-            }
-        }
+        target.writeStaticDictionary(out);
         if (target.dictionaryResources() != null) {
             for (String r : target.dictionaryResources()) {
                 List<Path> resolved = cp.resolve(r);
@@ -125,7 +100,7 @@ public abstract class BaseJazzerTask extends DefaultTask {
                     throw new IllegalStateException("Failed to find declared dictionary resource " + r + " for target " + target.targetClass());
                 }
                 for (Path path : resolved) {
-                    out.write(("# Dictionary from " + r + "\n").getBytes(StandardCharsets.UTF_8));
+                    DefinedFuzzTarget.writeResourceDictionaryPrefix(out, r);
                     Files.copy(path, out);
                     out.write('\n');
                 }

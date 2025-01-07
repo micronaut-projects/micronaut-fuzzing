@@ -12,6 +12,7 @@ import org.gradle.language.base.plugins.LifecycleBasePlugin;
 
 import javax.inject.Inject;
 import java.io.File;
+import java.util.Map;
 
 public abstract class JazzerPlugin implements Plugin<Project> {
     @Inject
@@ -19,8 +20,11 @@ public abstract class JazzerPlugin implements Plugin<Project> {
 
     @Override
     public void apply(Project project) {
-        Configuration jazzerClasspath = project.getConfigurations().create("jazzerClasspath", c ->
-            c.extendsFrom(project.getConfigurations().getByName(JavaPlugin.RUNTIME_CLASSPATH_CONFIGURATION_NAME)));
+        Configuration jazzerClasspath = project.getConfigurations().create("jazzerClasspath", c -> {
+            c.extendsFrom(project.getConfigurations().getByName(JavaPlugin.RUNTIME_CLASSPATH_CONFIGURATION_NAME));
+            // exclude jazzer, jazzer-api etc, since they are supplied by the runtime.
+            c.exclude(Map.of("group", "com.code-intelligence"));
+        });
         jazzerClasspath.getDependencies().add(project.getDependencies().create(project));
 
         project.getTasks().register("jazzer", JazzerTask.class, task -> {

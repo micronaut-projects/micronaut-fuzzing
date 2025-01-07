@@ -10,12 +10,13 @@ repositories {
 
 dependencies {
     implementation(mn.jackson.databind)
+    compileOnly(mn.micronaut.core) // annotations
 
     testImplementation(mnTest.junit.jupiter.api)
     testImplementation(mnTest.junit.jupiter.engine)
 }
 
-tasks{
+tasks {
     test {
         useJUnitPlatform()
     }
