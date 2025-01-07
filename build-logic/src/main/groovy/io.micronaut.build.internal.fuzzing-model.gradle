@@ -1,0 +1,13 @@
+import io.micronaut.build.internal.tasks.GenerateModelClasses
+
+def generateModel = tasks.register("generateModel", GenerateModelClasses) {
+    group = "build"
+    description = "Generate the model for the fuzzing module"
+    outputDirectory = layout.buildDirectory.dir("generated/sources/model")
+}
+
+sourceSets {
+    main {
+        java.srcDir(generateModel)
+    }
+}

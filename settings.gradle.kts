@@ -3,6 +3,7 @@ pluginManagement {
         gradlePluginPortal()
         mavenCentral()
     }
+    includeBuild("build-logic")
     includeBuild("jazzer-plugin") {
         name = "micronaut-jazzer-plugin"
     }
@@ -20,10 +21,9 @@ include("fuzzing-tests")
 
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
-configure<io.micronaut.build.MicronautBuildSettingsExtension> {
+micronautBuild {
     useStandardizedProjectNames = true
 
     importMicronautCatalog()
-
     requiresDevelopmentVersion("micronaut-core", "4.8.x")
 }
