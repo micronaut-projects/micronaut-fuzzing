@@ -1,5 +1,6 @@
 plugins {
     id("java-gradle-plugin")
+    id("io.micronaut.build.internal.publishing")
 }
 
 repositories {

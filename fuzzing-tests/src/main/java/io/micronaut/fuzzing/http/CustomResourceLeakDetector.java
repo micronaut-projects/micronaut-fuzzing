@@ -40,10 +40,15 @@ final class CustomResourceLeakDetector<T> extends ResourceLeakDetector<T> {
         }
     }
 
-    private static final List<Leak> leaks = new CopyOnWriteArrayList<>();
-    private static final List<ResourceLeakDetector<?>> detectors = new CopyOnWriteArrayList<>();
+    private static final List<Leak> LEAKS = new CopyOnWriteArrayList<>();
+    private static final List<ResourceLeakDetector<?>> DETECTORS = new CopyOnWriteArrayList<>();
 
     private static volatile ResourceLeakHint currentHint = new FixedHint(null);
+
+    public CustomResourceLeakDetector(Class<?> resourceType, int samplingInterval) {
+        super(resourceType, samplingInterval);
+        DETECTORS.add(this);
+    }
 
     static void register() {
         ResourceLeakDetector.setLevel(Level.PARANOID);
@@ -60,11 +65,6 @@ final class CustomResourceLeakDetector<T> extends ResourceLeakDetector<T> {
         currentHint = new FixedHint(input);
     }
 
-    public CustomResourceLeakDetector(Class<?> resourceType, int samplingInterval) {
-        super(resourceType, samplingInterval);
-        detectors.add(this);
-    }
-
     @Override
     protected boolean needReport() {
         return true;
@@ -72,13 +72,13 @@ final class CustomResourceLeakDetector<T> extends ResourceLeakDetector<T> {
 
     @Override
     protected void reportTracedLeak(String resourceType, String records) {
-        leaks.add(new Leak(resourceType, records));
+        LEAKS.add(new Leak(resourceType, records));
         super.reportTracedLeak(resourceType, records);
     }
 
     @Override
     protected void reportUntracedLeak(String resourceType) {
-        leaks.add(new Leak(resourceType, null));
+        LEAKS.add(new Leak(resourceType, null));
         super.reportUntracedLeak(resourceType);
     }
 
@@ -88,9 +88,9 @@ final class CustomResourceLeakDetector<T> extends ResourceLeakDetector<T> {
     }
 
     static void reportLeaks() {
-        if (!leaks.isEmpty()) {
+        if (!LEAKS.isEmpty()) {
             StringBuilder msg = new StringBuilder("Reported leaks! Probably unrelated to this particular run, though.\n");
-            for (Leak leak : leaks) {
+            for (Leak leak : LEAKS) {
                 msg.append(leak.resourceType).append("\n");
                 msg.append(leak.records).append("\n");
             }
@@ -101,7 +101,7 @@ final class CustomResourceLeakDetector<T> extends ResourceLeakDetector<T> {
     static void reportStillOpen() {
         Logger logger = LoggerFactory.getLogger(CustomResourceLeakDetector.class);
         String found = null;
-        for (ResourceLeakDetector<?> detector : detectors) {
+        for (ResourceLeakDetector<?> detector : DETECTORS) {
             Set<?> s = (Set<?>) ALL_LEAKS_FIELD.get(detector);
             for (Object o : s) {
                 String v = o.toString();
@@ -118,9 +118,10 @@ final class CustomResourceLeakDetector<T> extends ResourceLeakDetector<T> {
         }
     }
 
-    private record Leak(String resourceType, String records) {}
+    private record Leak(String resourceType, String records) {
+    }
 
-    private static class FixedHint implements ResourceLeakHint {
+    private static final class FixedHint implements ResourceLeakHint {
         private final String msg;
 
         private FixedHint(byte[] associatedInput) {

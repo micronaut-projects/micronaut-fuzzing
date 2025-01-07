@@ -23,14 +23,10 @@ import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.Post;
 import jakarta.inject.Singleton;
 import org.reactivestreams.Publisher;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @Singleton
 @Controller
-public class SimpleController {
-    private static final Logger LOG = LoggerFactory.getLogger(SimpleController.class);
-
+public final class SimpleController {
     static final String ECHO_PUBLISHER = "/echo-publisher";
     static final String ECHO_ARRAY = "/echo-array";
     static final String ECHO_STRING = "/echo-string";
