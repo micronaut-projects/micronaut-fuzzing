@@ -28,7 +28,7 @@ import java.util.function.Consumer;
  * This class splits a byte input into multiple chunks in a fuzzer-friendly way, using the
  * {@link ByteSeparator#SEPARATOR}. Take care to add the separator to the fuzzer dictionary!
  */
-public class ByteSeparator {
+public final class ByteSeparator {
     static final String SEPARATOR = "SEP";
     private static final ByteBuf SEPARATOR_BYTES = Unpooled.copiedBuffer(SEPARATOR, StandardCharsets.UTF_8);
 
