@@ -1,3 +1,7 @@
+pluginManagement {
+    includeBuild("../build-logic")
+}
+
 rootProject.name = "micronaut-jazzer-plugin"
 
 plugins {
@@ -6,7 +10,7 @@ plugins {
 
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
-configure<io.micronaut.build.MicronautBuildSettingsExtension> {
-    useStandardizedProjectNames = false
+micronautBuild {
+    useStandardizedProjectNames = true
     importMicronautCatalog()
 }

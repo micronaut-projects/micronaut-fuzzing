@@ -18,15 +18,15 @@ dependencies {
     implementation(mn.micronaut.jackson.databind)
     implementation(mn.reactor)
 
-    implementation("ch.qos.logback:logback-classic:1.4.14")
+    implementation(mnLogging.logback.classic)
 
     implementation(projects.micronautFuzzingApi)
 
     annotationProcessor(mn.micronaut.inject.java)
     annotationProcessor(projects.micronautFuzzingAnnotationProcessor)
 
-    testImplementation("org.junit.jupiter:junit-jupiter-engine:5.11.4")
-    testImplementation("org.junit.jupiter:junit-jupiter-params:5.11.4")
+    testImplementation(mnTest.junit.jupiter.engine)
+    testImplementation(mnTest.junit.jupiter.params)
     testImplementation(mn.micronaut.http.client)
     testImplementation(mnTest.micronaut.test.junit5)
     testAnnotationProcessor(mn.micronaut.inject.java)

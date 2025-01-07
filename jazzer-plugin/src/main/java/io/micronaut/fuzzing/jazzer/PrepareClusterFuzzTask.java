@@ -1,6 +1,6 @@
 package io.micronaut.fuzzing.jazzer;
 
-import io.micronaut.fuzzing.processor.DefinedFuzzTarget;
+import io.micronaut.fuzzing.model.DefinedFuzzTarget;
 import org.gradle.api.Action;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.provider.SetProperty;

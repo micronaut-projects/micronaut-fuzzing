@@ -18,7 +18,8 @@
 [versions]
 micronaut = "4.7.5"
 micronaut-docs = "2.0.0"
-micronaut-test = "4.1.0"
+micronaut-test = "4.6.2"
+micronaut-logging = "1.5.1"
 groovy = "4.0.15"
 spock = "2.3-groovy-4.0"
 
@@ -31,7 +32,7 @@ managed-jazzer = "0.23.0"
 [libraries]
 # Core
 micronaut-core = { module = 'io.micronaut:micronaut-core-bom', version.ref = 'micronaut' }
-
+micronaut-logging = { module = "io.micronaut.logging:micronaut-logging-bom", version.ref = "micronaut-logging" }
 #
 # Managed dependencies appear in the BOM
 #

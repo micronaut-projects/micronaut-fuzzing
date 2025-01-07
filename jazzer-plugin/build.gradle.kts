@@ -1,6 +1,7 @@
 plugins {
     id("java-gradle-plugin")
     id("io.micronaut.build.internal.publishing")
+    id("io.micronaut.build.internal.fuzzing-model")
 }
 
 repositories {
@@ -8,15 +9,19 @@ repositories {
 }
 
 dependencies {
-    // todo: bom dependencies
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.18.2")
+    implementation(mn.jackson.databind)
 
-    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
-    testImplementation("org.junit.jupiter:junit-jupiter-engine:5.11.4")
+    testImplementation(mnTest.junit.jupiter.api)
+    testImplementation(mnTest.junit.jupiter.engine)
 }
 
-tasks.test {
-    useJUnitPlatform()
+tasks{
+    test {
+        useJUnitPlatform()
+    }
+    generateModel {
+        packageName = "io.micronaut.fuzzing.model"
+    }
 }
 
 gradlePlugin {
