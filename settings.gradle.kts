@@ -10,7 +10,7 @@ pluginManagement {
 }
 
 plugins {
-    id("io.micronaut.build.shared.settings") version "7.3.1"
+    id("io.micronaut.build.shared.settings") version "7.3.2"
 }
 
 rootProject.name = "fuzzing-parent"
