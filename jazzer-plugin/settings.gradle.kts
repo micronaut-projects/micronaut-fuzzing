@@ -14,3 +14,11 @@ micronautBuild {
     useStandardizedProjectNames = true
     importMicronautCatalog()
 }
+
+val secring = File(settingsDir, "../secring.gpg").normalize()
+if (secring.exists()) {
+    val target = File(settingsDir, "secring.gpg")
+    if (!target.exists()) {
+        secring.copyTo(target)
+    }
+}
