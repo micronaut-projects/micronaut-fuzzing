@@ -7,6 +7,7 @@ dependencies {
     implementation(libs.managed.jazzer.standalone)
     implementation(mn.jackson.databind)
     implementation(projects.micronautFuzzingApi)
+    compileOnly(mn.micronaut.core)
 }
 
 tasks {
