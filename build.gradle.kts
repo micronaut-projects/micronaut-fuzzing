@@ -15,3 +15,8 @@ listOf("publishAllPublicationsToBuildRepository", "publishToSonatype", "closeAnd
         }
     }
 }
+
+val secring = File("secring.gpg")
+if (secring.exists()) {
+    secring.copyTo(File("jazzer-plugin/secring.gpg"))
+}
