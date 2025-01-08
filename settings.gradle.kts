@@ -28,3 +28,8 @@ micronautBuild {
     importMicronautCatalog()
     requiresDevelopmentVersion("micronaut-core", "4.8.x")
 }
+
+val secring = File("secring.gpg")
+if (secring.exists()) {
+    secring.copyTo(File("jazzer-plugin/secring.gpg"))
+}
