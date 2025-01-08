@@ -26,5 +26,8 @@ micronautBuild {
     useStandardizedProjectNames = true
 
     importMicronautCatalog()
-    requiresDevelopmentVersion("micronaut-core", "4.8.x")
+
+    if (providers.environmentVariable("OSSFUZZ_MICRONAUT_BRANCH").isPresent) {
+        requiresDevelopmentVersion("micronaut-core", providers.environmentVariable("OSSFUZZ_MICRONAUT_BRANCH").get())
+    }
 }
