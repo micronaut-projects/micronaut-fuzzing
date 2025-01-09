@@ -48,9 +48,13 @@
                                 
                                 <div class="toc-item" style="margin-left:0"><a href="#releaseHistory"><strong>2</strong><span>Release History</span></a></div>
                                 
-                                <div class="toc-item" style="margin-left:0"><a href="#quickStart"><strong>3</strong><span>Quick Start</span></a></div>
+                                <div class="toc-item" style="margin-left:0"><a href="#fuzzing"><strong>3</strong><span>Introduction to Fuzzing</span></a></div>
                                 
-                                <div class="toc-item" style="margin-left:0"><a href="#repository"><strong>4</strong><span>Repository</span></a></div>
+                                <div class="toc-item" style="margin-left:0"><a href="#quickStart"><strong>4</strong><span>Quick Start</span></a></div>
+                                
+                                <div class="toc-item" style="margin-left:0"><a href="#tips"><strong>5</strong><span>Tips</span></a></div>
+                                
+                                <div class="toc-item" style="margin-left:0"><a href="#repository"><strong>6</strong><span>Repository</span></a></div>
                                 
                             </div>
                         </div>
@@ -85,9 +89,13 @@
         
         <div class="toc-item" style="margin-left:0px" id="toc-item-releaseHistory"><a href="#releaseHistory"><strong>2</strong><span>Release History</span></a></div>
         
-        <div class="toc-item" style="margin-left:0px" id="toc-item-quickStart"><a href="#quickStart"><strong>3</strong><span>Quick Start</span></a></div>
+        <div class="toc-item" style="margin-left:0px" id="toc-item-fuzzing"><a href="#fuzzing"><strong>3</strong><span>Introduction to Fuzzing</span></a></div>
         
-        <div class="toc-item" style="margin-left:0px" id="toc-item-repository"><a href="#repository"><strong>4</strong><span>Repository</span></a></div>
+        <div class="toc-item" style="margin-left:0px" id="toc-item-quickStart"><a href="#quickStart"><strong>4</strong><span>Quick Start</span></a></div>
+        
+        <div class="toc-item" style="margin-left:0px" id="toc-item-tips"><a href="#tips"><strong>5</strong><span>Tips</span></a></div>
+        
+        <div class="toc-item" style="margin-left:0px" id="toc-item-repository"><a href="#repository"><strong>6</strong><span>Repository</span></a></div>
         
         </div>
     </div>
@@ -97,7 +105,7 @@
         <h1>Micronaut fuzzing</h1>
         <p></p>
         <p>TODO</p>
-        <p><strong>Version:</strong> 0.1.7 </p>
+        <p><strong>Version:</strong> 0.1.8 </p>
     </div>
     
 <h1 id="introduction"><a class="anchor" href="#introduction"></a>1 Introduction</h1>
@@ -110,7 +118,8 @@
 
 
 <div class="paragraph">
-<p>TODO</p>
+<p>Micronaut Fuzzing provides an opinionated approach to writing fuzz tests for JVM projects using
+<a href="https://github.com/CodeIntelligenceTesting/jazzer">jazzer</a>.</p>
 </div>
 
 <h1 id="releaseHistory"><a class="anchor" href="#releaseHistory"></a>2 Release History</h1>
@@ -129,7 +138,229 @@
 <p><a href="https://github.com/micronaut-projects/micronaut-fuzzing/releases">https://github.com/micronaut-projects/micronaut-fuzzing/releases</a></p>
 </div>
 
-<h1 id="quickStart"><a class="anchor" href="#quickStart"></a>3 Quick Start</h1>
+<h1 id="fuzzing"><a class="anchor" href="#fuzzing"></a>3 Introduction to Fuzzing</h1>
+
+<div class='contribute-btn'>
+    <button type='button' class='btn btn-default' onclick='window.location.href="https://github.com/micronaut-projects/micronaut-fuzzing/edit/master/src/main/docs/guide/fuzzing.adoc"'>
+        <i class='fa fa-pencil-square-o'></i> Improve this doc
+    </button>
+</div>
+
+
+<div class="paragraph">
+<p>Traditional testing is good at testing "normal" behavior of applications, but it is not ideal for security testing.
+The programmer that wrote the code under test usually also writes the test inputs, so if she failed to consider edge
+cases during programming, she is likely to also miss those cases when writing test inputs.</p>
+</div>
+<div class="paragraph">
+<p>Fuzz testing is an automated testing technique that can address this issue. Instead of relying on manually supplied
+inputs, tests are run with random inputs (more on that later), and program behavior is observed to remain within
+certain expected parameters.</p>
+</div>
+<div class="paragraph">
+<p>Let&#8217;s consider the following toy example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">record Ingredient(
+        String name,
+        int massInGrams,
+        int priceInCents
+) {
+    int pricePerKg() {
+        return priceInCents * 1000 / massInGrams;
+    }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>A manually written test case might look like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">@Test
+void test() {
+    assertEquals(50, new Ingredient("flour", 2000, 100).pricePerKg());
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now, let&#8217;s write a fuzz test. Don&#8217;t worry, the details are explained later.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">@FuzzTarget(enableImplicitly = false)
+public class IngredientTarget {
+    public static void fuzzerTestOneInput(FuzzedDataProvider data) {
+        new Ingredient(data.consumeString(10), data.consumeInt(), data.consumeInt()).pricePerKg();
+    }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>After running it for less than a minute, this error appears:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>== Java Exception: java.lang.ArithmeticException: / by zero
+	at io.micronaut.fuzzing.IngredientTarget$Ingredient.pricePerKg(IngredientTarget.java:21)
+	at io.micronaut.fuzzing.IngredientTarget.fuzzerTestOneInput(IngredientTarget.java:12)
+== libFuzzer crashing input ==
+MS: 0 ; base unit: 0000000000000000000000000000000000000000</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>That&#8217;s a bug! If <code>massInGrams</code> is 0, then calling <code>pricePerKg()</code> throws an exception because of the division by zero.
+That can be easily fixed with a check:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">Ingredient {
+    if (massInGrams == 0) {
+        throw new IllegalArgumentException("Mass cannot be 0");
+    }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Let&#8217;s take a look at what went into writing this fuzz test.</p>
+</div>
+<div class="sect2">
+<h3 id="_input_preparation">Input preparation</h3>
+<div class="paragraph">
+<p>The most obvious (but also easiest) part of writing a fuzz test is preparing the input to call the code under test. The
+fuzzer generally supplies the input as a byte array of arbitrary length. In the above example, we use the
+<code>FuzzedDataProvider</code> API from jazzer to create useful types (a <code>String</code> and two <code>int</code>) from that input.</p>
+</div>
+<div class="paragraph">
+<p>While in many cases this part of the test is simple, there are still some caveats to consider when writing more complex
+tests. Fuzzer inputs are not completely random: They follow certain patterns, so if you design your input preparation
+properly, the fuzzer will have an easier time finding edge cases.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_sanitization">Sanitization</h3>
+<div class="paragraph">
+<p>Simply running a program with invalid inputs is not enough, you need to detect that the program is misbehaving.</p>
+</div>
+<div class="paragraph">
+<p>Fuzzing first came to be, and is still most popular, in unmanaged languages such as C or C++, where buggy code can lead
+to memory corruption. For example, writing to a field of a reference that is <code>null</code> in Java will cause a
+<code>NullPointerException</code>, but in C it may not lead to an exception at all, and instead other unrelated data structures
+may be modified.</p>
+</div>
+<div class="paragraph">
+<p>To find such bugs, fuzzers use <em>sanitizers</em>. These sanitizers add checks to the runtime to detect these conditions,
+e.g. writing to a <code>NULL</code> field, when they happen. Such a write operation is basically always a bug.</p>
+</div>
+<div class="paragraph">
+<p>For jazzer fuzz targets, the "sanitization" mostly just checks for exceptions thrown by the <code>fuzzerTestOneInput</code>
+method. In the broken example, that method threw an <code>ArithmeticException</code>, so jazzer considers this as a failure. But
+not all bugs throw exceptions from <code>fuzzerTestOneInput</code>, and not all exceptions are bugs. If we ran the same fuzzer
+with the "fixed" <code>Ingredient</code> with the additional check, the fuzz test would <em>still</em> fail, except that it would now
+fail with an <code>IllegalArgumentException</code> instead of an <code>ArithmeticException</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>== Java Exception: java.lang.IllegalArgumentException: Mass cannot be 0
+	at io.micronaut.fuzzing.IngredientTarget$Ingredient.&lt;init&gt;(IngredientTarget.java:22)
+	at io.micronaut.fuzzing.IngredientTarget.fuzzerTestOneInput(IngredientTarget.java:12)
+== libFuzzer crashing input ==
+MS: 0 ; base unit: 0000000000000000000000000000000000000000</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We need to modify our test case to handle this exception:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">public static void fuzzerTestOneInput(FuzzedDataProvider data) {
+    Ingredient ingredient;
+    try {
+        ingredient = new Ingredient(data.consumeString(10), data.consumeInt(), data.consumeInt());
+    } catch (IllegalArgumentException ok) {
+        return; // cancel this test run
+    }
+    ingredient.pricePerKg();
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We might also want to detect other nonsensical outputs:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">public static void fuzzerTestOneInput(FuzzedDataProvider data) {
+    ...
+    if (ingredient.pricePerKg() &lt;= 0) {
+        throw new AssertionError();
+    }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This change will reveal further edge cases that we missed, such as a negative <code>priceInCents</code>.</p>
+</div>
+<div class="paragraph">
+<p>In practice, sanitization can become very complicated, but it is critical to the usefulness of a fuzz test, so it is
+worth spending time on. If the code under test interacts with files for example, it may be worthwhile to verify that no
+files are written outside allowed folders. If the code interacts with a database, verify that no data is modified that
+shouldn&#8217;t be. Once you&#8217;ve written a sanitizer, it can often stay the same for a long time, even as the code it&#8217;s
+testing evolves.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_under_the_hood">Under the hood</h3>
+<div class="paragraph">
+<p>Another key part of a fuzzer is its input generation. Fuzzers do not actually pass truly random inputs to your code.
+There are way too many possible inputs for that, so finding a bug would take forever. Instead, they use various
+heuristics to produce inputs that cause "interesting" behavior in your application. Fortunately, that is not usually
+something you have to concern yourself with directly, but it is good to have a rough idea of how it works in order to
+write tests that work well with the fuzzer.</p>
+</div>
+<div class="paragraph">
+<p>The main tool of the fuzzer for finding interesting inputs is coverage analysis. You may already be familiar with
+coverage reports from unit testing: The application bytecode is instrumented to report which lines of code, which
+conditions etc. are hit during test case execution.</p>
+</div>
+<div class="paragraph">
+<p>The fuzzer coverage analysis behaves similarly. When a new line of code is hit by a new input, that input is added to
+the <em>corpus</em> of the fuzz test. The corpus grows over time and provides the fuzzer with starting points to produce new
+inputs.</p>
+</div>
+<div class="paragraph">
+<p>Creating new inputs from the corpus is called <em>mutation</em>. This can involve inserting bytes into the input, or removing
+bytes, or swapping bytes, or many other operations. This is already a fairly complex process and research is still
+being done on this, but it is also handled by the fuzzer internally. One important consideration is that you should
+avoid "action at a distance" in your input preparation code (see the tips section below).</p>
+</div>
+<div class="paragraph">
+<p>Another important aid for the fuzzer is a <em>dictionary</em>. When you&#8217;re testing an HTTP server that will only accept
+requests with the <code>Content-Type: application/json</code> header, then the fuzzer is going to spend forever sending invalid
+inputs until it figures out by pure chance that this header needs to be present. To give the fuzzer a hand, pass a
+dictionary that contains the words <code>Content-Type</code> and <code>application/json</code>. The fuzzer will insert these words into new
+inputs occasionally, so it will find a valid request eventually. Once the input is found, it&#8217;s added to the corpus, and
+the fuzzer will continue efficiently.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_fuzzing_at_scale">Fuzzing at scale</h3>
+<div class="paragraph">
+<p>Fuzzing is a time-intensive process. Millions or even billions of inputs are passed to the code under test, and
+sanitizers and coverage analysis add their own overhead to the test execution. A fuzzer is never really done, there&#8217;s
+always more inputs to try. And some edge cases can be difficult to reach, taking many hours to discover.</p>
+</div>
+<div class="paragraph">
+<p>Because the necessary computing resources are out of reach for many open-source projects, but the benefit of finding
+security bugs can be so large, Google provides the <a href="https://github.com/google/oss-fuzz/">OSS-Fuzz</a> infrastructure.
+Open-source projects that are deemed <em>important</em> can run their fuzz tests on OSS-Fuzz at no cost.</p>
+</div>
+<div class="paragraph">
+<p>One objective of Micronaut Fuzzing is to provide a simple, opinionated way for JVM projects to build OSS-Fuzz tests.</p>
+</div>
+</div>
+
+<h1 id="quickStart"><a class="anchor" href="#quickStart"></a>4 Quick Start</h1>
 
 <div class='contribute-btn'>
     <button type='button' class='btn btn-default' onclick='window.location.href="https://github.com/micronaut-projects/micronaut-fuzzing/edit/master/src/main/docs/guide/quickStart.adoc"'>
@@ -139,10 +370,447 @@
 
 
 <div class="paragraph">
-<p>TODO</p>
+<p>To start writing fuzz tests, add the <code>micronaut-fuzzing-api</code> dependency, and the annotation processors:</p>
+</div>
+<div class="paragraph">
+<p>        <div class="listingblock multi-language-sample">
+<div class="title"></div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-kotlin hljs" data-lang="gradle">implementation(<span class="hljs-string">"io.micronaut.fuzzing:micronaut-fuzzing-api")</span></code></pre>
+</div>
+</div>
+<div class="listingblock multi-language-sample">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-xml hljs" data-lang="maven">&lt;dependency&gt;
+    &lt;groupId&gt;io.micronaut.fuzzing&lt;/groupId&gt;
+    &lt;artifactId&gt;micronaut-fuzzing-api&lt;/artifactId&gt;
+&lt;/dependency&gt;</code></pre>
+</div>
+</div></p>
+</div>
+<div class="paragraph">
+<p>        <div class="listingblock multi-language-sample">
+<div class="title"></div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-kotlin hljs" data-lang="gradle">annotationProcessor(<span class="hljs-string">"io.micronaut:micronaut-inject-java")</span></code></pre>
+</div>
+</div>
+<div class="listingblock multi-language-sample">
+<div class="title"></div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-xml hljs" data-lang="maven">&lt;annotationProcessorPaths&gt;
+    &lt;path&gt;
+        &lt;groupId&gt;io.micronaut&lt;/groupId&gt;
+        &lt;artifactId&gt;micronaut-inject-java&lt;/artifactId&gt;
+    &lt;/path&gt;
+&lt;/annotationProcessorPaths&gt;</code></pre>
+</div>
+</div></p>
+</div>
+<div class="paragraph">
+<p>        <div class="listingblock multi-language-sample">
+<div class="title"></div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-kotlin hljs" data-lang="gradle">annotationProcessor(<span class="hljs-string">"io.micronaut.fuzzing:micronaut-fuzzing-annotation-processor")</span></code></pre>
+</div>
+</div>
+<div class="listingblock multi-language-sample">
+<div class="title"></div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-xml hljs" data-lang="maven">&lt;annotationProcessorPaths&gt;
+    &lt;path&gt;
+        &lt;groupId&gt;io.micronaut.fuzzing&lt;/groupId&gt;
+        &lt;artifactId&gt;micronaut-fuzzing-annotation-processor&lt;/artifactId&gt;
+    &lt;/path&gt;
+&lt;/annotationProcessorPaths&gt;</code></pre>
+</div>
+</div></p>
+</div>
+<div class="paragraph">
+<p>This includes a transitive dependency on <code>jazzer-api</code>.</p>
+</div>
+<div class="paragraph">
+<p>Let&#8217;s write a simple test:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">import com.code_intelligence.jazzer.api.FuzzedDataProvider;
+import io.micronaut.fuzzing.FuzzTarget;
+
+@FuzzTarget <i class="conum" data-value="1"></i><b>(1)</b>
+public class IngredientTarget {
+    public static void fuzzerTestOneInput(FuzzedDataProvider data) { <i class="conum" data-value="2"></i><b>(2)</b>
+        new Ingredient(data.consumeString(10), data.consumeInt(), data.consumeInt()).pricePerKg();
+    }
+
+    record Ingredient(
+        String name,
+        int massInGrams,
+        int priceInCents
+    ) {
+        int pricePerKg() {
+            return priceInCents * 1000 / massInGrams;
+        }
+    }
+}</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>This annotation is required for Micronaut Fuzzing to pick up the test</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="2"></i><b>2</b></td>
+<td>Jazzer fuzz method. Could also accept a <code>byte[]</code> instead of the <code>FuzzedDataProvider</code></td>
+</tr>
+</table>
+</div>
+<div class="sect2">
+<h3 id="_dictionaries">Dictionaries</h3>
+<div class="paragraph">
+<p>It is highly recommended to add a dictionary to every non-trivial fuzz target. The <a href="../api/io/micronaut/fuzzing/Dict.html">@Dict</a> annotation can be
+used to manually add dictionary entries to a fuzz target. The dictionary can also be loaded from a resource using
+<a href="../api/io/micronaut/fuzzing/DictResource.html">@DictResource</a> (libfuzzer fuzzing dict syntax), and there is a pre-defined dictionary for HTTP using
+<a href="../api/io/micronaut/fuzzing/HttpDict.html">@HttpDict</a>.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_local_runner">Local runner</h3>
+<div class="paragraph">
+<p>Micronaut Fuzzing provides a "local" (same JVM) runner for rapid prototyping. First, add the <code>fuzzing-runner</code>
+dependency:</p>
+</div>
+<div class="paragraph">
+<p>        <div class="listingblock multi-language-sample">
+<div class="title"></div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-kotlin hljs" data-lang="gradle">implementation(<span class="hljs-string">"io.micronaut.fuzzing:micronaut-fuzzing-runner")</span></code></pre>
+</div>
+</div>
+<div class="listingblock multi-language-sample">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-xml hljs" data-lang="maven">&lt;dependency&gt;
+    &lt;groupId&gt;io.micronaut.fuzzing&lt;/groupId&gt;
+    &lt;artifactId&gt;micronaut-fuzzing-runner&lt;/artifactId&gt;
+&lt;/dependency&gt;</code></pre>
+</div>
+</div></p>
+</div>
+<div class="paragraph">
+<p>Then, you can add a simple <code>main</code> method to start fuzzing:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">public static void main(String[] args) {
+    LocalJazzerRunner.create(IngredientTarget.class).fuzz();
+}</code></pre>
+</div>
+</div>
+<div class="admonitionblock warning">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-warning" title="Warning"></i>
+</td>
+<td class="content">
+Local fuzzing is less stable, so it is recommended to use the gradle plugin to run fuzz tests properly for
+anything but test runs.
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>Instead of fuzzing, it is also possible to run a particular input using the <code>reproduce</code> method. This can be used for
+debugging errors found by "proper" fuzz runs.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_gradle_plugin">Gradle plugin</h3>
+<div class="paragraph">
+<p>The recommended way to generate and run fuzz tests is the gradle plugin.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-kotlin hljs" data-lang="kotlin">plugins {
+  id("io.micronaut.fuzzing.jazzer")
+}</code></pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_direct_run">Direct run</h4>
+<div class="paragraph">
+<p>To run the fuzz tests directly, use the <code>jazzer</code> task:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">./gradlew jazzer</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_oss_fuzz">OSS-Fuzz</h4>
+<div class="paragraph">
+<p>The <code>prepareClusterFuzz</code> task will generate output suitable for running on OSS-Fuzz. Output is written to the directory
+set in the <code>OUT</code> environment variable by default, and the task will fail if that variable is not set. The variable is
+set automatically by the OSS-Fuzz build infrastructure.</p>
+</div>
+<div class="paragraph">
+<p>The task under the hood:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Copies the test cases and any dependencies (except jazzer) to <code>$OUT/libs</code>. Jazzer is provided by the docker container
+already.</p>
+</li>
+<li>
+<p>Generates dictionaries (if declared) and writes them to <code>$OUT/libs/TargetName</code>.</p>
+</li>
+<li>
+<p>Creates a bash script for each fuzz target, to run the right class with the right dict and other options.</p>
+</li>
+<li>
+<p>Copies a filtered set of dependencies directly to <code>$OUT</code>. This is necessary because the fuzz introspector only
+considers jar files at the top level. The filtering is done to support multi-release jars and to keep the introspector
+output to a reasonable size.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>For Micronaut, we keep almost all of the build logic in our repositories so that we don&#8217;t have to send PRs to OSS-Fuzz
+as often. The OSS-Fuzz Dockerfile is as simple as this:</p>
+</div>
+<div class="listingblock">
+<div class="title">Dockerfile</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-dockerfile hljs" data-lang="dockerfile">FROM gcr.io/oss-fuzz-base/base-builder-jvm
+
+RUN apt-get update &amp;&amp; apt-get install -y locales <i class="conum" data-value="1"></i><b>(1)</b>
+RUN locale-gen en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+RUN git clone --depth=1 https://github.com/micronaut-projects/micronaut-fuzzing.git <i class="conum" data-value="2"></i><b>(2)</b>
+RUN micronaut-fuzzing/oss-fuzz/checkout.sh <i class="conum" data-value="3"></i><b>(3)</b>
+RUN ln -s micronaut-fuzzing/oss-fuzz/build.sh . <i class="conum" data-value="4"></i><b>(4)</b></code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>These locale setup steps are necessary to build micronaut-core, they may not be necessary for your project.</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="2"></i><b>2</b></td>
+<td>Clone the main fuzz test repo.</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="3"></i><b>3</b></td>
+<td>Run the checkout script below, to check out other repositories under test (e.g. micronaut-core)</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="4"></i><b>4</b></td>
+<td>Link the build file</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>The rest of the build files live in our own repos. <code>checkout.sh</code> fetches the source files. This must be done in the main
+<code>Dockerfile</code> for the OSS-Fuzz coverage reports to work properly.</p>
+</div>
+<div class="listingblock">
+<div class="title">checkout.sh</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">#!/bin/bash
+set -e
+git clone --depth=1 https://github.com/micronaut-projects/micronaut-core.git <i class="conum" data-value="1"></i><b>(1)</b></code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Clone the Micronaut Core repo. This is the code we run fuzz tests against.</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>In the actual build container, this build script runs:</p>
+</div>
+<div class="listingblock">
+<div class="title">build.sh</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">#!/bin/bash
+set -e
+
+<i class="conum" data-value="1"></i><b>(1)</b>
+
+cd micronaut-fuzzing
+./gradlew micronaut-fuzzing-tests:prepareClusterFuzz <i class="conum" data-value="2"></i><b>(2)</b></code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Build other projects here. We do this using gradle magic, so no explicit step is necessary.</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="2"></i><b>2</b></td>
+<td>Build the actual fuzz targets.</td>
+</tr>
+</table>
+</div>
+</div>
 </div>
 
-<h1 id="repository"><a class="anchor" href="#repository"></a>4 Repository</h1>
+<h1 id="tips"><a class="anchor" href="#tips"></a>5 Tips</h1>
+
+<div class='contribute-btn'>
+    <button type='button' class='btn btn-default' onclick='window.location.href="https://github.com/micronaut-projects/micronaut-fuzzing/edit/master/src/main/docs/guide/tips.adoc"'>
+        <i class='fa fa-pencil-square-o'></i> Improve this doc
+    </button>
+</div>
+
+
+<div class="paragraph">
+<p>Here are some tips for building fuzz targets.</p>
+</div>
+<div class="sect2">
+<h3 id="_avoid_action_at_a_distance">Avoid action at a distance</h3>
+<div class="paragraph">
+<p>When preparing the input, it is often necessary to produce multiple dynamically sized structures, for example network
+packets. It is tempting to use "length prefix" decoding as follows:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">public static void fuzzerTestOneInput(FuzzedDataProvider data) {
+    List&lt;byte[]&gt; packets = new ArrayList&lt;&gt;();
+    while (data.remainingBytes() &gt; 0) {
+        int len = data.consumeByte(0, 100);
+        packets.add(data.consumeBytes(len));
+    }
+    ...
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This would transform the input <code>\x03foo\x04fizz</code> into the two packets <code>foo</code> and <code>fizz</code>.</p>
+</div>
+<div class="paragraph">
+<p>While this <em>works</em>, it is not fuzzer-friendly. Many mutation operations that the fuzzer does will have an outsized
+impact on other parts of the input (hence "action at a distance"). For example, if a byte is inserted in the middle of
+the first packet, the length field of the next packet will be shifted to another byte, and all other packets will
+change as well. This is counterproductive, a mutation step is only supposed to have a limited impact on the control
+flow.</p>
+</div>
+<div class="paragraph">
+<p>A better alternative is to use separators. For example, split the input <code>fooSEPfizz</code> into the packets <code>foo</code> and <code>fizz</code>,
+and don&#8217;t forget to add <code>SEP</code> to the dictionary.</p>
+</div>
+<div class="paragraph">
+<p>To simplify this logic, <code>micronaut-fuzzing-api</code> provides the <a href="../api/io/micronaut/fuzzing/util/ByteSplitter.html">ByteSplitter</a> API:</p>
+</div>
+<div class="listingblock">
+<div class="title">ByteSplitter example</div>
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">@FuzzTarget
+@Dict("SEP") <i class="conum" data-value="1"></i><b>(1)</b>
+public class ExampleTarget {
+    private static final ByteSplitter SPLITTER = ByteSplitter.create("SEP"); <i class="conum" data-value="2"></i><b>(2)</b>
+
+    public static void fuzzerTestOneInput(FuzzedDataProvider data) {
+        for (byte[] packet : SPLITTER.split(data.consumeRemainingAsBytes())) { <i class="conum" data-value="3"></i><b>(3)</b>
+            ...
+        }
+    }
+}</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Add separator to the dictionary</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="2"></i><b>2</b></td>
+<td>Pre-computed splitter</td>
+</tr>
+<tr>
+<td><i class="conum" data-value="3"></i><b>3</b></td>
+<td>Split along <code>SEP</code> boundaries. There are more efficient methods available</td>
+</tr>
+</table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_logging_as_a_failure_indicator">Logging as a failure indicator</h3>
+<div class="paragraph">
+<p>Some failure conditions may not throw an exception directly from the method under test, but they may log a failure
+message. For some code, it may also be desirable to avoid logging entirely, as excessive logging can be a denial of
+service vector.</p>
+</div>
+<div class="paragraph">
+<p>To detect log messages, a simple logback appender:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.AppenderBase;
+
+public class FlagAppender extends AppenderBase&lt;ILoggingEvent&gt; {
+    private static volatile boolean triggered = false;
+
+    public static void checkTriggered() {
+        if (triggered) {
+            triggered = false;
+            throw new RuntimeException("Log message recorded, failing.");
+        }
+    }
+
+    @Override
+    protected void append(ILoggingEvent eventObject) {
+        triggered = true;
+    }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>It can be added to the <code>logback.xml</code> as follows:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-xml hljs" data-lang="xml">&lt;appender name="TRIGGER_FAILURE" class="io.micronaut.fuzzing.FlagAppender"&gt;
+    &lt;filter class="ch.qos.logback.classic.filter.ThresholdFilter"&gt;
+        &lt;level&gt;WARN&lt;/level&gt;
+        &lt;onMatch&gt;ACCEPT&lt;/onMatch&gt;
+        &lt;onMismatch&gt;DENY&lt;/onMismatch&gt;
+    &lt;/filter&gt;
+&lt;/appender&gt;
+
+&lt;root level="info"&gt;
+    <i class="conum" data-value="1"></i><b>(1)</b>
+    &lt;appender-ref ref="TRIGGER_FAILURE" /&gt;
+&lt;/root&gt;</code></pre>
+</div>
+</div>
+<div class="colist arabic">
+<table>
+<tr>
+<td><i class="conum" data-value="1"></i><b>1</b></td>
+<td>Other appenders</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>Then, just add <code>FlagAppender.checkTriggered();</code> to the end of your <code>fuzzerTestOneInput</code> method, and any log message
+will lead to a fuzzer failure.</p>
+</div>
+</div>
+
+<h1 id="repository"><a class="anchor" href="#repository"></a>6 Repository</h1>
 
 <div class='contribute-btn'>
     <button type='button' class='btn btn-default' onclick='window.location.href="https://github.com/micronaut-projects/micronaut-fuzzing/edit/master/src/main/docs/guide/repository.adoc"'>
