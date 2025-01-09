@@ -4,4 +4,8 @@ plugins {
 
 dependencies {
     api(libs.managed.jazzer.api)
+    compileOnly(mn.micronaut.core)
+
+    testImplementation(mnTest.junit.jupiter.engine)
+    testImplementation(mnTest.junit.jupiter.params)
 }

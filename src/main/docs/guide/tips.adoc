@@ -1,0 +1,104 @@
+Here are some tips for building fuzz targets.
+
+=== Avoid action at a distance
+
+When preparing the input, it is often necessary to produce multiple dynamically sized structures, for example network
+packets. It is tempting to use "length prefix" decoding as follows:
+
+[source,java]
+----
+public static void fuzzerTestOneInput(FuzzedDataProvider data) {
+    List<byte[]> packets = new ArrayList<>();
+    while (data.remainingBytes() > 0) {
+        int len = data.consumeByte(0, 100);
+        packets.add(data.consumeBytes(len));
+    }
+    ...
+}
+----
+
+This would transform the input `\x03foo\x04fizz` into the two packets `foo` and `fizz`.
+
+While this _works_, it is not fuzzer-friendly. Many mutation operations that the fuzzer does will have an outsized
+impact on other parts of the input (hence "action at a distance"). For example, if a byte is inserted in the middle of
+the first packet, the length field of the next packet will be shifted to another byte, and all other packets will
+change as well. This is counterproductive, a mutation step is only supposed to have a limited impact on the control
+flow.
+
+A better alternative is to use separators. For example, split the input `fooSEPfizz` into the packets `foo` and `fizz`,
+and don't forget to add `SEP` to the dictionary.
+
+To simplify this logic, `micronaut-fuzzing-api` provides the api:fuzzing.util.ByteSplitter[] API:
+
+.ByteSplitter example
+[source,java]
+----
+@FuzzTarget
+@Dict("SEP") // <1>
+public class ExampleTarget {
+    private static final ByteSplitter SPLITTER = ByteSplitter.create("SEP"); // <2>
+
+    public static void fuzzerTestOneInput(FuzzedDataProvider data) {
+        for (byte[] packet : SPLITTER.split(data.consumeRemainingAsBytes())) { // <3>
+            ...
+        }
+    }
+}
+----
+
+<1> Add separator to the dictionary
+<2> Pre-computed splitter
+<3> Split along `SEP` boundaries. There are more efficient methods available
+
+=== Logging as a failure indicator
+
+Some failure conditions may not throw an exception directly from the method under test, but they may log a failure
+message. For some code, it may also be desirable to avoid logging entirely, as excessive logging can be a denial of
+service vector.
+
+To detect log messages, a simple logback appender:
+
+[source,java]
+----
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.AppenderBase;
+
+public class FlagAppender extends AppenderBase<ILoggingEvent> {
+    private static volatile boolean triggered = false;
+
+    public static void checkTriggered() {
+        if (triggered) {
+            triggered = false;
+            throw new RuntimeException("Log message recorded, failing.");
+        }
+    }
+
+    @Override
+    protected void append(ILoggingEvent eventObject) {
+        triggered = true;
+    }
+}
+----
+
+It can be added to the `logback.xml` as follows:
+
+[source,xml]
+----
+<appender name="TRIGGER_FAILURE" class="io.micronaut.fuzzing.FlagAppender">
+    <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+        <level>WARN</level>
+        <onMatch>ACCEPT</onMatch>
+        <onMismatch>DENY</onMismatch>
+    </filter>
+</appender>
+
+<root level="info">
+    <1>
+    <appender-ref ref="TRIGGER_FAILURE" />
+</root>
+----
+
+<1> Other appenders
+
+Then, just add `FlagAppender.checkTriggered();` to the end of your `fuzzerTestOneInput` method, and any log message
+will lead to a fuzzer failure.

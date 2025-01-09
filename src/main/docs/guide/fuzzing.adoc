@@ -1,0 +1,179 @@
+Traditional testing is good at testing "normal" behavior of applications, but it is not ideal for security testing.
+The programmer that wrote the code under test usually also writes the test inputs, so if she failed to consider edge
+cases during programming, she is likely to also miss those cases when writing test inputs.
+
+Fuzz testing is an automated testing technique that can address this issue. Instead of relying on manually supplied
+inputs, tests are run with random inputs (more on that later), and program behavior is observed to remain within
+certain expected parameters.
+
+Let's consider the following toy example:
+
+[source,java]
+----
+record Ingredient(
+        String name,
+        int massInGrams,
+        int priceInCents
+) {
+    int pricePerKg() {
+        return priceInCents * 1000 / massInGrams;
+    }
+}
+----
+
+A manually written test case might look like this:
+
+[source,java]
+----
+@Test
+void test() {
+    assertEquals(50, new Ingredient("flour", 2000, 100).pricePerKg());
+}
+----
+
+Now, let's write a fuzz test. Don't worry, the details are explained later.
+
+[source,java]
+----
+@FuzzTarget(enableImplicitly = false)
+public class IngredientTarget {
+    public static void fuzzerTestOneInput(FuzzedDataProvider data) {
+        new Ingredient(data.consumeString(10), data.consumeInt(), data.consumeInt()).pricePerKg();
+    }
+}
+----
+
+After running it for less than a minute, this error appears:
+
+----
+== Java Exception: java.lang.ArithmeticException: / by zero
+	at io.micronaut.fuzzing.IngredientTarget$Ingredient.pricePerKg(IngredientTarget.java:21)
+	at io.micronaut.fuzzing.IngredientTarget.fuzzerTestOneInput(IngredientTarget.java:12)
+== libFuzzer crashing input ==
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+----
+
+That's a bug! If `massInGrams` is 0, then calling `pricePerKg()` throws an exception because of the division by zero.
+That can be easily fixed with a check:
+
+[source,java]
+----
+Ingredient {
+    if (massInGrams == 0) {
+        throw new IllegalArgumentException("Mass cannot be 0");
+    }
+}
+----
+
+Let's take a look at what went into writing this fuzz test.
+
+=== Input preparation
+
+The most obvious (but also easiest) part of writing a fuzz test is preparing the input to call the code under test. The
+fuzzer generally supplies the input as a byte array of arbitrary length. In the above example, we use the
+`FuzzedDataProvider` API from jazzer to create useful types (a `String` and two `int`) from that input.
+
+While in many cases this part of the test is simple, there are still some caveats to consider when writing more complex
+tests. Fuzzer inputs are not completely random: They follow certain patterns, so if you design your input preparation
+properly, the fuzzer will have an easier time finding edge cases.
+
+=== Sanitization
+
+Simply running a program with invalid inputs is not enough, you need to detect that the program is misbehaving.
+
+Fuzzing first came to be, and is still most popular, in unmanaged languages such as C or C++, where buggy code can lead
+to memory corruption. For example, writing to a field of a reference that is `null` in Java will cause a
+`NullPointerException`, but in C it may not lead to an exception at all, and instead other unrelated data structures
+may be modified.
+
+To find such bugs, fuzzers use _sanitizers_. These sanitizers add checks to the runtime to detect these conditions,
+e.g. writing to a `NULL` field, when they happen. Such a write operation is basically always a bug.
+
+For jazzer fuzz targets, the "sanitization" mostly just checks for exceptions thrown by the `fuzzerTestOneInput`
+method. In the broken example, that method threw an `ArithmeticException`, so jazzer considers this as a failure. But
+not all bugs throw exceptions from `fuzzerTestOneInput`, and not all exceptions are bugs. If we ran the same fuzzer
+with the "fixed" `Ingredient` with the additional check, the fuzz test would _still_ fail, except that it would now
+fail with an `IllegalArgumentException` instead of an `ArithmeticException`:
+
+----
+== Java Exception: java.lang.IllegalArgumentException: Mass cannot be 0
+	at io.micronaut.fuzzing.IngredientTarget$Ingredient.<init>(IngredientTarget.java:22)
+	at io.micronaut.fuzzing.IngredientTarget.fuzzerTestOneInput(IngredientTarget.java:12)
+== libFuzzer crashing input ==
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+----
+
+We need to modify our test case to handle this exception:
+
+[source,java]
+----
+public static void fuzzerTestOneInput(FuzzedDataProvider data) {
+    Ingredient ingredient;
+    try {
+        ingredient = new Ingredient(data.consumeString(10), data.consumeInt(), data.consumeInt());
+    } catch (IllegalArgumentException ok) {
+        return; // cancel this test run
+    }
+    ingredient.pricePerKg();
+}
+----
+
+We might also want to detect other nonsensical outputs:
+
+[source,java]
+----
+public static void fuzzerTestOneInput(FuzzedDataProvider data) {
+    ...
+    if (ingredient.pricePerKg() <= 0) {
+        throw new AssertionError();
+    }
+}
+----
+
+This change will reveal further edge cases that we missed, such as a negative `priceInCents`.
+
+In practice, sanitization can become very complicated, but it is critical to the usefulness of a fuzz test, so it is
+worth spending time on. If the code under test interacts with files for example, it may be worthwhile to verify that no
+files are written outside allowed folders. If the code interacts with a database, verify that no data is modified that
+shouldn't be. Once you've written a sanitizer, it can often stay the same for a long time, even as the code it's
+testing evolves.
+
+=== Under the hood
+
+Another key part of a fuzzer is its input generation. Fuzzers do not actually pass truly random inputs to your code.
+There are way too many possible inputs for that, so finding a bug would take forever. Instead, they use various
+heuristics to produce inputs that cause "interesting" behavior in your application. Fortunately, that is not usually
+something you have to concern yourself with directly, but it is good to have a rough idea of how it works in order to
+write tests that work well with the fuzzer.
+
+The main tool of the fuzzer for finding interesting inputs is coverage analysis. You may already be familiar with
+coverage reports from unit testing: The application bytecode is instrumented to report which lines of code, which
+conditions etc. are hit during test case execution.
+
+The fuzzer coverage analysis behaves similarly. When a new line of code is hit by a new input, that input is added to
+the _corpus_ of the fuzz test. The corpus grows over time and provides the fuzzer with starting points to produce new
+inputs.
+
+Creating new inputs from the corpus is called _mutation_. This can involve inserting bytes into the input, or removing
+bytes, or swapping bytes, or many other operations. This is already a fairly complex process and research is still
+being done on this, but it is also handled by the fuzzer internally. One important consideration is that you should
+avoid "action at a distance" in your input preparation code (see the tips section below).
+
+Another important aid for the fuzzer is a _dictionary_. When you're testing an HTTP server that will only accept
+requests with the `Content-Type: application/json` header, then the fuzzer is going to spend forever sending invalid
+inputs until it figures out by pure chance that this header needs to be present. To give the fuzzer a hand, pass a
+dictionary that contains the words `Content-Type` and `application/json`. The fuzzer will insert these words into new
+inputs occasionally, so it will find a valid request eventually. Once the input is found, it's added to the corpus, and
+the fuzzer will continue efficiently.
+
+=== Fuzzing at scale
+
+Fuzzing is a time-intensive process. Millions or even billions of inputs are passed to the code under test, and
+sanitizers and coverage analysis add their own overhead to the test execution. A fuzzer is never really done, there's
+always more inputs to try. And some edge cases can be difficult to reach, taking many hours to discover.
+
+Because the necessary computing resources are out of reach for many open-source projects, but the benefit of finding
+security bugs can be so large, Google provides the https://github.com/google/oss-fuzz/[OSS-Fuzz] infrastructure.
+Open-source projects that are deemed _important_ can run their fuzz tests on OSS-Fuzz at no cost.
+
+One objective of Micronaut Fuzzing is to provide a simple, opinionated way for JVM projects to build OSS-Fuzz tests.

@@ -1,1 +1,2 @@
-TODO
+Micronaut Fuzzing provides an opinionated approach to writing fuzz tests for JVM projects using
+https://github.com/CodeIntelligenceTesting/jazzer[jazzer].

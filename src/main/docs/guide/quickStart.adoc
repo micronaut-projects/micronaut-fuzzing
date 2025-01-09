@@ -1,1 +1,153 @@
-TODO
+To start writing fuzz tests, add the `micronaut-fuzzing-api` dependency, and the annotation processors:
+
+dependency:fuzzing-api[groupId="io.micronaut.fuzzing"]
+
+dependency::micronaut-inject-java[scope="annotationProcessor"]
+
+dependency:fuzzing-annotation-processor[groupId="io.micronaut.fuzzing",scope="annotationProcessor"]
+
+This includes a transitive dependency on `jazzer-api`.
+
+Let's write a simple test:
+
+[source,java]
+----
+import com.code_intelligence.jazzer.api.FuzzedDataProvider;
+import io.micronaut.fuzzing.FuzzTarget;
+
+@FuzzTarget // <1>
+public class IngredientTarget {
+    public static void fuzzerTestOneInput(FuzzedDataProvider data) { // <2>
+        new Ingredient(data.consumeString(10), data.consumeInt(), data.consumeInt()).pricePerKg();
+    }
+
+    record Ingredient(
+        String name,
+        int massInGrams,
+        int priceInCents
+    ) {
+        int pricePerKg() {
+            return priceInCents * 1000 / massInGrams;
+        }
+    }
+}
+----
+
+<1> This annotation is required for Micronaut Fuzzing to pick up the test
+<2> Jazzer fuzz method. Could also accept a `byte[]` instead of the `FuzzedDataProvider`
+
+=== Dictionaries
+
+It is highly recommended to add a dictionary to every non-trivial fuzz target. The ann:fuzzing.Dict[] annotation can be
+used to manually add dictionary entries to a fuzz target. The dictionary can also be loaded from a resource using
+ann:fuzzing.DictResource[] (libfuzzer fuzzing dict syntax), and there is a pre-defined dictionary for HTTP using
+ann:fuzzing.HttpDict[].
+
+=== Local runner
+
+Micronaut Fuzzing provides a "local" (same JVM) runner for rapid prototyping. First, add the `fuzzing-runner`
+dependency:
+
+dependency:fuzzing-runner[groupId="io.micronaut.fuzzing"]
+
+Then, you can add a simple `main` method to start fuzzing:
+
+[source,java]
+----
+public static void main(String[] args) {
+    LocalJazzerRunner.create(IngredientTarget.class).fuzz();
+}
+----
+
+WARNING: Local fuzzing is less stable, so it is recommended to use the gradle plugin to run fuzz tests properly for
+anything but test runs.
+
+Instead of fuzzing, it is also possible to run a particular input using the `reproduce` method. This can be used for
+debugging errors found by "proper" fuzz runs.
+
+=== Gradle plugin
+
+The recommended way to generate and run fuzz tests is the gradle plugin.
+
+[source, kotlin, subs="verbatim,attributes"]
+----
+plugins {
+  id("io.micronaut.fuzzing.jazzer")
+}
+----
+
+==== Direct run
+
+To run the fuzz tests directly, use the `jazzer` task:
+
+[source,bash]
+----
+./gradlew jazzer
+----
+
+==== OSS-Fuzz
+
+The `prepareClusterFuzz` task will generate output suitable for running on OSS-Fuzz. Output is written to the directory
+set in the `OUT` environment variable by default, and the task will fail if that variable is not set. The variable is
+set automatically by the OSS-Fuzz build infrastructure.
+
+The task under the hood:
+
+* Copies the test cases and any dependencies (except jazzer) to `$OUT/libs`. Jazzer is provided by the docker container
+already.
+* Generates dictionaries (if declared) and writes them to `$OUT/libs/TargetName`.
+* Creates a bash script for each fuzz target, to run the right class with the right dict and other options.
+* Copies a filtered set of dependencies directly to `$OUT`. This is necessary because the fuzz introspector only
+considers jar files at the top level. The filtering is done to support multi-release jars and to keep the introspector
+output to a reasonable size.
+
+For Micronaut, we keep almost all of the build logic in our repositories so that we don't have to send PRs to OSS-Fuzz
+as often. The OSS-Fuzz Dockerfile is as simple as this:
+
+.Dockerfile
+[source,dockerfile]
+----
+FROM gcr.io/oss-fuzz-base/base-builder-jvm
+
+RUN apt-get update && apt-get install -y locales <1>
+RUN locale-gen en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+RUN git clone --depth=1 https://github.com/micronaut-projects/micronaut-fuzzing.git <2>
+RUN micronaut-fuzzing/oss-fuzz/checkout.sh <3>
+RUN ln -s micronaut-fuzzing/oss-fuzz/build.sh . <4>
+----
+
+<1> These locale setup steps are necessary to build micronaut-core, they may not be necessary for your project.
+<2> Clone the main fuzz test repo.
+<3> Run the checkout script below, to check out other repositories under test (e.g. micronaut-core)
+<4> Link the build file
+
+The rest of the build files live in our own repos. `checkout.sh` fetches the source files. This must be done in the main
+`Dockerfile` for the OSS-Fuzz coverage reports to work properly.
+
+.checkout.sh
+[source,bash]
+----
+#!/bin/bash
+set -e
+git clone --depth=1 https://github.com/micronaut-projects/micronaut-core.git <1>
+----
+
+<1> Clone the Micronaut Core repo. This is the code we run fuzz tests against.
+
+In the actual build container, this build script runs:
+
+.build.sh
+[source,bash]
+----
+#!/bin/bash
+set -e
+
+<1>
+
+cd micronaut-fuzzing
+./gradlew micronaut-fuzzing-tests:prepareClusterFuzz <2>
+----
+
+<1> Build other projects here. We do this using gradle magic, so no explicit step is necessary.
+<2> Build the actual fuzz targets.

@@ -21,6 +21,7 @@ import io.micronaut.fuzzing.FlagAppender;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
+import io.micronaut.fuzzing.util.ByteSplitter;
 import io.micronaut.http.server.netty.NettyHttpServer;
 import io.micronaut.runtime.server.EmbeddedServer;
 import io.netty.buffer.ByteBuf;
@@ -34,13 +35,16 @@ import java.util.Map;
 @FuzzTarget
 @HttpDict
 @Dict({
-    ByteSeparator.SEPARATOR,
+    EmbeddedHttpTarget.SEPARATOR,
     SimpleController.ECHO_ARRAY,
     SimpleController.ECHO_PUBLISHER,
     SimpleController.ECHO_STRING,
     SimpleController.ECHO_PIECE_JSON,
 })
 public class EmbeddedHttpTarget implements AutoCloseable {
+    static final String SEPARATOR = "SEP";
+    private static final ByteSplitter SPLITTER = ByteSplitter.create(SEPARATOR);
+
     private static EmbeddedHttpTarget instance;
 
     private final NettyHttpServer nettyHttpServer;
@@ -75,15 +79,13 @@ public class EmbeddedHttpTarget implements AutoCloseable {
 
         EmbeddedChannel embeddedChannel = nettyHttpServer.buildEmbeddedChannel(false);
 
-        ByteBuf joint = embeddedChannel.alloc().buffer(input.length);
-        joint.writeBytes(input);
-        ByteSeparator.forEachPiece(joint, msg -> {
-            if (embeddedChannel.isOpen()) {
-                embeddedChannel.writeInbound(msg);
-            } else {
-                msg.release();
-            }
-        });
+        ByteSplitter.ChunkIterator iterator = SPLITTER.splitIterator(input);
+        while (iterator.hasNext() && embeddedChannel.isOpen()) {
+            iterator.proceed();
+            ByteBuf bb = embeddedChannel.alloc().buffer(iterator.length());
+            bb.writeBytes(input, iterator.start(), iterator.length());
+            embeddedChannel.writeInbound(bb);
+        }
 
         embeddedChannel.releaseOutbound();
         // don't release inbound, that doesn't happen normally either
