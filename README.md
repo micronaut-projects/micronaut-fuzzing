@@ -1,13 +1,13 @@
 <!-- Checklist: https://github.com/micronaut-projects/micronaut-core/wiki/New-Module-Checklist -->
 
-# Micronaut project-template
+# Micronaut Fuzzing
 
 [![Maven Central](https://img.shields.io/maven-central/v/io.micronaut.project-template/micronaut-project-template.svg?label=Maven%20Central)](https://search.maven.org/search?q=g:%22io.micronaut.project-template%22%20AND%20a:%22micronaut-project-template%22)
 [![Build Status](https://github.com/micronaut-projects/micronaut-project-template/workflows/Java%20CI/badge.svg)](https://github.com/micronaut-projects/micronaut-project-template/actions)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=micronaut-projects_micronaut-template&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=micronaut-projects_micronaut-template)
 [![Revved up by Develocity](https://img.shields.io/badge/Revved%20up%20by-Develocity-06A0CE?logo=Gradle&labelColor=02303A)](https://ge.micronaut.io/scans)
 
-Micronaut project-template
+Micronaut Fuzzing provides a simple, opinionated fuzzing infrastructure for JVM projects.
 
 ## Documentation
 
