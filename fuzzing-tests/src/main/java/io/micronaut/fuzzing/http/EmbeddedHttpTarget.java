@@ -39,10 +39,12 @@ import java.lang.management.ManagementFactory;
     SimpleController.ECHO_STRING,
     SimpleController.ECHO_PIECE_JSON,
 })
-public class EmbeddedHttpTarget {
-    private static NettyHttpServer nettyHttpServer;
+public class EmbeddedHttpTarget implements AutoCloseable {
+    private static EmbeddedHttpTarget instance;
 
-    public static void fuzzerInitialize() {
+    private final NettyHttpServer nettyHttpServer;
+
+    EmbeddedHttpTarget(Map<String, Object> cfg) {
         System.setProperty("io.netty.leakDetection.targetRecords", "100");
 
         String vmName = ManagementFactory.getRuntimeMXBean().getName();
@@ -50,12 +52,24 @@ public class EmbeddedHttpTarget {
         LoggerFactory.getLogger(EmbeddedHttpTarget.class).info("Starting embedded HTTP target. VM name is: {}", vmName);
         CustomResourceLeakDetector.register();
 
-        ApplicationContext ctx = ApplicationContext.run();
+        ApplicationContext ctx = ApplicationContext.run(cfg);
 
         nettyHttpServer = (NettyHttpServer) ctx.getBean(EmbeddedServer.class);
     }
 
+    public static void fuzzerInitialize() {
+        instance = new EmbeddedHttpTarget(Map.of());
+    }
+
     public static void fuzzerTestOneInput(byte[] input) {
+        instance.run(input);
+    }
+
+    public static void fuzzerTearDown() {
+        instance.close();
+    }
+
+    void run(byte[] input) {
         CustomResourceLeakDetector.setCurrentInput(input);
 
         EmbeddedChannel embeddedChannel = nettyHttpServer.buildEmbeddedChannel(false);
@@ -84,7 +98,8 @@ public class EmbeddedHttpTarget {
         FlagAppender.checkTriggered();
     }
 
-    public static void fuzzerTearDown() {
+    @Override
+    public void close() {
         //CustomResourceLeakDetector.reportStillOpen();
     }
 

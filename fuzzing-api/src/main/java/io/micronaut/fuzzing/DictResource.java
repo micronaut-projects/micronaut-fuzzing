@@ -16,6 +16,7 @@
 package io.micronaut.fuzzing;
 
 import java.lang.annotation.ElementType;
+import java.lang.annotation.Inherited;
 import java.lang.annotation.Repeatable;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -29,6 +30,7 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.TYPE)
 @Repeatable(DictResource.Repeated.class)
+@Inherited
 public @interface DictResource {
     /**
      * @return The resource path
@@ -37,6 +39,7 @@ public @interface DictResource {
 
     @Retention(RetentionPolicy.CLASS)
     @Target(ElementType.TYPE)
+    @Inherited
     @interface Repeated {
         DictResource[] value();
     }
