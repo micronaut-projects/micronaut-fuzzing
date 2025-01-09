@@ -29,6 +29,7 @@ import io.netty.util.ReferenceCountUtil;
 import org.slf4j.LoggerFactory;
 
 import java.lang.management.ManagementFactory;
+import java.util.Map;
 
 @FuzzTarget
 @HttpDict
@@ -69,7 +70,7 @@ public class EmbeddedHttpTarget implements AutoCloseable {
         instance.close();
     }
 
-    void run(byte[] input) {
+    final void run(byte[] input) {
         CustomResourceLeakDetector.setCurrentInput(input);
 
         EmbeddedChannel embeddedChannel = nettyHttpServer.buildEmbeddedChannel(false);
@@ -99,7 +100,7 @@ public class EmbeddedHttpTarget implements AutoCloseable {
     }
 
     @Override
-    public void close() {
+    public final void close() {
         //CustomResourceLeakDetector.reportStillOpen();
     }
 
