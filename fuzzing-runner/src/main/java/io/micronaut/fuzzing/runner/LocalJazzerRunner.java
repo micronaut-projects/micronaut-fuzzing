@@ -79,18 +79,20 @@ public final class LocalJazzerRunner {
 
     private void writeDictionary(OutputStream out) throws IOException {
         target.writeStaticDictionary(out);
-        for (String r : target.dictionaryResources()) {
-            Enumeration<URL> urls = LocalJazzerRunner.class.getClassLoader().getResources(r);
-            if (!urls.hasMoreElements()) {
-                throw new IllegalStateException("Dictionary resource " + r + " not found");
-            }
-            do {
-                DefinedFuzzTarget.writeResourceDictionaryPrefix(out, r);
-                try (InputStream in = urls.nextElement().openStream()) {
-                    in.transferTo(out);
+        if (target.dictionaryResources() != null) {
+            for (String r : target.dictionaryResources()) {
+                Enumeration<URL> urls = LocalJazzerRunner.class.getClassLoader().getResources(r);
+                if (!urls.hasMoreElements()) {
+                    throw new IllegalStateException("Dictionary resource " + r + " not found");
                 }
-                out.write('\n');
-            } while (urls.hasMoreElements());
+                do {
+                    DefinedFuzzTarget.writeResourceDictionaryPrefix(out, r);
+                    try (InputStream in = urls.nextElement().openStream()) {
+                        in.transferTo(out);
+                    }
+                    out.write('\n');
+                } while (urls.hasMoreElements());
+            }
         }
     }
 
@@ -129,7 +131,7 @@ public final class LocalJazzerRunner {
      * Reproduce a crash with the given data in this JVM, for easy debugging.
      *
      * @param path Path to the data that leads to the crash
-     * @see #reproduce(byte[]) 
+     * @see #reproduce(byte[])
      */
     public void reproduce(@NonNull Path path) {
         try {
