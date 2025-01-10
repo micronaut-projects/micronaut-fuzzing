@@ -7,11 +7,9 @@ import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputDirectory;
 import org.gradle.api.tasks.InputFile;
-import org.gradle.api.tasks.Nested;
 import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.TaskAction;
-import org.gradle.jvm.toolchain.JavaInstallationMetadata;
 import org.gradle.process.ExecOperations;
 
 import javax.annotation.Nonnull;
@@ -25,16 +23,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public abstract class JazzerTask extends BaseJazzerTask {
-    @InputFile
-    @Nonnull
-    public abstract RegularFileProperty getJazzerBinary();
-
     @InputDirectory
     @Optional
     public abstract DirectoryProperty getCorpus();
-
-    @Nested
-    public abstract Property<JavaInstallationMetadata> getJavaInstallation();
 
     @Input
     @Optional
@@ -78,8 +69,7 @@ public abstract class JazzerTask extends BaseJazzerTask {
                         }
                     }
                     Path finalTmpDictFile = tmpDictFile;
-                    getExecOperations().exec(spec -> {
-                        spec.setExecutable(getJazzerBinary().get().getAsFile().toString());
+                    getExecOperations().javaexec(spec -> {
                         List<String> args = new ArrayList<>();
                         collectArgs(args, target);
                         if (getForks().isPresent()) {
@@ -88,6 +78,7 @@ public abstract class JazzerTask extends BaseJazzerTask {
                         if (getJobs().isPresent()) {
                             args.add("-jobs=" + getJobs().get());
                         }
+                        spec.classpath(getClasspath());
                         args.add("--cp=" + getClasspath().getAsPath());
 
                         if (getCoverageDumpFile().isPresent()) {
@@ -99,9 +90,7 @@ public abstract class JazzerTask extends BaseJazzerTask {
                         if (getMaxTotalTime().isPresent()) {
                             args.add("-max_total_time=" + getMaxTotalTime().get().toSeconds());
                         }
-                        if (getJvmArgs().isPresent() && !getJvmArgs().get().isEmpty()) {
-                            args.add("--jvm_args=" + joinPlatform(getJvmArgs().get()));
-                        }
+                        spec.jvmArgs(getJvmArgs().get());
                         if (finalTmpDictFile != null) {
                             args.add("-dict=" + finalTmpDictFile);
                         }
@@ -113,8 +102,8 @@ public abstract class JazzerTask extends BaseJazzerTask {
                             args.add(getCorpus().getAsFile().get().getPath());
                         }
                         spec.setArgs(args);
-                        getLogger().quiet("Jazzer command line: {}", String.join(" ", args));
-                        spec.environment("JAVA_HOME", getJavaInstallation().get().getInstallationPath());
+                        spec.getMainClass().set("com.code_intelligence.jazzer.Jazzer");
+                        getLogger().quiet("Jazzer command line: {}", String.join(" ", spec.getCommandLine()));
                     });
                 } finally {
                     if (tmpDictFile != null) {

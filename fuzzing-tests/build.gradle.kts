@@ -48,8 +48,6 @@ tasks.withType<PrepareClusterFuzzTask> {
 }
 
 tasks.named<JazzerTask>("jazzer") {
-    // todo: fetch on-demand from gh releases
-    jazzerBinary.set(File("/home/yawkat/bin/jazzer/0.22.1/jazzer"))
     targets.set(listOf(
         //"io.micronaut.fuzzing.toml.TomlTarget",
         //"io.micronaut.fuzzing.http.HttpTarget",
