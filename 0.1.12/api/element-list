@@ -1,0 +1,5 @@
+io.micronaut.fuzzing
+io.micronaut.fuzzing.http
+io.micronaut.fuzzing.processor
+io.micronaut.fuzzing.runner
+io.micronaut.fuzzing.util
