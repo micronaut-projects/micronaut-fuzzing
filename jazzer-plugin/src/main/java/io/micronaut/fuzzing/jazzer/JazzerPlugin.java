@@ -66,6 +66,10 @@ public abstract class JazzerPlugin implements Plugin<Project> {
             if (out != null) {
                 task.getOutputDirectory().set(new File(out));
             }
+            String sanitizer = System.getenv("SANITIZER");
+            if (sanitizer != null) {
+                task.getJni().getSanitizer().set(sanitizer);
+            }
         });
     }
 }

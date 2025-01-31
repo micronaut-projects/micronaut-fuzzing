@@ -3,18 +3,23 @@ package io.micronaut.fuzzing.jazzer;
 import io.micronaut.fuzzing.model.DefinedFuzzTarget;
 import org.gradle.api.Action;
 import org.gradle.api.file.DirectoryProperty;
+import org.gradle.api.provider.Property;
 import org.gradle.api.provider.SetProperty;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.Nested;
 import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
+import org.gradle.process.ExecOperations;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.inject.Inject;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.CopyOption;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileVisitResult;
@@ -45,6 +50,15 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
     public abstract Introspector getIntrospector();
 
     /**
+     * Settings for <a href="https://github.com/CodeIntelligenceTesting/jazzer/blob/main/docs/advanced.md#native-libraries">testing JNI code with jazzer</a>.
+     */
+    @Nested
+    public abstract Jni getJni();
+
+    @Inject
+    protected abstract ExecOperations getExecOperations();
+
+    /**
      * Introspector-specific settings. Note that these don't affect the actual fuzzing, only the
      * introspector report.
      */
@@ -67,13 +81,58 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
             cp.add("$this_dir/libs/" + library.getName());
         }
 
+        boolean jni = getJni().isEnabled().getOrElse(false);
+        if (jni) {
+            Path nativeSanitizersDir = getOutputDirectory().dir("native-sanitizers").get().getAsFile().toPath();
+            try {
+                Files.createDirectories(nativeSanitizersDir);
+            } catch (FileAlreadyExistsException ignored) {
+            }
+
+            String lib = switch (getJni().getSanitizer().getOrElse("")) {
+                case "address" -> "libclang_rt.asan.so";
+                case "undefined" -> "libclang_rt.ubsan_standalone.so";
+                default -> null;
+            };
+            if (lib != null) {
+                ByteArrayOutputStream os = new ByteArrayOutputStream();
+                getExecOperations().exec(exec -> {
+                    exec.commandLine("clang", "--print-file-name", lib);
+                    exec.setStandardOutput(os);
+                }).assertNormalExitValue();
+                Path path = Path.of(os.toString(StandardCharsets.UTF_8).trim());
+                if (Files.exists(path)) {
+                    Files.copy(path, nativeSanitizersDir.resolve(lib), StandardCopyOption.REPLACE_EXISTING);
+                } else {
+                    LOG.warn("Sanitizer runtime not found: {}", path);
+                }
+            } else {
+                LOG.warn("Unsupported sanitizer mode: {}", getJni().getSanitizer().getOrNull());
+            }
+        }
+
         try (ClasspathAccess classpathAccess = new ClasspathAccess()) {
             List<DefinedFuzzTarget> targets = findFuzzTargets(classpathAccess);
             Map<String, String> targetNames = assignTargetNames(targets.stream().map(DefinedFuzzTarget::targetClass).toList());
             for (DefinedFuzzTarget target : targets) {
-                List<String> args = new ArrayList<>();
-                collectArgs(args, target);
-                args.add("--cp=" + String.join(":", cp));
+                List<String> line = new ArrayList<>();
+                line.add("LD_LIBRARY_PATH=\"$JVM_LD_LIBRARY_PATH\":$this_dir");
+                if (jni) {
+                    line.add("JAZZER_NATIVE_SANITIZERS_DIR=native-sanitizers");
+                }
+                line.add("$this_dir/jazzer_driver");
+                if (jni) {
+                    switch (getJni().getSanitizer().getOrElse("")) {
+                        case "address" -> line.add("--asan");
+                        case "undefined" -> line.add("--ubsan");
+                        default -> {
+                            // there was a warning above already
+                        }
+                    }
+                }
+                line.add("--agent_path=$this_dir/jazzer_agent_deploy.jar");
+                collectArgs(line, target);
+                line.add("--cp=" + String.join(":", cp));
                 String fileName = targetNames.get(target.targetClass());
                 if (target.dictionary() != null || target.dictionaryResources() != null) {
                     File dictFile = getOutputDirectory().file("dict/" + fileName).get().getAsFile();
@@ -82,14 +141,14 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                     try (OutputStream os = new FileOutputStream(dictFile)) {
                         buildDictionary(classpathAccess, os, target);
                     }
-                    args.add("-dict=$this_dir/dict/" + fileName);
+                    line.add("-dict=$this_dir/dict/" + fileName);
                 }
+                line.add("$@");
                 String sh = """
                 #!/bin/bash
                 # LLVMFuzzerTestOneInput <-- for fuzzer detection (see test_all.py)
                 this_dir=$(dirname "$0")
-                LD_LIBRARY_PATH="$JVM_LD_LIBRARY_PATH":$this_dir $this_dir/jazzer_driver --agent_path=$this_dir/jazzer_agent_deploy.jar %s $@
-                """.formatted(String.join(" ", args));
+                """ + String.join(" ", line);
                 Path targetPath = getOutputDirectory().file(fileName).get().getAsFile().toPath();
                 Files.writeString(targetPath, sh);
                 Files.setPosixFilePermissions(targetPath, Set.of(
@@ -222,5 +281,23 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
          */
         @Input
         SetProperty<String> getExcludes();
+    }
+
+    public interface Jni {
+        /**
+         * Whether to enable JNI fuzzing support. Disabled by default.
+         * <p>Enabling this will copy the sanitizer runtime, set
+         * {@code JAZZER_NATIVE_SANITIZERS_DIR}, and pass the appropriate flag for jazzer to
+         * include the runtime.
+         */
+        @Input
+        Property<Boolean> isEnabled();
+
+        /**
+         * The sanitizer to prepare for. The default is the {@code SANITIZER} environment variable
+         * set by OSS-Fuzz.
+         */
+        @Input
+        Property<String> getSanitizer();
     }
 }
