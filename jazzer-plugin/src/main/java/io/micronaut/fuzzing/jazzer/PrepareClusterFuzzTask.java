@@ -7,6 +7,7 @@ import org.gradle.api.provider.Property;
 import org.gradle.api.provider.SetProperty;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.Nested;
+import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.process.ExecOperations;
@@ -81,7 +82,7 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
             cp.add("$this_dir/libs/" + library.getName());
         }
 
-        boolean jni = getJni().isEnabled().getOrElse(false);
+        boolean jni = getJni().getEnabled().getOrElse(false);
         if (jni) {
             Path nativeSanitizersDir = getOutputDirectory().dir("native-sanitizers").get().getAsFile().toPath();
             try {
@@ -291,13 +292,15 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
          * include the runtime.
          */
         @Input
-        Property<Boolean> isEnabled();
+        @Optional
+        Property<Boolean> getEnabled();
 
         /**
          * The sanitizer to prepare for. The default is the {@code SANITIZER} environment variable
          * set by OSS-Fuzz.
          */
         @Input
+        @Optional
         Property<String> getSanitizer();
     }
 }
