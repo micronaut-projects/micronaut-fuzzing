@@ -59,6 +59,10 @@ public abstract class BaseJazzerTask extends DefaultTask {
     @Optional
     public abstract Property<Boolean> getOnlyAscii();
 
+    @Input
+    @Optional
+    public abstract ListProperty<String> getAdditionalJazzerArgs();
+
     protected final List<DefinedFuzzTarget> findFuzzTargets(ClasspathAccess cp) throws IOException {
         List<DefinedFuzzTarget> definedFuzzTargets = new ArrayList<>();
         for (Path dir : cp.resolve("META-INF/" + DefinedFuzzTarget.DIRECTORY)) {
@@ -118,6 +122,9 @@ public abstract class BaseJazzerTask extends DefaultTask {
         }
         if (getOnlyAscii().isPresent()) {
             args.add("-only_ascii=" + (getOnlyAscii().get() ? "1" : "0"));
+        }
+        if (getAdditionalJazzerArgs().isPresent()) {
+            args.addAll(getAdditionalJazzerArgs().get());
         }
     }
 
