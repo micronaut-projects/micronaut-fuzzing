@@ -23,7 +23,7 @@ micronaut-logging = "1.5.1"
 groovy = "4.0.15"
 spock = "2.3-groovy-4.0"
 
-managed-jazzer = "0.23.0"
+managed-jazzer = "0.24.0"
 
 # Managed versions appear in the BOM
 # managed-somelib = "1.0"
