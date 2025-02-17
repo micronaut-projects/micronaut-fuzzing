@@ -4,6 +4,8 @@ import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.HandlerFuzzerBase;
 import io.netty.handler.codec.LineBasedFrameDecoder;
 import io.netty.handler.codec.TooLongFrameException;
@@ -17,20 +19,21 @@ public class StringDecoderFuzzer extends HandlerFuzzerBase {
     public StringDecoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
         channel.pipeline()
             .addLast(new LineBasedFrameDecoder(80))
-            .addLast(new StringDecoder(fuzzedDataProvider.consumeBoolean() ? StandardCharsets.UTF_8 : StandardCharsets.US_ASCII));
+            .addLast(new StringDecoder(fuzzedDataProvider.consumeBoolean() ? StandardCharsets.UTF_8 : StandardCharsets.US_ASCII))
+            .addLast(new ChannelInboundHandlerAdapter() {
+                @Override
+                public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+                    if (cause instanceof TooLongFrameException) {
+                        return;
+                    }
+                    super.exceptionCaught(ctx, cause);
+                }
+            });
     }
 
     public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
         var fuzzer = new StringDecoderFuzzer(fuzzedDataProvider);
         fuzzer.test(fuzzedDataProvider);
-    }
-
-    @Override
-    protected void onException(Exception e) {
-        if (e instanceof TooLongFrameException) {
-            return;
-        }
-        super.onException(e);
     }
 
     public static void main(String[] args) {
