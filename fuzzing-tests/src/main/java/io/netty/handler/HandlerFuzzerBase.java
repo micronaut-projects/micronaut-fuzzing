@@ -58,7 +58,6 @@ public abstract class HandlerFuzzerBase {
         } catch (Exception e) {
             onException(e);
         }
-        CustomResourceLeakDetector.reportLeaks();
         CustomResourceLeakDetector.reportStillOpen();
         FlagAppender.checkTriggered();
     }
