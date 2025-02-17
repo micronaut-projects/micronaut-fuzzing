@@ -28,7 +28,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-final class CustomResourceLeakDetector<T> extends ResourceLeakDetector<T> {
+public final class CustomResourceLeakDetector<T> extends ResourceLeakDetector<T> {
     private static final VarHandle ALL_LEAKS_FIELD;
 
     static {
@@ -50,7 +50,7 @@ final class CustomResourceLeakDetector<T> extends ResourceLeakDetector<T> {
         DETECTORS.add(this);
     }
 
-    static void register() {
+    public static void register() {
         ResourceLeakDetector.setLevel(Level.PARANOID);
         ResourceLeakDetectorFactory.setResourceLeakDetectorFactory(new ResourceLeakDetectorFactory() {
             @Override
@@ -87,7 +87,7 @@ final class CustomResourceLeakDetector<T> extends ResourceLeakDetector<T> {
         return currentHint;
     }
 
-    static void reportLeaks() {
+    public static void reportLeaks() {
         if (!LEAKS.isEmpty()) {
             StringBuilder msg = new StringBuilder("Reported leaks! Probably unrelated to this particular run, though.\n");
             for (Leak leak : LEAKS) {
@@ -98,7 +98,7 @@ final class CustomResourceLeakDetector<T> extends ResourceLeakDetector<T> {
         }
     }
 
-    static void reportStillOpen() {
+    public static void reportStillOpen() {
         Logger logger = LoggerFactory.getLogger(CustomResourceLeakDetector.class);
         String found = null;
         for (ResourceLeakDetector<?> detector : DETECTORS) {
