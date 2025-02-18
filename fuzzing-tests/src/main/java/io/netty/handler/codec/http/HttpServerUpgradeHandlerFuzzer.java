@@ -4,7 +4,10 @@ import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.HandlerFuzzerBase;
+import io.netty.handler.codec.PrematureChannelClosureException;
 import io.netty.handler.codec.http2.Http2CodecUtil;
 import io.netty.handler.codec.http2.Http2FrameCodecBuilder;
 import io.netty.handler.codec.http2.Http2ServerUpgradeCodec;
@@ -25,7 +28,16 @@ public class HttpServerUpgradeHandlerFuzzer extends HandlerFuzzerBase {
                 } else {
                     return null;
                 }
-            }, 1024));
+            }, 1024))
+            .addLast(new ChannelInboundHandlerAdapter() {
+                @Override
+                public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+                    if (cause instanceof PrematureChannelClosureException) {
+                        return;
+                    }
+                    super.exceptionCaught(ctx, cause);
+                }
+            });
     }
 
     public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
