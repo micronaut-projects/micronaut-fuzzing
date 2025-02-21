@@ -7,6 +7,7 @@ import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.HandlerFuzzerBase;
+import io.netty.handler.codec.PrematureChannelClosureException;
 
 import javax.net.ssl.SSLException;
 
@@ -20,7 +21,7 @@ public class HttpObjectAggregatorFuzzer extends HandlerFuzzerBase {
             .addLast(new ChannelInboundHandlerAdapter() {
                 @Override
                 public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-                    if (cause instanceof TooLongHttpContentException) {
+                    if (cause instanceof TooLongHttpContentException || cause instanceof PrematureChannelClosureException) {
                         ctx.close();
                         return;
                     }
