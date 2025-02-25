@@ -26,7 +26,7 @@ dependencies {
     runtimeOnly("com.aayushatharva.brotli4j:native-linux-x86_64:1.18.0")
     runtimeOnly("com.aayushatharva.brotli4j:brotli4j:1.18.0")
     runtimeOnly("com.github.jponge:lzma-java:1.3")
-    runtimeOnly("com.github.luben:zstd-jni:1.5.6-10")
+    runtimeOnly("com.github.luben:zstd-jni:1.5.7-1")
     runtimeOnly("com.jcraft:jzlib:1.1.3")
     runtimeOnly("com.ning:compress-lzf:1.1.2")
     runtimeOnly("org.lz4:lz4-java:1.8.0")
