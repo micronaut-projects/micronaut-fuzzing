@@ -11,6 +11,8 @@ import io.netty.handler.codec.PrematureChannelClosureException;
 import io.netty.handler.codec.http.HttpServerCodec;
 
 import javax.net.ssl.SSLException;
+import java.nio.channels.ClosedChannelException;
+import java.nio.file.Path;
 
 @FuzzTarget
 @HttpDict
@@ -23,7 +25,7 @@ public class WebSocketServerProtocolHandlerFuzzer extends HandlerFuzzerBase {
             .addLast(new ChannelInboundHandlerAdapter() {
                 @Override
                 public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-                    if (cause instanceof PrematureChannelClosureException) {
+                    if (cause instanceof PrematureChannelClosureException || cause instanceof ClosedChannelException) {
                         return;
                     }
                     super.exceptionCaught(ctx, cause);
@@ -37,6 +39,6 @@ public class WebSocketServerProtocolHandlerFuzzer extends HandlerFuzzerBase {
     }
 
     public static void main(String[] args) {
-        LocalJazzerRunner.create(WebSocketServerProtocolHandlerFuzzer.class).fuzz();
+        LocalJazzerRunner.create(WebSocketServerProtocolHandlerFuzzer.class).reproduce(Path.of("fuzzing-tests/minimized-from-9d4ebe930fe9b5b83e28398c4c1b4a36f2b89062"));
     }
 }
