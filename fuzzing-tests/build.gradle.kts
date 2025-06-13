@@ -31,6 +31,7 @@ dependencies {
     runtimeOnly("com.ning:compress-lzf:1.1.2")
     runtimeOnly("org.lz4:lz4-java:1.8.0")
     runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.80")
+    implementation("io.netty:netty-codec-xml")
 
     annotationProcessor(mn.micronaut.inject.java)
     annotationProcessor(projects.micronautFuzzingAnnotationProcessor)
