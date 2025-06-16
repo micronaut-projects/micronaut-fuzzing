@@ -16,7 +16,7 @@ jobs:
         uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@master
         with:
           oss-fuzz-project-name: micronaut
-          fuzz-seconds: '10'
+          fuzz-seconds: '60'
           output-sarif: true
           language: 'jvm'
       - name: Upload SARIF
