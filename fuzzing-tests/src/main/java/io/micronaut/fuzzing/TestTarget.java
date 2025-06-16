@@ -18,7 +18,7 @@ package io.micronaut.fuzzing;
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 
-@FuzzTarget(enableImplicitly = false)
+@FuzzTarget//(enableImplicitly = false)
 public class TestTarget {
     public static void fuzzerTestOneInput(FuzzedDataProvider provider) {
         int a = provider.consumeInt();
