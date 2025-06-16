@@ -1,0 +1,27 @@
+name: OSS-Fuzz integration test
+on: [push]
+jobs:
+  Run-OSS-Fuzz:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - name: Build fuzzers
+        id: build
+        uses: google/oss-fuzz/infra/cifuzz/actions/build_fuzzers@master
+        with:
+          oss-fuzz-project-name: micronaut
+          language: 'jvm'
+      - name: Run Fuzzers
+        uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@master
+        with:
+          oss-fuzz-project-name: micronaut
+          fuzz-seconds: '10'
+          output-sarif: true
+          language: 'jvm'
+      - name: Upload SARIF
+        if: always() && steps.build.outcome == 'success'
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: cifuzz-sarif/results.sarif
+          checkout_path: cifuzz-sarif
