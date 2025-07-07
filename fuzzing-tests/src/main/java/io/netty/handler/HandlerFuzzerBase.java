@@ -22,7 +22,10 @@ import io.micronaut.fuzzing.FlagAppender;
 import io.micronaut.fuzzing.http.CustomResourceLeakDetector;
 import io.micronaut.fuzzing.util.ByteSplitter;
 import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.embedded.EmbeddedChannel;
+import io.netty.util.ReferenceCountUtil;
 import io.netty.util.internal.PlatformDependent;
 
 /**
@@ -38,8 +41,20 @@ public abstract class HandlerFuzzerBase {
     }
 
     protected final EmbeddedChannel channel = new EmbeddedChannel();
+    private boolean finished = false;
 
     public void test(FuzzedDataProvider provider) {
+        if (!finished) {
+            finished = true;
+            channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
+                @Override
+                public void channelRead(ChannelHandlerContext ctx, Object msg) {
+                    // to avoid OOM from output buffering, release inputs immediately
+                    ReferenceCountUtil.release(msg);
+                }
+            });
+        }
+
         byte[] allBytes = provider.consumeRemainingAsBytes();
         ByteSplitter.ChunkIterator itr = SPLITTER.splitIterator(allBytes);
         while (itr.hasNext() && channel.isOpen()) {
