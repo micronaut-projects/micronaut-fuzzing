@@ -10,6 +10,7 @@ import io.netty.handler.HandlerFuzzerBase;
 import io.netty.handler.codec.PrematureChannelClosureException;
 
 import javax.net.ssl.SSLException;
+import java.nio.channels.ClosedChannelException;
 
 @FuzzTarget
 @HttpDict
@@ -21,7 +22,7 @@ public class HttpObjectAggregatorFuzzer extends HandlerFuzzerBase {
             .addLast(new ChannelInboundHandlerAdapter() {
                 @Override
                 public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-                    if (cause instanceof TooLongHttpContentException || cause instanceof PrematureChannelClosureException) {
+                    if (cause instanceof TooLongHttpContentException || cause instanceof PrematureChannelClosureException || cause instanceof ClosedChannelException) {
                         ctx.close();
                         return;
                     }
