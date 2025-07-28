@@ -13,4 +13,4 @@ cd micronaut-fuzzing
 mkdir -p checkouts
 touch checkouts/catalog-micronaut-core.sha1
 
-./gradlew micronaut-fuzzing-tests:prepareClusterFuzz
+./gradlew --max-workers 2 micronaut-fuzzing-tests:prepareClusterFuzz
