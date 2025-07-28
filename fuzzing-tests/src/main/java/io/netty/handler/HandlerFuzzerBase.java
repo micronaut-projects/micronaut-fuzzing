@@ -26,6 +26,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.util.ReferenceCountUtil;
+import io.netty.util.concurrent.FastThreadLocalThread;
 import io.netty.util.internal.PlatformDependent;
 
 /**
@@ -44,6 +45,10 @@ public abstract class HandlerFuzzerBase {
     private boolean finished = false;
 
     public void test(FuzzedDataProvider provider) {
+        FastThreadLocalThread.runWithFastThreadLocal(() -> test0(provider));
+    }
+
+    private void test0(FuzzedDataProvider provider) {
         if (!finished) {
             finished = true;
             channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
