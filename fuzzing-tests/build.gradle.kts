@@ -53,6 +53,7 @@ tasks.withType<PrepareClusterFuzzTask> {
         )
     }
     jvmArgs = listOf(
+        "-Xmx512M",
         "-XX:+ExitOnOutOfMemoryError"
     )
 }
