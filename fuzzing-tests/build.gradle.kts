@@ -54,6 +54,9 @@ tasks.withType<PrepareClusterFuzzTask> {
     }
     jvmArgs = listOf(
         "-Xmx512M",
+        "-XX:MaxDirectMemorySize=256M",
+        "-Dio.netty.leakDetection.targetRecords=0",
+        "-Dio.netty.noUnsafe=true",
         "-XX:+ExitOnOutOfMemoryError"
     )
 }
@@ -68,6 +71,8 @@ tasks.named<JazzerTask>("jazzer") {
     ))
     jvmArgs.set(listOf(
         "-Xmx512M",
+        "-XX:MaxDirectMemorySize=256M",
+        "-Dio.netty.noUnsafe=true",
         "-Dio.netty.leakDetection.targetRecords=100",
         "-XX:+ExitOnOutOfMemoryError",
         "-XX:+HeapDumpOnOutOfMemoryError",
