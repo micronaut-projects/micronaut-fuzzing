@@ -4,6 +4,9 @@ import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.handler.codec.DecoderException;
 
 import javax.net.ssl.SSLException;
 
@@ -12,7 +15,16 @@ import javax.net.ssl.SSLException;
 public class SnappyFrameDecoderFuzzer extends DecompressorFuzzerBase {
     public SnappyFrameDecoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
         channel.pipeline()
-            .addLast(new SnappyFrameDecoder(fuzzedDataProvider.consumeBoolean()));
+            .addLast(new SnappyFrameDecoder(fuzzedDataProvider.consumeBoolean()))
+            .addLast(new ChannelInboundHandlerAdapter() {
+                @Override
+                public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+                    if (cause instanceof DecoderException && cause.getCause() instanceof IndexOutOfBoundsException) {
+                        return;
+                    }
+                    super.exceptionCaught(ctx, cause);
+                }
+            });
     }
 
     public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {

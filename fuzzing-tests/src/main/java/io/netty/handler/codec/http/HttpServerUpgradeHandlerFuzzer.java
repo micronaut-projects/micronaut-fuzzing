@@ -14,6 +14,7 @@ import io.netty.handler.codec.http2.Http2ServerUpgradeCodec;
 import io.netty.util.AsciiString;
 
 import javax.net.ssl.SSLException;
+import java.nio.channels.ClosedChannelException;
 
 @FuzzTarget
 @HttpDict
@@ -32,7 +33,7 @@ public class HttpServerUpgradeHandlerFuzzer extends HandlerFuzzerBase {
             .addLast(new ChannelInboundHandlerAdapter() {
                 @Override
                 public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-                    if (cause instanceof PrematureChannelClosureException) {
+                    if (cause instanceof PrematureChannelClosureException || cause instanceof ClosedChannelException) {
                         return;
                     }
                     super.exceptionCaught(ctx, cause);

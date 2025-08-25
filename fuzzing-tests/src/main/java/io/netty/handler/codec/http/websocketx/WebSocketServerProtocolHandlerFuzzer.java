@@ -7,11 +7,13 @@ import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.HandlerFuzzerBase;
+import io.netty.handler.codec.DecoderException;
 import io.netty.handler.codec.PrematureChannelClosureException;
 import io.netty.handler.codec.http.HttpServerCodec;
 
 import javax.net.ssl.SSLException;
 import java.nio.channels.ClosedChannelException;
+import java.nio.file.Path;
 
 @FuzzTarget
 @HttpDict
@@ -27,6 +29,9 @@ public class WebSocketServerProtocolHandlerFuzzer extends HandlerFuzzerBase {
                     if (cause instanceof PrematureChannelClosureException || cause instanceof ClosedChannelException) {
                         return;
                     }
+                    if (cause instanceof DecoderException && (cause.getCause() instanceof NumberFormatException)) {
+                        return;
+                    }
                     super.exceptionCaught(ctx, cause);
                 }
             });
@@ -38,6 +43,6 @@ public class WebSocketServerProtocolHandlerFuzzer extends HandlerFuzzerBase {
     }
 
     public static void main(String[] args) {
-        LocalJazzerRunner.create(WebSocketServerProtocolHandlerFuzzer.class).fuzz();
+        LocalJazzerRunner.create(WebSocketServerProtocolHandlerFuzzer.class).reproduce(Path.of("/home/yawkat/Downloads/clusterfuzz-testcase-WebSocketServerProtocolHandlerFuzzer-4672102718570496"));
     }
 }

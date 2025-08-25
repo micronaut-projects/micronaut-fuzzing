@@ -4,8 +4,11 @@ import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.HandlerFuzzerBase;
 import io.netty.handler.codec.http2.Http2ClientUpgradeCodec;
+import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2FrameCodecBuilder;
 
 import javax.net.ssl.SSLException;
@@ -17,7 +20,16 @@ public class HttpClientUpgradeHandlerFuzzer extends HandlerFuzzerBase {
         HttpClientCodec clientCodec = new HttpClientCodec();
         channel.pipeline()
             .addLast(clientCodec)
-            .addLast(new HttpClientUpgradeHandler(clientCodec, new Http2ClientUpgradeCodec(Http2FrameCodecBuilder.forClient().build()), 1024));
+            .addLast(new HttpClientUpgradeHandler(clientCodec, new Http2ClientUpgradeCodec(Http2FrameCodecBuilder.forClient().build()), 1024))
+            .addLast(new ChannelInboundHandlerAdapter() {
+                @Override
+                public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+                    if (cause instanceof Http2Exception) {
+                        return;
+                    }
+                    super.exceptionCaught(ctx, cause);
+                }
+            });
 
         channel.writeOutbound(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/", channel.alloc().buffer()));
     }

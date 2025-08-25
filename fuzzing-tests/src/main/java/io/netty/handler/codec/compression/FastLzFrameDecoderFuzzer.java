@@ -9,7 +9,6 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.DecoderException;
 
 import javax.net.ssl.SSLException;
-import java.nio.file.Path;
 
 @FuzzTarget
 @HttpDict
@@ -34,6 +33,6 @@ public class FastLzFrameDecoderFuzzer extends DecompressorFuzzerBase {
     }
 
     public static void main(String[] args) {
-        LocalJazzerRunner.create(FastLzFrameDecoderFuzzer.class).reproduce(Path.of("/home/yawkat/Downloads/clusterfuzz-testcase-FastLzFrameDecoderFuzzer-4819632412491776"));
+        LocalJazzerRunner.create(FastLzFrameDecoderFuzzer.class).fuzz();
     }
 }
