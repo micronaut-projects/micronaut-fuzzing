@@ -53,6 +53,8 @@ tasks.withType<PrepareClusterFuzzTask> {
         )
     }
     jvmArgs = listOf(
+        "-XX:+UseParallelGC",
+        "-XX:GCTimeLimit=80", // avoid gc thrashing
         "-Xmx512M",
         "-XX:MaxDirectMemorySize=256M",
         "-Dio.netty.leakDetection.targetRecords=0",
