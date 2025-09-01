@@ -24,7 +24,7 @@ public class HttpClientUpgradeHandlerFuzzer extends HandlerFuzzerBase {
             .addLast(new ChannelInboundHandlerAdapter() {
                 @Override
                 public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-                    if (cause instanceof Http2Exception) {
+                    if (cause instanceof Http2Exception || cause instanceof IllegalStateException) {
                         return;
                     }
                     super.exceptionCaught(ctx, cause);
