@@ -24,17 +24,23 @@ import org.slf4j.LoggerFactory;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public final class CustomResourceLeakDetector<T> extends ResourceLeakDetector<T> {
+    private static final boolean TRACK_CURRENT_TEST_CASE =
+        Boolean.parseBoolean(System.getProperty("track-current-test-case", "true"));
+
     private static final VarHandle ALL_LEAKS_FIELD;
 
     static {
         try {
             ALL_LEAKS_FIELD = MethodHandles.privateLookupIn(ResourceLeakDetector.class, MethodHandles.lookup())
-                    .findVarHandle(ResourceLeakDetector.class, "allLeaks", Set.class);
+                .findVarHandle(ResourceLeakDetector.class, "allLeaks", Set.class)
+                .withInvokeExactBehavior();
         } catch (NoSuchFieldException | IllegalAccessException e) {
             throw new RuntimeException(e);
         }
@@ -42,6 +48,8 @@ public final class CustomResourceLeakDetector<T> extends ResourceLeakDetector<T>
 
     private static final List<Leak> LEAKS = new CopyOnWriteArrayList<>();
     private static final List<ResourceLeakDetector<?>> DETECTORS = new CopyOnWriteArrayList<>();
+    private static final Set<Object> STATICALLY_CREATED_OBJECTS =
+        Collections.newSetFromMap(new IdentityHashMap<>());
 
     private static volatile ResourceLeakHint currentHint = new FixedHint(null);
 
@@ -62,7 +70,9 @@ public final class CustomResourceLeakDetector<T> extends ResourceLeakDetector<T>
     }
 
     public static void setCurrentInput(byte[] input) {
-        currentHint = new FixedHint(input);
+        if (TRACK_CURRENT_TEST_CASE) {
+            currentHint = new FixedHint(input);
+        }
     }
 
     @Override
@@ -104,10 +114,21 @@ public final class CustomResourceLeakDetector<T> extends ResourceLeakDetector<T>
         for (ResourceLeakDetector<?> detector : DETECTORS) {
             Set<?> s = (Set<?>) ALL_LEAKS_FIELD.get(detector);
             for (Object o : s) {
-                String v = o.toString();
-                if (v.contains("<clinit>")) {
+                boolean staticallyCreated = STATICALLY_CREATED_OBJECTS.contains(o);
+                String v;
+                if (!staticallyCreated) {
+                    v = o.toString();
+                    if (v.contains("<clinit>")) {
+                        staticallyCreated = true;
+                        STATICALLY_CREATED_OBJECTS.add(o);
+                    }
+                } else {
+                    v = null;
+                }
+                if (staticallyCreated) {
                     logger.debug("Skipping still-open resource that has a <clinit> stack, so is probably irrelevant.");
                 } else {
+                    assert v != null;
                     logger.info("Still open: {}", v);
                     found = v;
                 }

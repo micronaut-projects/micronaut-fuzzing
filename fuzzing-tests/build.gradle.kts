@@ -59,6 +59,7 @@ tasks.withType<PrepareClusterFuzzTask> {
         "-XX:MaxDirectMemorySize=256M",
         "-Dio.netty.leakDetection.targetRecords=0",
         "-Dio.netty.noUnsafe=true",
+        "-Dtrack-current-test-case=false",
         "-XX:+ExitOnOutOfMemoryError"
     )
 }
