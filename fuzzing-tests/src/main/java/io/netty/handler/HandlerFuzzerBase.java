@@ -19,12 +19,12 @@ package io.netty.handler;
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.Dict;
 import io.micronaut.fuzzing.FlagAppender;
-import io.micronaut.fuzzing.http.CustomResourceLeakDetector;
 import io.micronaut.fuzzing.util.ByteSplitter;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.embedded.EmbeddedChannel;
+import io.netty.util.LeakPresenceDetector;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.FastThreadLocalThread;
 import io.netty.util.internal.PlatformDependent;
@@ -36,10 +36,6 @@ import io.netty.util.internal.PlatformDependent;
 public abstract class HandlerFuzzerBase {
     static final String SEPARATOR = "SEP";
     static final ByteSplitter SPLITTER = ByteSplitter.create(SEPARATOR);
-
-    static {
-        CustomResourceLeakDetector.register();
-    }
 
     protected final EmbeddedChannel channel = new EmbeddedChannel();
     private boolean finished = false;
@@ -78,7 +74,7 @@ public abstract class HandlerFuzzerBase {
         } catch (Exception e) {
             onException(e);
         }
-        CustomResourceLeakDetector.reportStillOpen();
+        LeakPresenceDetector.check();
         FlagAppender.checkTriggered();
     }
 

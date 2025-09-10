@@ -26,6 +26,7 @@ import io.micronaut.http.server.netty.NettyHttpServer;
 import io.micronaut.runtime.server.EmbeddedServer;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.embedded.EmbeddedChannel;
+import io.netty.util.LeakPresenceDetector;
 import io.netty.util.ReferenceCountUtil;
 import org.slf4j.LoggerFactory;
 
@@ -50,12 +51,9 @@ public class EmbeddedHttpTarget implements AutoCloseable {
     private final NettyHttpServer nettyHttpServer;
 
     EmbeddedHttpTarget(Map<String, Object> cfg) {
-        System.setProperty("io.netty.leakDetection.targetRecords", "100");
-
         String vmName = ManagementFactory.getRuntimeMXBean().getName();
         System.setProperty("VM_NAME", vmName);
         LoggerFactory.getLogger(EmbeddedHttpTarget.class).info("Starting embedded HTTP target. VM name is: {}", vmName);
-        CustomResourceLeakDetector.register();
 
         ApplicationContext ctx = ApplicationContext.run(cfg);
 
@@ -75,8 +73,6 @@ public class EmbeddedHttpTarget implements AutoCloseable {
     }
 
     final void run(byte[] input) {
-        CustomResourceLeakDetector.setCurrentInput(input);
-
         EmbeddedChannel embeddedChannel = nettyHttpServer.buildEmbeddedChannel(false);
 
         ByteSplitter.ChunkIterator iterator = SPLITTER.splitIterator(input);
@@ -96,14 +92,12 @@ public class EmbeddedHttpTarget implements AutoCloseable {
 
         embeddedChannel.checkException();
 
-        CustomResourceLeakDetector.reportLeaks();
-        CustomResourceLeakDetector.reportStillOpen();
+        LeakPresenceDetector.check();
         FlagAppender.checkTriggered();
     }
 
     @Override
     public final void close() {
-        //CustomResourceLeakDetector.reportStillOpen();
     }
 
     public static void main(String[] args) {

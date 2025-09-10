@@ -30,6 +30,7 @@ import io.netty.channel.ChannelOption;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.netty.resolver.NoopAddressResolverGroup;
+import io.netty.util.LeakPresenceDetector;
 import org.slf4j.LoggerFactory;
 
 import java.lang.management.ManagementFactory;
@@ -45,13 +46,9 @@ public class HttpTarget {
     private static Bootstrap clientBootstrap;
 
     public static void fuzzerInitialize() {
-        System.setProperty("io.netty.leakDetection.level", "paranoid");
-        System.setProperty("io.netty.leakDetection.targetRecords", "100");
-
         String vmName = ManagementFactory.getRuntimeMXBean().getName();
         System.setProperty("VM_NAME", vmName);
         LoggerFactory.getLogger(HttpTarget.class).info("Starting HTTP target. VM name is: {}", vmName);
-        CustomResourceLeakDetector.register();
 
         ApplicationContext ctx = ApplicationContext.run(Map.of(
                 "micronaut.server.port", "-1",
@@ -88,18 +85,15 @@ public class HttpTarget {
     }
 
     public static void fuzzerTestOneInput(byte[] input) throws Exception {
-        CustomResourceLeakDetector.setCurrentInput(input);
-
         Channel channel = clientBootstrap.connect().sync().channel();
         channel.writeAndFlush(Unpooled.wrappedBuffer(input));
         channel.closeFuture().await();
 
-        CustomResourceLeakDetector.reportLeaks();
+        LeakPresenceDetector.check();
     }
 
     public static void fuzzerTearDown() {
         embeddedServer.close();
-
-        CustomResourceLeakDetector.reportStillOpen();
+        LeakPresenceDetector.check();
     }
 }

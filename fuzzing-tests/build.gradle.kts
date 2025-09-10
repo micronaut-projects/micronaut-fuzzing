@@ -57,8 +57,9 @@ tasks.withType<PrepareClusterFuzzTask> {
         "-XX:GCTimeLimit=80", // avoid gc thrashing
         "-Xmx512M",
         "-XX:MaxDirectMemorySize=256M",
-        "-Dio.netty.leakDetection.targetRecords=0",
         "-Dio.netty.noUnsafe=true",
+        "-Dio.netty.customResourceLeakDetector=io.netty.util.LeakPresenceDetector",
+        "-Dio.netty.leakDetection.targetRecords=0",
         "-Dtrack-current-test-case=false",
         "-XX:+ExitOnOutOfMemoryError"
     )
@@ -76,6 +77,8 @@ tasks.named<JazzerTask>("jazzer") {
         "-Xmx512M",
         "-XX:MaxDirectMemorySize=256M",
         "-Dio.netty.noUnsafe=true",
+        "-Dio.netty.customResourceLeakDetector=io.netty.util.LeakPresenceDetector",
+        "-Dio.netty.util.LeakPresenceDetector.trackCreationStack=true",
         "-Dio.netty.leakDetection.targetRecords=100",
         "-XX:+ExitOnOutOfMemoryError",
         "-XX:+HeapDumpOnOutOfMemoryError",
