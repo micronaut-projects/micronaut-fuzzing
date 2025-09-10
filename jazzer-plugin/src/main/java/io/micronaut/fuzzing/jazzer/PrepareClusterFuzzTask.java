@@ -36,6 +36,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
     private static final Logger LOG = LoggerFactory.getLogger(PrepareClusterFuzzTask.class);
@@ -144,6 +145,7 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                     }
                     line.add("-dict=$this_dir/dict/" + fileName);
                 }
+                line.add("--jvm_args=" + getJvmArgs().get().stream().map(s -> s.replace(":", "\\:")).collect(Collectors.joining(":")));
                 line.add("$@");
                 String sh = """
                 #!/bin/bash
