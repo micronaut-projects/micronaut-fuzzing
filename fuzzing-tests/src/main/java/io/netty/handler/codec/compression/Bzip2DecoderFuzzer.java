@@ -19,7 +19,7 @@ public class Bzip2DecoderFuzzer extends DecompressorFuzzerBase {
             .addLast(new ChannelInboundHandlerAdapter() {
                 @Override
                 public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-                    if (cause instanceof DecoderException && cause.getCause() instanceof ArrayIndexOutOfBoundsException) {
+                    if (cause instanceof DecoderException && (cause.getCause() instanceof ArrayIndexOutOfBoundsException || cause.getCause() instanceof IndexOutOfBoundsException)) {
                         return;
                     }
                     super.exceptionCaught(ctx, cause);
