@@ -77,6 +77,7 @@ tasks.withType<PrepareClusterFuzzTask> {
         "-XX:+ExitOnOutOfMemoryError",
         "--enable-preview"
     )
+    setupScript.set("apt install -y openjdk-21-jdk-headless")
     javaHome.set("/usr/lib/jvm/java-21-openjdk-amd64")
 }
 

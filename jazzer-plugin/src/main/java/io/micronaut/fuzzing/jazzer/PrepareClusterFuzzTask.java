@@ -64,6 +64,10 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
     @Optional
     public abstract Property<String> getJavaHome();
 
+    @Input
+    @Optional
+    public abstract Property<String> getSetupScript();
+
     /**
      * Introspector-specific settings. Note that these don't affect the actual fuzzing, only the
      * introspector report.
@@ -155,7 +159,7 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                 #!/bin/bash
                 # LLVMFuzzerTestOneInput <-- for fuzzer detection (see test_all.py)
                 this_dir=$(dirname "$0")
-                """ + String.join(" ", line);
+                """ + getSetupScript().getOrElse("") + "\n" + String.join(" ", line);
                 Path targetPath = getOutputDirectory().file(fileName).get().getAsFile().toPath();
                 Files.writeString(targetPath, sh);
                 Files.setPosixFilePermissions(targetPath, Set.of(
