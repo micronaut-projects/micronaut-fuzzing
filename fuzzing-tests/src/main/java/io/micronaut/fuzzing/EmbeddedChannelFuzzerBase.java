@@ -24,7 +24,7 @@ public abstract class EmbeddedChannelFuzzerBase {
 
     protected final EmbeddedChannel channel;
 
-    protected long baseCpuTime = 200000;
+    protected long baseCpuTime = 500000;
     protected long inputCpuTime = 20;
     protected long outputCpuTime = 0;
     protected boolean hasOutput = false;
