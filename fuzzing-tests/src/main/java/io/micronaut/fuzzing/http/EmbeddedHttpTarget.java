@@ -15,92 +15,55 @@
  */
 package io.micronaut.fuzzing.http;
 
+import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.context.ApplicationContext;
 import io.micronaut.fuzzing.Dict;
-import io.micronaut.fuzzing.FlagAppender;
+import io.micronaut.fuzzing.EmbeddedChannelFuzzerBase;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
-import io.micronaut.fuzzing.util.ByteSplitter;
 import io.micronaut.http.server.netty.NettyHttpServer;
 import io.micronaut.runtime.server.EmbeddedServer;
-import io.netty.buffer.ByteBuf;
-import io.netty.channel.embedded.EmbeddedChannel;
-import io.netty.util.LeakPresenceDetector;
-import io.netty.util.ReferenceCountUtil;
 import org.slf4j.LoggerFactory;
 
 import java.lang.management.ManagementFactory;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 @FuzzTarget
 @HttpDict
 @Dict({
-    EmbeddedHttpTarget.SEPARATOR,
     SimpleController.ECHO_ARRAY,
     SimpleController.ECHO_PUBLISHER,
     SimpleController.ECHO_STRING,
     SimpleController.ECHO_PIECE_JSON,
 })
-public class EmbeddedHttpTarget implements AutoCloseable {
-    static final String SEPARATOR = "SEP";
-    private static final ByteSplitter SPLITTER = ByteSplitter.create(SEPARATOR);
+public class EmbeddedHttpTarget extends EmbeddedChannelFuzzerBase {
+    private static final ContextHolder HTTP1 = new ContextHolder(Map.of());
 
-    private static EmbeddedHttpTarget instance;
-
-    private final NettyHttpServer nettyHttpServer;
-
-    EmbeddedHttpTarget(Map<String, Object> cfg) {
-        String vmName = ManagementFactory.getRuntimeMXBean().getName();
-        System.setProperty("VM_NAME", vmName);
-        LoggerFactory.getLogger(EmbeddedHttpTarget.class).info("Starting embedded HTTP target. VM name is: {}", vmName);
-
-        ApplicationContext ctx = ApplicationContext.run(cfg);
-
-        nettyHttpServer = (NettyHttpServer) ctx.getBean(EmbeddedServer.class);
+    EmbeddedHttpTarget(ContextHolder contextHolder) {
+        super(contextHolder.nettyHttpServer.buildEmbeddedChannel(false));
     }
 
-    public static void fuzzerInitialize() {
-        instance = new EmbeddedHttpTarget(Map.of());
+    public static void fuzzerTestOneInput(FuzzedDataProvider input) {
+        new EmbeddedHttpTarget(HTTP1).test(input);
     }
 
-    public static void fuzzerTestOneInput(byte[] input) {
-        instance.run(input);
+    static void main(String[] args) {
+        LocalJazzerRunner.create(EmbeddedHttpTarget.class).reproduce("GET / HTTP/1.1\r\nContent-Length: 0\r\nHost: localhost\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.UTF_8));
     }
 
-    public static void fuzzerTearDown() {
-        instance.close();
-    }
+    static final class ContextHolder {
+        final NettyHttpServer nettyHttpServer;
 
-    final void run(byte[] input) {
-        EmbeddedChannel embeddedChannel = nettyHttpServer.buildEmbeddedChannel(false);
+        ContextHolder(Map<String, Object> cfg) {
+            String vmName = ManagementFactory.getRuntimeMXBean().getName();
+            System.setProperty("VM_NAME", vmName);
+            LoggerFactory.getLogger(EmbeddedHttpTarget.class).info("Starting embedded HTTP target. VM name is: {}", vmName);
 
-        ByteSplitter.ChunkIterator iterator = SPLITTER.splitIterator(input);
-        while (iterator.hasNext() && embeddedChannel.isOpen()) {
-            iterator.proceed();
-            ByteBuf bb = embeddedChannel.alloc().buffer(iterator.length());
-            bb.writeBytes(input, iterator.start(), iterator.length());
-            embeddedChannel.writeInbound(bb);
+            ApplicationContext ctx = ApplicationContext.run(cfg);
+
+            nettyHttpServer = (NettyHttpServer) ctx.getBean(EmbeddedServer.class);
         }
-
-        embeddedChannel.releaseOutbound();
-        // don't release inbound, that doesn't happen normally either
-        for (Object inboundMessage : embeddedChannel.inboundMessages()) {
-            ReferenceCountUtil.touch(inboundMessage);
-        }
-        embeddedChannel.finish();
-
-        embeddedChannel.checkException();
-
-        LeakPresenceDetector.check();
-        FlagAppender.checkTriggered();
-    }
-
-    @Override
-    public final void close() {
-    }
-
-    public static void main(String[] args) {
-        LocalJazzerRunner.create(EmbeddedHttpTarget.class).fuzz();
     }
 }

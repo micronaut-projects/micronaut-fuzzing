@@ -60,6 +60,10 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
     @Inject
     protected abstract ExecOperations getExecOperations();
 
+    @Input
+    @Optional
+    public abstract Property<String> getJavaHome();
+
     /**
      * Introspector-specific settings. Note that these don't affect the actual fuzzing, only the
      * introspector report.
@@ -118,7 +122,7 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
             Map<String, String> targetNames = assignTargetNames(targets.stream().map(DefinedFuzzTarget::targetClass).toList());
             for (DefinedFuzzTarget target : targets) {
                 List<String> line = new ArrayList<>();
-                line.add("LD_LIBRARY_PATH=\"$JVM_LD_LIBRARY_PATH\":$this_dir");
+                line.add("LD_LIBRARY_PATH=" + (getJavaHome().isPresent() ? getJavaHome().get() + "/lib/server" : "\"$JVM_LD_LIBRARY_PATH\"") + ":$this_dir");
                 if (jni) {
                     line.add("JAZZER_NATIVE_SANITIZERS_DIR=native-sanitizers");
                 }

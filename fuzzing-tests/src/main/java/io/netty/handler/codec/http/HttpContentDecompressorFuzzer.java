@@ -29,6 +29,7 @@ public class HttpContentDecompressorFuzzer extends HandlerFuzzerBase {
                     super.exceptionCaught(ctx, cause);
                 }
             });
+        outputCpuTime = inputCpuTime;
     }
 
     public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {

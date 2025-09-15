@@ -7,17 +7,12 @@ import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
 import org.gradle.api.artifacts.result.ResolvedArtifactResult;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier;
-import org.gradle.jvm.toolchain.JavaToolchainService;
 import org.gradle.language.base.plugins.LifecycleBasePlugin;
 
-import javax.inject.Inject;
 import java.io.File;
 import java.util.Map;
 
 public abstract class JazzerPlugin implements Plugin<Project> {
-    @Inject
-    protected abstract JavaToolchainService getJavaToolchainService();
-
     @Override
     public void apply(Project project) {
         Configuration runtimeClasspath = project.getConfigurations().getByName(JavaPlugin.RUNTIME_CLASSPATH_CONFIGURATION_NAME);

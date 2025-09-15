@@ -11,6 +11,19 @@ repositories {
     mavenCentral()
 }
 
+micronautBuild {
+    javaVersion.set(21)
+}
+
+tasks.withType<JavaCompile> {
+    options.compilerArgs.add("--enable-preview")
+    options.release.set(21)
+}
+
+tasks.withType<Test>() {
+    jvmArgs("--enable-preview")
+}
+
 group = "io.micronaut.fuzzing"
 
 dependencies {
@@ -61,11 +74,15 @@ tasks.withType<PrepareClusterFuzzTask> {
         "-Dio.netty.customResourceLeakDetector=io.netty.util.LeakPresenceDetector",
         "-Dio.netty.leakDetection.targetRecords=0",
         "-Dtrack-current-test-case=false",
-        "-XX:+ExitOnOutOfMemoryError"
+        "-XX:+ExitOnOutOfMemoryError",
+        "--enable-preview"
     )
+    javaHome.set("/usr/lib/jvm/java-21-openjdk-amd64")
 }
 
 tasks.named<JazzerTask>("jazzer") {
+    val collectJfr = true
+
     targets.set(listOf(
         //"io.micronaut.fuzzing.toml.TomlTarget",
         //"io.micronaut.fuzzing.http.HttpTarget",
@@ -73,7 +90,7 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.micronaut.fuzzing.http.MediaTypeTarget",
         //"io.netty.handler.HttpRequestDecoderFuzzer"
     ))
-    jvmArgs.set(listOf(
+    val jvmArgs = mutableListOf(
         "-Xmx512M",
         "-XX:MaxDirectMemorySize=256M",
         "-Dio.netty.noUnsafe=true",
@@ -82,15 +99,17 @@ tasks.named<JazzerTask>("jazzer") {
         "-Dio.netty.leakDetection.targetRecords=100",
         "-XX:+ExitOnOutOfMemoryError",
         "-XX:+HeapDumpOnOutOfMemoryError",
-    ))
+        "--enable-preview"
+    )
+    if (collectJfr) {
+        jvmArgs += listOf("-XX:+FlightRecorder", "-XX:StartFlightRecording=settings=cpu-times.jfc,filename=build/cpu-times.jfr")
+    }
+    this.jvmArgs.set(jvmArgs)
     rssLimitMb.set(8192)
     instrumentationIncludes.set(listOf("io.micronaut.**", "io.netty.**"))
-    //forks.set(8)
-    //corpus.set(File("/home/yawkat/dev/scratch/go-fuzz-corpus/httpreq/corpus"))
-    //minimizeCrashFile.set(File("crash-161cd5ffd4f8b5b5d9a7e7f19784ac446343c142"))
-    maxTotalTime.set(Duration.ofHours(2))
-    //maxTotalTime.set(Duration.ofSeconds(10))
-    coverageDumpFile.set(layout.buildDirectory.file("cov-report.exec"))
+    //minimizeCrashFile.set(File("minimized-from-84bb018a9cb013e56e2fe5689989968b0a685ba6"))
+    maxTotalTime.set(if (collectJfr) Duration.ofMinutes(2) else Duration.ofHours(2))
+    //coverageDumpFile.set(layout.buildDirectory.file("cov-report.exec"))
 }
 
 val jazzerReportDir = layout.buildDirectory.dir("jacocoJazzerHtml")

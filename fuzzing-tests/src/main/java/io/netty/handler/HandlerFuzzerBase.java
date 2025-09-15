@@ -16,69 +16,15 @@
 
 package io.netty.handler;
 
-import com.code_intelligence.jazzer.api.FuzzedDataProvider;
-import io.micronaut.fuzzing.Dict;
-import io.micronaut.fuzzing.FlagAppender;
-import io.micronaut.fuzzing.util.ByteSplitter;
-import io.netty.buffer.ByteBuf;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.micronaut.fuzzing.EmbeddedChannelFuzzerBase;
 import io.netty.channel.embedded.EmbeddedChannel;
-import io.netty.util.LeakPresenceDetector;
-import io.netty.util.ReferenceCountUtil;
-import io.netty.util.concurrent.FastThreadLocalThread;
-import io.netty.util.internal.PlatformDependent;
 
 /**
  * Base class for fuzzing the input of an inbound handler. Will report exceptions thrown by the handler.
  */
-@Dict(HandlerFuzzerBase.SEPARATOR)
-public abstract class HandlerFuzzerBase {
-    static final String SEPARATOR = "SEP";
-    static final ByteSplitter SPLITTER = ByteSplitter.create(SEPARATOR);
-
-    protected final EmbeddedChannel channel = new EmbeddedChannel();
-    private boolean finished = false;
-
-    public void test(FuzzedDataProvider provider) {
-        FastThreadLocalThread.runWithFastThreadLocal(() -> test0(provider));
-    }
-
-    private void test0(FuzzedDataProvider provider) {
-        if (!finished) {
-            finished = true;
-            channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
-                @Override
-                public void channelRead(ChannelHandlerContext ctx, Object msg) {
-                    // to avoid OOM from output buffering, release inputs immediately
-                    ReferenceCountUtil.release(msg);
-                }
-            });
-        }
-
-        byte[] allBytes = provider.consumeRemainingAsBytes();
-        ByteSplitter.ChunkIterator itr = SPLITTER.splitIterator(allBytes);
-        while (itr.hasNext() && channel.isOpen()) {
-            itr.proceed();
-            ByteBuf buffer = channel.alloc().buffer(itr.length());
-            buffer.writeBytes(allBytes, itr.start(), itr.length());
-            try {
-                channel.writeInbound(buffer);
-            } catch (Exception e) {
-                onException(e);
-                break; // cancel further input, but still release
-            }
-        }
-        try {
-            channel.finishAndReleaseAll();
-        } catch (Exception e) {
-            onException(e);
-        }
-        LeakPresenceDetector.check();
-        FlagAppender.checkTriggered();
-    }
-
-    protected void onException(Exception e) {
-        PlatformDependent.throwException(e);
+public abstract class HandlerFuzzerBase extends EmbeddedChannelFuzzerBase {
+    public HandlerFuzzerBase() {
+        super(new EmbeddedChannel());
+        hasOutput = true;
     }
 }

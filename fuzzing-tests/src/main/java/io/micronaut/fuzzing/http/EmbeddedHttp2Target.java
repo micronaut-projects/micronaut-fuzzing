@@ -15,6 +15,7 @@
  */
 package io.micronaut.fuzzing.http;
 
+import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 
@@ -22,27 +23,17 @@ import java.util.Map;
 
 @FuzzTarget
 public class EmbeddedHttp2Target extends EmbeddedHttpTarget {
-    private static EmbeddedHttp2Target instance;
+    private static final EmbeddedHttpTarget.ContextHolder HTTP2 = new EmbeddedHttpTarget.ContextHolder(Map.of("micronaut.server.http-version", "2.0"));
 
-    EmbeddedHttp2Target(Map<String, Object> cfg) {
-        super(cfg);
+    EmbeddedHttp2Target(ContextHolder contextHolder) {
+        super(contextHolder);
     }
 
-    public static void fuzzerInitialize() {
-        instance = new EmbeddedHttp2Target(Map.of(
-            "micronaut.server.http-version", "2.0"
-        ));
+    public static void fuzzerTestOneInput(FuzzedDataProvider input) {
+        new EmbeddedHttp2Target(HTTP2).test(input);
     }
 
-    public static void fuzzerTestOneInput(byte[] input) {
-        instance.run(input);
-    }
-
-    public static void fuzzerTearDown() {
-        instance.close();
-    }
-
-    public static void main(String[] args) {
+    static void main(String[] args) {
         LocalJazzerRunner.create(EmbeddedHttp2Target.class).fuzz();
     }
 }
