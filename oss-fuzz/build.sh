@@ -2,8 +2,6 @@
 
 set -e
 
-apt install -y openjdk-21-jdk-headless
-
 mkdir -p ~/.gradle
 echo "auto.include.git.dirs=$(pwd)" >> ~/.gradle/gradle.properties
 
