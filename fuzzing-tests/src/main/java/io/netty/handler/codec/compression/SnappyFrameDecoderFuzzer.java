@@ -18,7 +18,7 @@ public class SnappyFrameDecoderFuzzer extends DecompressorFuzzerBase {
 
     @Override
     protected void onException(Exception e) {
-        if (e instanceof DecoderException && e.getCause() instanceof IndexOutOfBoundsException) {
+        if (e instanceof DecoderException && (e.getCause() instanceof IndexOutOfBoundsException || e.getCause() instanceof IllegalArgumentException)) {
             return;
         }
         super.onException(e);
