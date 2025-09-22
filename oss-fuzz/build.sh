@@ -2,6 +2,15 @@
 
 set -e
 
+export JAVA_HOME="$OUT/jdk"
+
+curl -L -O https://corretto.aws/downloads/latest/amazon-corretto-25-x64-linux-jdk.tar.gz
+mkdir -p $JAVA_HOME
+tar -xz --strip-components=1 -f amazon-corretto-25-x64-linux-jdk.tar.gz --directory $JAVA_HOME
+rm -rf $JAVA_HOME/jmods $JAVA_HOME/lib/src.zip
+
+export PATH="$JAVA_HOME/bin:$PATH"
+
 mkdir -p ~/.gradle
 echo "auto.include.git.dirs=$(pwd)" >> ~/.gradle/gradle.properties
 
