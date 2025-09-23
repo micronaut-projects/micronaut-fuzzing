@@ -77,7 +77,7 @@ tasks.withType<PrepareClusterFuzzTask> {
         "-XX:+ExitOnOutOfMemoryError",
         "--enable-preview"
     )
-    javaHome.set("/out/jdk")
+    javaHome.set("\$this_dir/jdk")
 }
 
 tasks.named<JazzerTask>("jazzer") {
