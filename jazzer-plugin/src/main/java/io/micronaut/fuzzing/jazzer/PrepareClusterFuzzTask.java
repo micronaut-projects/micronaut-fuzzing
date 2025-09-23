@@ -127,6 +127,9 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
             for (DefinedFuzzTarget target : targets) {
                 List<String> line = new ArrayList<>();
                 line.add("LD_LIBRARY_PATH=" + (getJavaHome().isPresent() ? getJavaHome().get() + "/lib/server" : "\"$JVM_LD_LIBRARY_PATH\"") + ":$this_dir");
+                if (getJavaHome().isPresent()) {
+                    line.add("JAVA_HOME=" + getJavaHome().get());
+                }
                 if (jni) {
                     line.add("JAZZER_NATIVE_SANITIZERS_DIR=native-sanitizers");
                 }
