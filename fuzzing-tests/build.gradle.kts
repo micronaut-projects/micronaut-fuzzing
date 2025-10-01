@@ -41,7 +41,7 @@ dependencies {
     runtimeOnly("com.github.jponge:lzma-java:1.3")
     runtimeOnly("com.github.luben:zstd-jni:1.5.7-4")
     runtimeOnly("com.jcraft:jzlib:1.1.3")
-    runtimeOnly("com.ning:compress-lzf:1.1.2")
+    runtimeOnly("com.ning:compress-lzf:1.1.3")
     runtimeOnly("org.lz4:lz4-java:1.8.0")
     runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.80")
     implementation("io.netty:netty-codec-xml")
