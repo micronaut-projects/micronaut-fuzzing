@@ -40,6 +40,11 @@ public abstract class JazzerTask extends BaseJazzerTask {
     @Optional
     public abstract RegularFileProperty getMinimizeCrashFile();
 
+    @InputFile
+    @Nonnull
+    @Optional
+    public abstract RegularFileProperty getReproduceCrashFile();
+
     @OutputFile
     @Nonnull
     @Optional
@@ -98,7 +103,10 @@ public abstract class JazzerTask extends BaseJazzerTask {
                             args.add("-minimize_crash=1");
                             args.add(getMinimizeCrashFile().getAsFile().get().getPath());
                         }
-                        if (getCorpus().isPresent() && !getMinimizeCrashFile().isPresent()) {
+                        if (getReproduceCrashFile().isPresent()) {
+                            args.add(getReproduceCrashFile().getAsFile().get().getPath());
+                        }
+                        if (getCorpus().isPresent() && !getMinimizeCrashFile().isPresent() && !getReproduceCrashFile().isPresent()) {
                             args.add(getCorpus().getAsFile().get().getPath());
                         }
                         spec.setArgs(args);
