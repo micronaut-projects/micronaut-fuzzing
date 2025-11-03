@@ -43,7 +43,7 @@ dependencies {
     runtimeOnly("com.jcraft:jzlib:1.1.3")
     runtimeOnly("com.ning:compress-lzf:1.1.3")
     runtimeOnly("org.lz4:lz4-java:1.8.0")
-    runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.80")
+    runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.82")
     implementation("io.netty:netty-codec-xml")
 
     annotationProcessor(mn.micronaut.inject.java)
