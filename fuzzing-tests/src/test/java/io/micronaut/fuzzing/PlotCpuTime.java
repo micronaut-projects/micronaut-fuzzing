@@ -289,6 +289,7 @@ public class PlotCpuTime {
         options.scales.y.title = new AxisTitle();
         options.scales.y.title.display = true;
         options.scales.y.title.text = "actualTime / factor";
+        //options.scales.y.type = "logarithmic";
         options.plugins = new Plugins();
         options.plugins.tooltip = new Tooltip();
         options.plugins.tooltip.callbacks = new TooltipCallbacks();
@@ -406,6 +407,7 @@ public class PlotCpuTime {
 
     public static class Axis {
         public AxisTitle title;
+        public String type = "linear";
     }
 
     public static class AxisTitle {
