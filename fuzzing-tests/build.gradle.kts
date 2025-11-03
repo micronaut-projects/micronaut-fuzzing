@@ -28,6 +28,8 @@ group = "io.micronaut.fuzzing"
 
 dependencies {
     implementation(mn.micronaut.http.server.netty)
+    implementation(mn.micronaut.http.client.core)
+    implementation(mn.micronaut.http.client)
     implementation(mn.micronaut.jackson.databind)
     implementation(mn.reactor)
 
@@ -51,7 +53,6 @@ dependencies {
 
     testImplementation(mnTest.junit.jupiter.engine)
     testImplementation(mnTest.junit.jupiter.params)
-    testImplementation(mn.micronaut.http.client)
     testImplementation(mnTest.micronaut.test.junit5)
     testAnnotationProcessor(mn.micronaut.inject.java)
 }

@@ -15,48 +15,60 @@
  */
 package io.micronaut.fuzzing.http;
 
-import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.Body;
-import io.micronaut.http.annotation.Consumes;
 import io.micronaut.http.annotation.Controller;
-import io.micronaut.http.annotation.Get;
-import io.micronaut.http.annotation.Post;
 import jakarta.inject.Singleton;
 import org.reactivestreams.Publisher;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+import java.util.concurrent.CompletionStage;
 
 @Singleton
 @Controller
-public final class SimpleController {
-    static final String ECHO_PUBLISHER = "/echo-publisher";
-    static final String ECHO_ARRAY = "/echo-array";
-    static final String ECHO_STRING = "/echo-string";
-    static final String ECHO_PIECE_JSON = "/echo-piece-json";
+public final class SimpleController implements Api {
 
-    @Get
+    @Override
     public String index() {
         return "index";
     }
 
-    @Post(ECHO_PUBLISHER)
+    @Override
     public Publisher<byte[]> echo(@Body Publisher<byte[]> foo) {
         return foo;
     }
 
-    @Post(ECHO_ARRAY)
+    @Override
+    public Publisher<String> echoString(@Body Publisher<String> foo) {
+        return foo;
+    }
+
+    @Override
+    public Mono<String> echoMono(@Body Mono<String> foo) {
+        return foo;
+    }
+
+    @Override
+    public Flux<String> echoFlux(@Body Flux<String> foo) {
+        return foo;
+    }
+
+    @Override
+    public CompletionStage<String> echoFuture(@Body CompletionStage<String> foo) {
+        return foo;
+    }
+
+    @Override
     public byte[] echo(@Body byte[] foo) {
         return foo;
     }
 
-    @Post(ECHO_STRING)
+    @Override
     public String echo(@Body String foo) {
         return foo;
     }
 
-    @Post(ECHO_PIECE_JSON)
-    @Consumes({
-        MediaType.APPLICATION_JSON,
-        MediaType.APPLICATION_FORM_URLENCODED
-    })
+    @Override
     public String echoPieceJson(@Body("foo") String foo) {
         return foo;
     }
