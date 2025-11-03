@@ -106,7 +106,6 @@ tasks.named<JazzerTask>("jazzer") {
     }
     this.jvmArgs.set(jvmArgs)
     rssLimitMb.set(8192)
-    instrumentationIncludes.set(listOf("io.micronaut.**", "io.netty.**"))
     //minimizeCrashFile.set(File("minimized-from-84bb018a9cb013e56e2fe5689989968b0a685ba6"))
     maxTotalTime.set(if (collectJfr) Duration.ofMinutes(2) else Duration.ofHours(2))
     //coverageDumpFile.set(layout.buildDirectory.file("cov-report.exec"))
