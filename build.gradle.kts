@@ -7,11 +7,11 @@ plugins {
 listOf("publishAllPublicationsToBuildRepository", "publishToSonatype", "closeAndReleaseSonatypeStagingRepository").forEach {t ->
     if (tasks.names.find { it == t } == null) {
         tasks.register(t) {
-            dependsOn(gradle.includedBuilds.find { it.name == "micronaut-jazzer-plugin" }?.task(":$t"))
+            dependsOn(gradle.includedBuilds.find { it.name == "micronaut-jazzer-plugin" }?.task(":$t")!!)
         }
     } else {
         tasks.named(t) {
-            dependsOn(gradle.includedBuilds.find { it.name == "micronaut-jazzer-plugin" }?.task(":$t"))
+            dependsOn(gradle.includedBuilds.find { it.name == "micronaut-jazzer-plugin" }?.task(":$t")!!)
         }
     }
 }
