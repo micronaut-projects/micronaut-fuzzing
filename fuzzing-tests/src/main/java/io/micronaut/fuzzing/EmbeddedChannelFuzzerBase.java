@@ -1,6 +1,7 @@
 package io.micronaut.fuzzing;
 
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
+import io.micronaut.fuzzing.sanitizer.SanitizerTransformer;
 import io.micronaut.fuzzing.util.ByteSplitter;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufHolder;
@@ -32,6 +33,10 @@ public abstract class EmbeddedChannelFuzzerBase {
     private long outputBytes;
 
     private boolean finished = false;
+
+    static {
+        SanitizerTransformer.installLocally();
+    }
 
     protected EmbeddedChannelFuzzerBase(EmbeddedChannel channel) {
         this.channel = channel;

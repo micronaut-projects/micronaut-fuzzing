@@ -36,6 +36,8 @@ dependencies {
     implementation(projects.micronautFuzzingApi)
     implementation(projects.micronautFuzzingRunner)
 
+    implementation(mnTest.bytebuddy)
+
     runtimeOnly("com.aayushatharva.brotli4j:native-linux-x86_64:1.18.0")
     runtimeOnly("com.aayushatharva.brotli4j:brotli4j:1.18.0")
     runtimeOnly("com.github.jponge:lzma-java:1.3")
@@ -95,7 +97,7 @@ tasks.named<JazzerTask>("jazzer") {
         "-XX:MaxDirectMemorySize=256M",
         "-Dio.netty.noUnsafe=true",
         "-Dio.netty.customResourceLeakDetector=io.netty.util.LeakPresenceDetector",
-        "-Dio.netty.util.LeakPresenceDetector.trackCreationStack=true",
+        //"-Dio.netty.util.LeakPresenceDetector.trackCreationStack=true",
         "-Dio.netty.leakDetection.targetRecords=100",
         "-XX:+ExitOnOutOfMemoryError",
         "-XX:+HeapDumpOnOutOfMemoryError",

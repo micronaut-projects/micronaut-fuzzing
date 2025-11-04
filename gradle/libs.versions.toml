@@ -16,9 +16,9 @@
 # a managed version (a version which alias starts with "managed-"
 
 [versions]
-micronaut = "4.8.18"
+micronaut = "4.10.8"
 micronaut-docs = "2.0.0"
-micronaut-test = "4.6.2"
+micronaut-test = "4.10.2"
 micronaut-logging = "1.5.1"
 groovy = "4.0.15"
 spock = "2.3-groovy-4.0"
