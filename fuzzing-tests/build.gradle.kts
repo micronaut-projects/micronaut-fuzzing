@@ -38,7 +38,7 @@ dependencies {
 
     implementation(mnTest.bytebuddy)
 
-    runtimeOnly("com.aayushatharva.brotli4j:native-linux-x86_64:1.18.0")
+    runtimeOnly("com.aayushatharva.brotli4j:native-linux-x86_64:1.20.0")
     runtimeOnly("com.aayushatharva.brotli4j:brotli4j:1.20.0")
     runtimeOnly("com.github.jponge:lzma-java:1.3")
     runtimeOnly("com.github.luben:zstd-jni:1.5.7-6")
