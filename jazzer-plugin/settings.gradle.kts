@@ -5,7 +5,7 @@ pluginManagement {
 rootProject.name = "micronaut-jazzer-plugin"
 
 plugins {
-    id("io.micronaut.build.shared.settings") version "7.3.2"
+    id("io.micronaut.build.shared.settings") version "7.6.6"
 }
 
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
