@@ -21,22 +21,27 @@ final class ByteBufArraySanitizer {
 
     static byte baload(byte[] array, int index) {
         if (array[0] == PATTERN_B1) {
-            checkIndexSlow(array, index);
+            array = checkIndexSlow(array, index);
         }
         return array[index];
     }
 
     static void bastore(byte[] array, int index, byte value) {
         if (array[0] == PATTERN_B1) {
-            checkIndexSlow(array, index);
+            array = checkIndexSlow(array, index);
         }
         array[index] = value;
     }
 
-    private static void checkIndexSlow(byte[] array, int index) {
+    private static byte[] checkIndexSlow(byte[] array, int index) {
         Slot slot = findSlot(array);
-        if (slot != null && (index < slot.start || index >= slot.end)) {
-            Jazzer.reportFindingFromHook(new FuzzerSecurityIssueCritical("Out-of-bounds array access"));
+        if (slot != null) {
+            if (index < slot.start || index >= slot.end) {
+                Jazzer.reportFindingFromHook(new FuzzerSecurityIssueCritical("Out-of-bounds array access"));
+            }
+            return slot.backing;
+        } else {
+            return array;
         }
     }
 
@@ -85,14 +90,14 @@ final class ByteBufArraySanitizer {
 
     static byte[] arraysCopyOf(byte[] array, int newLength) {
         if (array.length > 0 && array[0] == PATTERN_B1) {
-            checkRangeSlow(array, 0, newLength);
+            array = checkRangeSlow(array, 0, newLength);
         }
         return Arrays.copyOf(array, newLength);
     }
 
     static byte[] arraysCopyOfRange(byte[] array, int from, int to) {
         if (array.length > 0 && array[0] == PATTERN_B1) {
-            checkRangeSlow(array, from, to - from);
+            array = checkRangeSlow(array, from, to - from);
         }
         return Arrays.copyOfRange(array, from, to);
     }
@@ -100,18 +105,18 @@ final class ByteBufArraySanitizer {
     static void systemArraycopy(Object src, int srcPos, Object dest, int destPos, int length) {
         if (length != 0) {
             if (src instanceof byte[] s && s[0] == PATTERN_B1) {
-                checkRangeSlow(s, srcPos, length);
+                src = checkRangeSlow(s, srcPos, length);
             }
             if (dest instanceof byte[] d && d[0] == PATTERN_B1) {
-                checkRangeSlow(d, destPos, length);
+                dest = checkRangeSlow(d, destPos, length);
             }
         }
         System.arraycopy(src, srcPos, dest, destPos, length);
     }
 
-    private static void checkRangeSlow(byte[] array, int pos, int len) {
+    private static byte[] checkRangeSlow(byte[] array, int pos, int len) {
         if (len <= 0) {
-            return;
+            return array;
         }
         Slot slot = findSlot(array);
         if (slot != null) {
@@ -122,6 +127,9 @@ final class ByteBufArraySanitizer {
             if (pos < start || hi > end) {
                 Jazzer.reportFindingFromHook(new FuzzerSecurityIssueCritical("Out-of-bounds array access"));
             }
+            return slot.backing;
+        } else {
+            return array;
         }
     }
 
