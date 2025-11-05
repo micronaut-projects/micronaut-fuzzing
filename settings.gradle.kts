@@ -10,6 +10,7 @@ pluginManagement {
 }
 
 plugins {
+    // note: also update jazzer-plugin/settings.gradle.kts!
     id("io.micronaut.build.shared.settings") version "8.0.0-M9"
 }
 
