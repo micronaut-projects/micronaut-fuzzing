@@ -3,6 +3,7 @@ package io.micronaut.fuzzing.sanitizer;
 import com.code_intelligence.jazzer.api.FuzzerSecurityIssueCritical;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
+import io.netty.handler.codec.http.HttpRequestDecoder;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -93,5 +94,10 @@ public class SanitizerTransformerTest {
             buffer.release();
             parent.release();
         }
+    }
+
+    @Test
+    public void httpObjectDecoderInitializes() {
+        new HttpRequestDecoder();
     }
 }

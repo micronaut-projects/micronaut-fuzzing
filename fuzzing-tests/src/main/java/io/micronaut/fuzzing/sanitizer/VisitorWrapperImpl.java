@@ -8,6 +8,7 @@ import net.bytebuddy.description.method.MethodList;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.implementation.Implementation;
 import net.bytebuddy.jar.asm.ClassVisitor;
+import net.bytebuddy.jar.asm.FieldVisitor;
 import net.bytebuddy.jar.asm.Handle;
 import net.bytebuddy.jar.asm.MethodVisitor;
 import net.bytebuddy.jar.asm.Opcodes;
@@ -26,8 +27,18 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
     }
 
     private static final class ClassVisitorImpl extends ClassVisitor {
+        private boolean hasBooleanArrayField;
+
         ClassVisitorImpl(int api, ClassVisitor classVisitor) {
             super(api, classVisitor);
+        }
+
+        @Override
+        public FieldVisitor visitField(int access, String name, String descriptor, String signature, Object value) {
+            if (BOOLEAN_ARRAY.equals(descriptor)) {
+                hasBooleanArrayField = true;
+            }
+            return super.visitField(access, name, descriptor, signature, value);
         }
 
         @Override
@@ -41,6 +52,9 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
             if (descriptor.contains(BOOLEAN_ARRAY)) {
                 methodVisitor.ohNoBooleanArray = true;
             }
+            if ("<clinit>".equals(name) && hasBooleanArrayField) {
+                methodVisitor.ohNoBooleanArray = true;
+            }
             return methodVisitor;
         }
     }
@@ -50,6 +64,22 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
 
         MethodVisitorImpl(int api, MethodVisitor methodVisitor) {
             super(api, methodVisitor);
+        }
+
+        @Override
+        public void visitFieldInsn(int opcode, String owner, String name, String descriptor) {
+            if (!ohNoBooleanArray && BOOLEAN_ARRAY.equals(descriptor)) {
+                ohNoBooleanArray = true;
+            }
+            super.visitFieldInsn(opcode, owner, name, descriptor);
+        }
+
+        @Override
+        public void visitIntInsn(int opcode, int operand) {
+            if (!ohNoBooleanArray && opcode == Opcodes.NEWARRAY && operand == Opcodes.T_BOOLEAN) {
+                ohNoBooleanArray = true;
+            }
+            super.visitIntInsn(opcode, operand);
         }
 
         @Override
@@ -94,6 +124,11 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
 
         @Override
         public void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) {
+            // Also treat any method that mentions boolean[] in its signature (parameters or return)
+            // as an escape hatch source. This covers synthetic accessors returning [Z from outer classes.
+            if (!ohNoBooleanArray && descriptor.contains(BOOLEAN_ARRAY)) {
+                ohNoBooleanArray = true;
+            }
             String arraysOwner = Type.getInternalName(Arrays.class);
             String systemOwner = Type.getInternalName(System.class);
 
