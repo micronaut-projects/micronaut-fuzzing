@@ -15,6 +15,7 @@ import net.bytebuddy.jar.asm.Type;
 import net.bytebuddy.pool.TypePool;
 
 import java.lang.reflect.Method;
+import java.util.Arrays;
 
 final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
     private static final String BOOLEAN_ARRAY = "[Z";
@@ -93,7 +94,31 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
 
         @Override
         public void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) {
-            if (name.equals("array") && owner.equals(Type.getInternalName(ByteBuf.class))) {
+            String arraysOwner = Type.getInternalName(Arrays.class);
+            String systemOwner = Type.getInternalName(System.class);
+
+            if (owner.equals(arraysOwner) && name.equals("copyOf")
+                && descriptor.equals(Type.getMethodDescriptor(Type.getType(byte[].class), Type.getType(byte[].class), Type.INT_TYPE))) {
+                indy(
+                    SanitizerBootstrap.METHOD_ARRAYS_COPY_OF_BOOTSTRAP,
+                    Type.getMethodDescriptor(Type.getType(byte[].class), Type.getType(byte[].class), Type.INT_TYPE)
+                );
+                return;
+            } else if (owner.equals(arraysOwner) && name.equals("copyOfRange")
+                && descriptor.equals(Type.getMethodDescriptor(Type.getType(byte[].class), Type.getType(byte[].class), Type.INT_TYPE, Type.INT_TYPE))) {
+                indy(
+                    SanitizerBootstrap.METHOD_ARRAYS_COPY_OF_RANGE_BOOTSTRAP,
+                    Type.getMethodDescriptor(Type.getType(byte[].class), Type.getType(byte[].class), Type.INT_TYPE, Type.INT_TYPE)
+                );
+                return;
+            } else if (owner.equals(systemOwner) && name.equals("arraycopy")) {
+                // Intercept any System.arraycopy signature and adapt in the bootstrap
+                indy(
+                    SanitizerBootstrap.METHOD_SYSTEM_ARRAYCOPY_BOOTSTRAP,
+                    descriptor
+                );
+                return;
+            } else if (name.equals("array") && owner.equals(Type.getInternalName(ByteBuf.class))) {
                 indy(
                     SanitizerBootstrap.METHOD_BYTE_BUF_ARRAY_BOOTSTRAP,
                     Type.getMethodDescriptor(Type.getType(byte[].class), Type.getType(ByteBuf.class))

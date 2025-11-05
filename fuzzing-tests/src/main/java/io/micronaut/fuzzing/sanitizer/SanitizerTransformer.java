@@ -52,7 +52,8 @@ public class SanitizerTransformer implements AgentBuilder.Transformer {
             "net.bytebuddy",
             "sun",
             "java",
-            "jdk"
+            "jdk",
+            "io.netty.buffer" // need to ignore nested calls to .array
         );
 
         ElementMatcher.Junction<NamedElement> matcher = ElementMatchers.any()

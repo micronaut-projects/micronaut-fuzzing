@@ -4,6 +4,7 @@ import com.code_intelligence.jazzer.api.FuzzerSecurityIssueCritical;
 import com.code_intelligence.jazzer.api.Jazzer;
 import io.netty.buffer.ByteBuf;
 
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
 final class ByteBufArraySanitizer {
@@ -80,6 +81,48 @@ final class ByteBufArraySanitizer {
         slot.end = offset + capacity;
 
         return guard;
+    }
+
+    static byte[] arraysCopyOf(byte[] array, int newLength) {
+        if (array.length > 0 && array[0] == PATTERN_B1) {
+            checkRangeSlow(array, 0, newLength);
+        }
+        return Arrays.copyOf(array, newLength);
+    }
+
+    static byte[] arraysCopyOfRange(byte[] array, int from, int to) {
+        if (array.length > 0 && array[0] == PATTERN_B1) {
+            checkRangeSlow(array, from, to - from);
+        }
+        return Arrays.copyOfRange(array, from, to);
+    }
+
+    static void systemArraycopy(Object src, int srcPos, Object dest, int destPos, int length) {
+        if (length != 0) {
+            if (src instanceof byte[] s && s[0] == PATTERN_B1) {
+                checkRangeSlow(s, srcPos, length);
+            }
+            if (dest instanceof byte[] d && d[0] == PATTERN_B1) {
+                checkRangeSlow(d, destPos, length);
+            }
+        }
+        System.arraycopy(src, srcPos, dest, destPos, length);
+    }
+
+    private static void checkRangeSlow(byte[] array, int pos, int len) {
+        if (len <= 0) {
+            return;
+        }
+        Slot slot = findSlot(array);
+        if (slot != null) {
+            int start = slot.start;
+            int end = slot.end;
+            // Validate [pos, pos+len) within [start, end)
+            long hi = (long) pos + (long) len; // avoid overflow surprises
+            if (pos < start || hi > end) {
+                Jazzer.reportFindingFromHook(new FuzzerSecurityIssueCritical("Out-of-bounds array access"));
+            }
+        }
     }
 
     private static class Slot {
