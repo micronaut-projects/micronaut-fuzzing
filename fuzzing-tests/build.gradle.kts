@@ -12,12 +12,12 @@ repositories {
 }
 
 micronautBuild {
-    javaVersion.set(25)
+    javaVersion.set(21)
 }
 
 tasks.withType<JavaCompile> {
     options.compilerArgs.add("--enable-preview")
-    options.release.set(25)
+    options.release.set(21)
 }
 
 tasks.withType<Test>() {
