@@ -2,10 +2,12 @@ package io.micronaut.fuzzing.jazzer;
 
 import io.micronaut.fuzzing.model.DefinedFuzzTarget;
 import org.gradle.api.Action;
+import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.SetProperty;
 import org.gradle.api.tasks.Input;
+import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.Nested;
 import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.OutputDirectory;
@@ -14,6 +16,7 @@ import org.gradle.process.ExecOperations;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
 import javax.inject.Inject;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -35,11 +38,16 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
     private static final Logger LOG = LoggerFactory.getLogger(PrepareClusterFuzzTask.class);
+
+    @InputFiles
+    @Nonnull
+    public abstract ConfigurableFileCollection getSourcePath();
 
     @OutputDirectory
     public abstract DirectoryProperty getOutputDirectory();
@@ -156,6 +164,9 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                     }
                     line.add("-dict=$this_dir/dict/" + fileName);
                 }
+                // These single quotes are very important. Without them, the JVM args will not
+                // apply, but there will be no error. `-merge=1 --nohooks` will fail loudly, but
+                // not when running inside oss-fuzz...
                 line.add("'--jvm_args=" + getJvmArgs().get().stream().map(s -> s.replace(":", "\\:")).collect(Collectors.joining(":")) + "'");
                 line.add("$@");
                 String sh = """
@@ -177,76 +188,6 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                     PosixFilePermission.OTHERS_EXECUTE
                 ));
             }
-        }
-    }
-
-    @TaskAction
-    public void prepareIntrospectorJars() throws IOException {
-        // prepare a separate set of jars in the top-level /out directory, just for the
-        // introspector to find.
-
-        List<File> forIntrospector = new ArrayList<>();
-        for (File library : getClasspath().getFiles()) {
-            File dst = getOutputDirectory().file(library.getName()).get().getAsFile();
-            Files.copy(library.toPath(), dst.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            forIntrospector.add(dst);
-        }
-        try (ClasspathAccess classpathAccess = new ClasspathAccess(forIntrospector)) {
-            Set<String> includePatterns = getIntrospector().getIncludes().getOrNull();
-            ClassNameMatcher introspectorIncludes;
-            if (includePatterns == null || includePatterns.isEmpty()) {
-                introspectorIncludes = null;
-            } else {
-                introspectorIncludes = new ClassNameMatcher(includePatterns);
-            }
-            ClassNameMatcher introspectorExcludes = new ClassNameMatcher(getIntrospector().getExcludes().orElse(Set.of()).get());
-            classpathAccess.walkFileTree(root -> new SimpleFileVisitor<>() {
-                @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                    visit(file);
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-                    if (exc == null) {
-                        visit(dir);
-                    }
-                    return FileVisitResult.CONTINUE;
-                }
-
-                private void visit(Path file) throws IOException {
-                    Path relative = root.relativize(file);
-                    boolean delete = false;
-                    if (relative.startsWith("META-INF/versions") && relative.getNameCount() >= 3) {
-                        try {
-                            int version = Integer.parseInt(relative.getName(2).toString());
-                            if (version > 17) {
-                                // hack: remove class files with versions > java 17 so that the introspector doesn't hiccup
-                                LOG.info("For oss-fuzz introspector compatibility, deleting class file: {}", relative);
-                                delete = true;
-                            }
-                        } catch (NumberFormatException ignored) {
-                        }
-                        if (relative.getNameCount() > 3) {
-                            relative = relative.subpath(3, relative.getNameCount());
-                        }
-                    }
-                    String p = relative.toString();
-                    if ((introspectorIncludes != null || !introspectorExcludes.isEmpty()) && p.endsWith(".class")) {
-                        String className = p.substring(0, p.length() - 6).replace('/', '.');
-                        if (introspectorIncludes != null && !introspectorIncludes.matches(className)) {
-                            delete = true;
-                        }
-                        if (introspectorExcludes.matches(className)) {
-                            delete = true;
-                        }
-                    }
-                    if (delete) {
-                        Files.delete(file);
-                    }
-                }
-            });
         }
     }
 
@@ -278,6 +219,130 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
             }
         }
         return targetNames;
+    }
+
+    @TaskAction
+    public void prepareIntrospectorJars() throws IOException {
+        // prepare a separate set of jars in the top-level /out directory, just for the
+        // introspector to find.
+
+        List<File> forIntrospector = new ArrayList<>();
+        for (File library : getClasspath().getFiles()) {
+            File dst = getOutputDirectory().file(library.getName()).get().getAsFile();
+            Files.copy(library.toPath(), dst.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            forIntrospector.add(dst);
+        }
+        try (ClasspathAccess classpathAccess = new ClasspathAccess(forIntrospector)) {
+            ClassNameMatcher introspectorIncludes = compileIntrospectorIncludes();
+            ClassNameMatcher introspectorExcludes = compileIntrospectorExcludes();
+            classpathAccess.walkFileTree(root -> new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                    if (!includeInIntrospector(introspectorIncludes, introspectorExcludes, root.relativize(file), true)) {
+                        Files.delete(file);
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        }
+    }
+
+    private ClassNameMatcher compileIntrospectorExcludes() {
+        return new ClassNameMatcher(getIntrospector().getExcludes().orElse(Set.of()).get());
+    }
+
+    private ClassNameMatcher compileIntrospectorIncludes() {
+        Set<String> includePatterns = getIntrospector().getIncludes().getOrNull();
+        ClassNameMatcher introspectorIncludes;
+        if (includePatterns == null || includePatterns.isEmpty()) {
+            introspectorIncludes = null;
+        } else {
+            introspectorIncludes = new ClassNameMatcher(includePatterns);
+        }
+        return introspectorIncludes;
+    }
+
+    private static OptionalInt parseMultiReleaseVersion(Path relativeClassPath) {
+        if (relativeClassPath.startsWith("META-INF/versions") && relativeClassPath.getNameCount() >= 3) {
+            try {
+                return OptionalInt.of(Integer.parseInt(relativeClassPath.getName(2).toString()));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return OptionalInt.empty();
+    }
+
+    private static Path stripMultiReleasePrefix(Path relativeClassPath) {
+        if (relativeClassPath.startsWith("META-INF/versions") && relativeClassPath.getNameCount() > 3) {
+            return relativeClassPath.subpath(3, relativeClassPath.getNameCount());
+        } else {
+            return relativeClassPath;
+        }
+    }
+
+    private static boolean includeInIntrospector(ClassNameMatcher includes, ClassNameMatcher excludes, Path relative, boolean keepNonClasses) {
+        if (parseMultiReleaseVersion(relative).orElse(-1) > 17) {
+            // hack: remove class files with versions > java 17 so that the introspector doesn't hiccup
+            LOG.info("For oss-fuzz introspector compatibility, deleting class file: {}", relative);
+            return false;
+        }
+        relative = stripMultiReleasePrefix(relative);
+
+        String p = relative.toString();
+        if (!p.endsWith(".class")) {
+            return keepNonClasses;
+        }
+        if ((includes != null || !excludes.isEmpty())) {
+            String className = p.substring(0, p.length() - 6).replace('/', '.');
+            if (includes != null && !includes.matches(className)) {
+                return false;
+            }
+            //noinspection RedundantIfStatement
+            if (excludes.matches(className)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @TaskAction
+    public void prepareCoverageSources() throws Exception {
+        try (ClasspathAccess classRoots = new ClasspathAccess(getClasspath());
+             ClasspathAccess sourceRoots = new ClasspathAccess(getSourcePath())) {
+            Path dest = getOutputDirectory().get().getAsFile().toPath().resolve("src");
+            try {
+                Files.createDirectories(dest);
+            } catch (FileAlreadyExistsException ignored) {
+            }
+
+            ClassNameMatcher introspectorIncludes = compileIntrospectorIncludes();
+            ClassNameMatcher introspectorExcludes = compileIntrospectorExcludes();
+            classRoots.walkFileTree(classRoot -> new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                    Path classRelative = classRoot.relativize(file);
+                    if (includeInIntrospector(introspectorIncludes, introspectorExcludes, classRelative, false)) {
+                        classRelative = stripMultiReleasePrefix(classRelative);
+
+                        Path classDest = dest.resolve(classRelative.toString());
+                        try {
+                            Files.createDirectories(classDest.getParent());
+                        } catch (FileAlreadyExistsException ignored) {
+                        }
+                        Files.copy(file, classDest, StandardCopyOption.REPLACE_EXISTING);
+
+                        String sourceName = classRelative.toString();
+                        sourceName = sourceName.substring(0, sourceName.length() - ".class".length()) + ".java";
+                        List<Path> sourcePaths = sourceRoots.resolve(sourceName);
+                        if (!sourcePaths.isEmpty()) {
+                            Files.copy(sourcePaths.getFirst(), dest.resolve(sourceName), StandardCopyOption.REPLACE_EXISTING);
+                        }
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+
+        }
     }
 
     public interface Introspector {

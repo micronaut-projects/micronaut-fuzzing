@@ -5,6 +5,10 @@ import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
 import org.gradle.api.artifacts.result.ResolvedArtifactResult;
+import org.gradle.api.attributes.Bundling;
+import org.gradle.api.attributes.Category;
+import org.gradle.api.attributes.DocsType;
+import org.gradle.api.attributes.Usage;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier;
 import org.gradle.language.base.plugins.LifecycleBasePlugin;
@@ -57,6 +61,15 @@ public abstract class JazzerPlugin implements Plugin<Project> {
             task.setDescription("Prepare run scripts of the different fuzz targets for ClusterFuzz (OSS-Fuzz) execution");
 
             task.getClasspath().setFrom(jazzerBaseClasspath);
+            task.getSourcePath().setFrom(jazzerBaseClasspath.getIncoming().artifactView(v -> {
+                v.withVariantReselection();
+                v.attributes(attributes -> {
+                    attributes.attribute(Usage.USAGE_ATTRIBUTE, project.getObjects().named(Usage.class, Usage.JAVA_RUNTIME));
+                    attributes.attribute(Category.CATEGORY_ATTRIBUTE, project.getObjects().named(Category.class, Category.DOCUMENTATION));
+                    attributes.attribute(Bundling.BUNDLING_ATTRIBUTE, project.getObjects().named(Bundling.class, Bundling.EXTERNAL));
+                    attributes.attribute(DocsType.DOCS_TYPE_ATTRIBUTE, project.getObjects().named(DocsType.class, DocsType.SOURCES));
+                });
+            }).getFiles());
             String out = System.getenv("OUT");
             if (out != null) {
                 task.getOutputDirectory().set(new File(out));

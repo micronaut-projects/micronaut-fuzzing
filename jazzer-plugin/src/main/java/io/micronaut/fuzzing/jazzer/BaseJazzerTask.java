@@ -160,7 +160,7 @@ public abstract class BaseJazzerTask extends DefaultTask {
             }
         }
 
-        private List<Path> resolve(String p) {
+        public List<Path> resolve(String p) {
             List<Path> result = new ArrayList<>();
             for (Path root : roots) {
                 Path resolved = root.resolve(p).normalize();
