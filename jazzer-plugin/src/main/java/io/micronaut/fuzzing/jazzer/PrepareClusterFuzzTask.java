@@ -156,7 +156,7 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                     }
                     line.add("-dict=$this_dir/dict/" + fileName);
                 }
-                line.add("--jvm_args=" + getJvmArgs().get().stream().map(s -> s.replace(":", "\\:")).collect(Collectors.joining(":")));
+                line.add("'--jvm_args=" + getJvmArgs().get().stream().map(s -> s.replace(":", "\\:")).collect(Collectors.joining(":")) + "'");
                 line.add("$@");
                 String sh = """
                 #!/bin/bash
