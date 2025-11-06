@@ -173,6 +173,7 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                 #!/bin/bash
                 # LLVMFuzzerTestOneInput <-- for fuzzer detection (see test_all.py)
                 this_dir=$(dirname "$0")
+                export EXTERNAL_JAZZER_ARGS="$@"
                 """ + getSetupScript().getOrElse("") + "\n" + String.join(" ", line);
                 Path targetPath = getOutputDirectory().file(fileName).get().getAsFile().toPath();
                 Files.writeString(targetPath, sh);

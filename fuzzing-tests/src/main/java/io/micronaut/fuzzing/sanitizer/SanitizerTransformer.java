@@ -32,6 +32,12 @@ public class SanitizerTransformer implements AgentBuilder.Transformer {
     }
 
     public static void installLocally() {
+        String externalJazzerArgs = System.getenv("EXTERNAL_JAZZER_ARGS");
+        if (externalJazzerArgs != null && externalJazzerArgs.contains("--nohooks")) {
+            System.err.println("Refusing to install custom sanitizer because of `--nohooks` jazzer argument. This prevents interference with jacoco in coverage checking.");
+            return;
+        }
+
         try {
             Method m = Class.forName("com.code_intelligence.jazzer.third_party.net.bytebuddy.agent.ByteBuddyAgent").getMethod("install");
             install((Instrumentation) m.invoke(null));
