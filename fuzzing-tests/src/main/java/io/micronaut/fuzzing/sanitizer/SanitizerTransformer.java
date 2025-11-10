@@ -21,7 +21,7 @@ public class SanitizerTransformer implements AgentBuilder.Transformer {
             return builder;
         }
         try {
-            Class.forName("io.micronaut.fuzzing.sanitizer.SanitizerBootstrap", false, classLoader);
+            Class.forName("io.micronaut.fuzzing.sanitizer.ByteBufArraySanitizer", false, classLoader);
         } catch (ClassNotFoundException e) {
             return builder;
         }

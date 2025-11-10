@@ -2,13 +2,15 @@ package io.micronaut.fuzzing.sanitizer;
 
 import com.code_intelligence.jazzer.api.FuzzerSecurityIssueCritical;
 import com.code_intelligence.jazzer.api.Jazzer;
+import io.micronaut.core.annotation.Internal;
 import io.netty.buffer.ByteBuf;
 
 import java.lang.ref.SoftReference;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
-final class ByteBufArraySanitizer {
+@Internal
+public final class ByteBufArraySanitizer {
     private static final AtomicInteger next = new AtomicInteger();
     private static final Slot[] slots = new Slot[256];
 
@@ -20,14 +22,14 @@ final class ByteBufArraySanitizer {
         }
     }
 
-    static byte baload(byte[] array, int index) {
+    public static byte baload(byte[] array, int index) {
         if (array[0] == PATTERN_B1) {
             array = checkIndexSlow(array, index);
         }
         return array[index];
     }
 
-    static void bastore(byte[] array, int index, byte value) {
+    public static void bastore(byte[] array, int index, byte value) {
         if (array[0] == PATTERN_B1) {
             array = checkIndexSlow(array, index);
         }
@@ -57,7 +59,7 @@ final class ByteBufArraySanitizer {
         return slot;
     }
 
-    static byte[] byteBufArray(ByteBuf buf) {
+    public static byte[] byteBufArray(ByteBuf buf) {
         byte[] array = buf.array();
         int capacity = buf.capacity();
         if (capacity == array.length) {
@@ -88,21 +90,21 @@ final class ByteBufArraySanitizer {
         return guard;
     }
 
-    static byte[] arraysCopyOf(byte[] array, int newLength) {
+    public static byte[] arraysCopyOf(byte[] array, int newLength) {
         if (array.length > 0 && array[0] == PATTERN_B1) {
             array = checkRangeSlow(array, 0, newLength);
         }
         return Arrays.copyOf(array, newLength);
     }
 
-    static byte[] arraysCopyOfRange(byte[] array, int from, int to) {
+    public static byte[] arraysCopyOfRange(byte[] array, int from, int to) {
         if (array.length > 0 && array[0] == PATTERN_B1) {
             array = checkRangeSlow(array, from, to - from);
         }
         return Arrays.copyOfRange(array, from, to);
     }
 
-    static void systemArraycopy(Object src, int srcPos, Object dest, int destPos, int length) {
+    public static void systemArraycopy(Object src, int srcPos, Object dest, int destPos, int length) {
         if (length != 0) {
             if (src instanceof byte[] s && s[0] == PATTERN_B1) {
                 src = checkRangeSlow(s, srcPos, length);

@@ -9,7 +9,6 @@ import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.implementation.Implementation;
 import net.bytebuddy.jar.asm.ClassVisitor;
 import net.bytebuddy.jar.asm.FieldVisitor;
-import net.bytebuddy.jar.asm.Handle;
 import net.bytebuddy.jar.asm.MethodVisitor;
 import net.bytebuddy.jar.asm.Opcodes;
 import net.bytebuddy.jar.asm.Type;
@@ -20,6 +19,26 @@ import java.util.Arrays;
 
 final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
     private static final String BOOLEAN_ARRAY = "[Z";
+
+    private static final Method BALOAD;
+    private static final Method BASTORE;
+    private static final Method BYTE_BUF_ARRAY;
+    private static final Method ARRAYS_COPY_OF;
+    private static final Method ARRAYS_COPY_OF_RANGE;
+    private static final Method SYSTEM_ARRAYCOPY;
+
+    static {
+        try {
+            BALOAD = ByteBufArraySanitizer.class.getMethod("baload", byte[].class, int.class);
+            BASTORE = ByteBufArraySanitizer.class.getMethod("bastore", byte[].class, int.class, byte.class);
+            BYTE_BUF_ARRAY = ByteBufArraySanitizer.class.getMethod("byteBufArray", ByteBuf.class);
+            ARRAYS_COPY_OF = ByteBufArraySanitizer.class.getMethod("arraysCopyOf", byte[].class, int.class);
+            ARRAYS_COPY_OF_RANGE = ByteBufArraySanitizer.class.getMethod("arraysCopyOfRange", byte[].class, int.class, int.class);
+            SYSTEM_ARRAYCOPY = ByteBufArraySanitizer.class.getMethod("systemArraycopy", Object.class, int.class, Object.class, int.class, int.class);
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     @Override
     public ClassVisitor wrap(TypeDescription typeDescription, ClassVisitor classVisitor, Implementation.Context context, TypePool typePool, FieldList<FieldDescription.InDefinedShape> fieldList, MethodList<?> methodList, int i, int i1) {
@@ -43,7 +62,7 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
 
         @Override
         public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
-            super.visit(Math.max(version, Opcodes.V1_8), access, name, signature, superName, interfaces);
+            super.visit(version, access, name, signature, superName, interfaces);
         }
 
         @Override
@@ -108,15 +127,9 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
             }
 
             if (opcode == Opcodes.BALOAD) {
-                indy(
-                    SanitizerBootstrap.METHOD_BALOAD_BOOTSTRAP,
-                    Type.getMethodDescriptor(Type.BYTE_TYPE, Type.getType(byte[].class), Type.INT_TYPE)
-                );
+                invokeStatic(BALOAD);
             } else if (opcode == Opcodes.BASTORE) {
-                indy(
-                    SanitizerBootstrap.METHOD_BASTORE_BOOTSTRAP,
-                    Type.getMethodDescriptor(Type.VOID_TYPE, Type.getType(byte[].class), Type.INT_TYPE, Type.BYTE_TYPE)
-                );
+                invokeStatic(BASTORE);
             } else {
                 super.visitInsn(opcode);
             }
@@ -134,47 +147,29 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
 
             if (owner.equals(arraysOwner) && name.equals("copyOf")
                 && descriptor.equals(Type.getMethodDescriptor(Type.getType(byte[].class), Type.getType(byte[].class), Type.INT_TYPE))) {
-                indy(
-                    SanitizerBootstrap.METHOD_ARRAYS_COPY_OF_BOOTSTRAP,
-                    Type.getMethodDescriptor(Type.getType(byte[].class), Type.getType(byte[].class), Type.INT_TYPE)
-                );
+                invokeStatic(ARRAYS_COPY_OF);
                 return;
             } else if (owner.equals(arraysOwner) && name.equals("copyOfRange")
                 && descriptor.equals(Type.getMethodDescriptor(Type.getType(byte[].class), Type.getType(byte[].class), Type.INT_TYPE, Type.INT_TYPE))) {
-                indy(
-                    SanitizerBootstrap.METHOD_ARRAYS_COPY_OF_RANGE_BOOTSTRAP,
-                    Type.getMethodDescriptor(Type.getType(byte[].class), Type.getType(byte[].class), Type.INT_TYPE, Type.INT_TYPE)
-                );
+                invokeStatic(ARRAYS_COPY_OF_RANGE);
                 return;
             } else if (owner.equals(systemOwner) && name.equals("arraycopy")) {
-                // Intercept any System.arraycopy signature and adapt in the bootstrap
-                indy(
-                    SanitizerBootstrap.METHOD_SYSTEM_ARRAYCOPY_BOOTSTRAP,
-                    descriptor
-                );
+                invokeStatic(SYSTEM_ARRAYCOPY);
                 return;
             } else if (name.equals("array") && owner.equals(Type.getInternalName(ByteBuf.class))) {
-                indy(
-                    SanitizerBootstrap.METHOD_BYTE_BUF_ARRAY_BOOTSTRAP,
-                    Type.getMethodDescriptor(Type.getType(byte[].class), Type.getType(ByteBuf.class))
-                );
+                invokeStatic(BYTE_BUF_ARRAY);
                 return;
             }
             super.visitMethodInsn(opcode, owner, name, descriptor, isInterface);
         }
 
-        private void indy(Method bootstrapMethod, String callSiteDescriptor, Object... args) {
-            super.visitInvokeDynamicInsn(
-                "foo",
-                callSiteDescriptor,
-                new Handle(
-                    Opcodes.H_INVOKESTATIC,
-                    Type.getInternalName(bootstrapMethod.getDeclaringClass()),
-                    bootstrapMethod.getName(),
-                    Type.getMethodDescriptor(bootstrapMethod),
-                    false
-                ),
-                args
+        private void invokeStatic(Method method) {
+            super.visitMethodInsn(
+                Opcodes.INVOKESTATIC,
+                Type.getInternalName(method.getDeclaringClass()),
+                method.getName(),
+                Type.getMethodDescriptor(method),
+                false
             );
         }
     }
