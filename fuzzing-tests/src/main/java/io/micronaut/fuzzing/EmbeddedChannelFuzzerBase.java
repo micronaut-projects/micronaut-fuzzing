@@ -33,6 +33,7 @@ public abstract class EmbeddedChannelFuzzerBase {
     private long outputBytes;
 
     private boolean finished = false;
+    private boolean exceptionCaught = false;
 
     static {
         SanitizerTransformer.installLocally();
@@ -53,37 +54,51 @@ public abstract class EmbeddedChannelFuzzerBase {
     private void test0(FuzzedDataProvider provider) {
         if (!finished) {
             finished = true;
-            if (hasOutput) {
-                channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
-                    @Override
-                    public void channelRead(ChannelHandlerContext ctx, Object msg) {
-                        if (outputCpuTime != 0) {
-                            long length;
-                            if (msg instanceof ByteBuf bb) {
-                                length = bb.readableBytes();
-                            } else if (msg instanceof ByteBufHolder bbh) {
-                                length = bbh.content().readableBytes();
-                            } else {
-                                length = 0;
-                            }
-                            if (length != 0) {
-                                outputBytes += length;
-                            }
+            channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
+                @Override
+                public void channelRead(ChannelHandlerContext ctx, Object msg) {
+                    if (outputCpuTime != 0) {
+                        long length;
+                        if (msg instanceof ByteBuf bb) {
+                            length = bb.readableBytes();
+                        } else if (msg instanceof ByteBufHolder bbh) {
+                            length = bbh.content().readableBytes();
+                        } else {
+                            length = 0;
                         }
-
-                        // to avoid OOM from output buffering, release inputs immediately
-                        ReferenceCountUtil.release(msg);
+                        if (length != 0) {
+                            outputBytes += length;
+                        }
                     }
-                });
-            }
+
+                    // to avoid OOM from output buffering, release inputs immediately
+                    ReferenceCountUtil.release(msg);
+                }
+
+                @Override
+                public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+                    exceptionCaught = true;
+                    if (cause instanceof Exception e) {
+                        try {
+                            onException(e);
+                        } catch (Exception f) {
+                            ctx.fireExceptionCaught(f);
+                        }
+                    } else {
+                        ctx.fireExceptionCaught(cause);
+                    }
+                }
+            });
         }
+
+        exceptionCaught = false;
 
         byte[] allBytes = provider.consumeRemainingAsBytes();
         long cpuTimeBudget = baseCpuTime + allBytes.length * inputCpuTime;
 
         ByteSplitter.ChunkIterator itr = SPLITTER.splitIterator(allBytes);
         long start = CpuTimer.currentThreadCpuTimeNanos();
-        while (itr.hasNext() && channel.isOpen()) {
+        while (itr.hasNext() && channel.isOpen() && !exceptionCaught) {
             itr.proceed();
             ByteBuf buffer = channel.alloc().buffer(itr.length());
             buffer.writeBytes(allBytes, itr.start(), itr.length());
