@@ -112,30 +112,3 @@ tasks.named<JazzerTask>("jazzer") {
     maxTotalTime.set(if (collectJfr) Duration.ofMinutes(2) else Duration.ofHours(2))
     //coverageDumpFile.set(layout.buildDirectory.file("cov-report.exec"))
 }
-
-val jazzerReportDir = layout.buildDirectory.dir("jacocoJazzerHtml")
-
-tasks.create("jacocoJazzerReport", JacocoReport::class.java) {
-    executionData(layout.buildDirectory.file("cov-report.exec"))
-    classDirectories.from(files(sourceSets.main.get().runtimeClasspath.files.map { dir ->
-        if (dir.isFile) {
-            zipTree(dir).matching { exclude("META-INF/**") }
-        } else {
-            fileTree(dir) { exclude("META-INF/**") }
-        }
-    }))
-    reports {
-        xml.required = false
-        csv.required = false
-        html.required = true
-        html.outputLocation = jazzerReportDir
-    }
-    dependsOn("jazzer")
-}
-
-tasks.create("jacocoJazzerReportTar", Tar::class.java) {
-    archiveFileName = "coverage-report.tar.bz2"
-    compression = Compression.BZIP2
-    from(jazzerReportDir)
-    dependsOn("jacocoJazzerReport")
-}
