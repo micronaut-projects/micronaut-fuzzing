@@ -4,6 +4,7 @@ import com.code_intelligence.jazzer.api.FuzzerSecurityIssueCritical;
 import com.code_intelligence.jazzer.api.Jazzer;
 import io.netty.buffer.ByteBuf;
 
+import java.lang.ref.SoftReference;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -50,7 +51,7 @@ final class ByteBufArraySanitizer {
             return null;
         }
         Slot slot = slots[guard[1] & 0xff];
-        if (slot.guard != guard) {
+        if (slot.guard.get() != guard) {
             return null;
         }
         return slot;
@@ -72,7 +73,6 @@ final class ByteBufArraySanitizer {
             throw new UnsupportedOperationException("Nested .array?");
         }
 
-
         byte[] guard = new byte[array.length];
         guard[0] = PATTERN_B1;
 
@@ -81,7 +81,7 @@ final class ByteBufArraySanitizer {
 
         Slot slot = slots[i % slots.length];
         slot.backing = array;
-        slot.guard = guard;
+        slot.guard = new SoftReference<>(guard);
         slot.start = offset;
         slot.end = offset + capacity;
 
@@ -138,6 +138,6 @@ final class ByteBufArraySanitizer {
         int start;
         int end;
 
-        byte[] guard;
+        SoftReference<byte[]> guard;
     }
 }
