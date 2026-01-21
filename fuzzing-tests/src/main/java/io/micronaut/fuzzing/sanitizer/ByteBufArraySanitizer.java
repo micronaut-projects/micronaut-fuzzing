@@ -53,7 +53,8 @@ public final class ByteBufArraySanitizer {
             return null;
         }
         Slot slot = slots[guard[1] & 0xff];
-        if (slot.guard.get() != guard) {
+        SoftReference<byte[]> ref = slot.guard;
+        if (ref == null || ref.get() != guard) {
             return null;
         }
         return slot;
