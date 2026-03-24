@@ -42,6 +42,13 @@ import java.util.Map;
     SimpleController.ECHO_HEADER,
     SimpleController.ECHO_FORM,
     SimpleController.ECHO_FORM_PAIR,
+    SimpleController.UPLOAD_FILE,
+    SimpleController.UPLOAD_FIELDS,
+    SimpleController.UPLOAD_MIXED,
+    SimpleController.ECHO_BEAN,
+    SimpleController.ECHO_REQUEST_BEAN,
+    SimpleController.ECHO_COOKIE,
+    SimpleController.UPLOAD_MULTIPLE,
 })
 public class EmbeddedHttpTarget extends EmbeddedChannelFuzzerBase {
     private static final ContextHolder HTTP1 = new ContextHolder(Map.of());

@@ -24,8 +24,17 @@ import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.Header;
 import io.micronaut.http.annotation.PathVariable;
 import io.micronaut.http.annotation.QueryValue;
+import io.micronaut.core.annotation.Nullable;
+import io.micronaut.http.annotation.CookieValue;
+import io.micronaut.http.annotation.Part;
+import io.micronaut.http.annotation.RequestBean;
+import io.micronaut.http.multipart.CompletedFileUpload;
+import java.util.List;
 import jakarta.inject.Singleton;
 import org.reactivestreams.Publisher;
+import io.micronaut.http.annotation.Produces;
+import static io.micronaut.http.MediaType.MULTIPART_FORM_DATA;
+import io.micronaut.http.HttpResponse;
 
 @Singleton
 @Controller
@@ -39,6 +48,15 @@ public final class SimpleController {
     static final String ECHO_HEADER = "/echo-header";
     static final String ECHO_FORM = "/echo-form";
     static final String ECHO_FORM_PAIR = "/echo-form-pair";
+    static final String UPLOAD_FILE = "/upload-file";
+    static final String UPLOAD_FIELDS = "/upload-fields";
+    static final String UPLOAD_MIXED = "/upload-mixed";
+    static final String ECHO_BEAN = "/echo-bean";
+    static final String ECHO_REQUEST_BEAN = "/echo-request-bean";
+    static final String ECHO_COOKIE = "/echo-cookie";
+    static final String UPLOAD_MULTIPLE = "/upload-multiple";
+    static final String ECHO_NEGOTIATED  = "/echo-negotiated";
+    static final String ECHO_MULTI_ACCEPT = "/echo-multi-accept";
 
     @Get
     public String index() {
@@ -94,4 +112,52 @@ public final class SimpleController {
     public String echoFormPair(@Body("foo") String foo, @Body("bar") String bar) {
         return foo + ":" + bar;
     }
+    @Post(value = UPLOAD_FILE, consumes = MULTIPART_FORM_DATA)
+    public String uploadFile(@Part("file") CompletedFileUpload file) {
+        return "size:" + file.getSize();
+    }
+    @Post(value = UPLOAD_FIELDS, consumes = MULTIPART_FORM_DATA)
+    public String uploadFields(@Part("username") String username,
+                               @Part("email") String email) {
+        return username + "/" + email;
+    }
+    @Post(value = UPLOAD_MIXED, consumes = MULTIPART_FORM_DATA)
+    public String uploadMixed(@Part("name") String name,
+                              @Part("data") CompletedFileUpload data) {
+        return name + ":" + data.getSize();
+    }
+    @Get(ECHO_BEAN + "{?keyword,page,active}")
+    public String echoBean(SearchQuery query) {
+        return query.getKeyword() + ":"
+            + query.getPage() + ":"
+            + query.getActive();
+    }
+    @Get(ECHO_REQUEST_BEAN + "/{id}{?filter}")
+    public String echoRequestBean(@RequestBean RequestData data) {
+        return data.getId() + ":"
+            + data.getFilter() + ":"
+            + data.getVersion();
+    }
+    @Get(ECHO_COOKIE)
+    public String echoCookie(@CookieValue("session") @Nullable String session,
+                             @CookieValue("theme") @Nullable String theme) {
+        return session + ":" + theme;
+    }
+    @Post(value = UPLOAD_MULTIPLE, consumes = MULTIPART_FORM_DATA)
+    public String uploadMultiple(@Part("files") List<CompletedFileUpload> files) {
+        return "count:" + files.size();
+    }
+    @Get(ECHO_NEGOTIATED)
+    @Produces({MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
+    public String echoNegotiated(@QueryValue @Nullable String value) {
+        return value != null ? value : "empty";
+    }
+
+    @Post(ECHO_MULTI_ACCEPT)
+    @Consumes({MediaType.APPLICATION_JSON, MediaType.APPLICATION_FORM_URLENCODED})
+    @Produces({MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
+    public HttpResponse<String> echoMultiAccept(@Body @Nullable String body) {
+        return HttpResponse.ok(body != null ? body : "empty");
+    }
+
 }
