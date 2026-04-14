@@ -27,6 +27,8 @@ import io.micronaut.http.annotation.QueryValue;
 import jakarta.inject.Singleton;
 import org.reactivestreams.Publisher;
 
+import java.util.List;
+
 @Singleton
 @Controller
 public final class SimpleController {
@@ -39,6 +41,7 @@ public final class SimpleController {
     static final String ECHO_HEADER = "/echo-header";
     static final String ECHO_FORM = "/echo-form";
     static final String ECHO_FORM_PAIR = "/echo-form-pair";
+    static final String ECHO_AUTHORS = "/echo-authors";
 
     @Get
     public String index() {
@@ -93,5 +96,11 @@ public final class SimpleController {
     @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
     public String echoFormPair(@Body("foo") String foo, @Body("bar") String bar) {
         return foo + ":" + bar;
+    }
+    @Post(ECHO_AUTHORS)
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    public String echoAuthors(@Body AuthorForm form) {
+        List<AuthorEntry> authors = form.getAuthors();
+        return authors == null ? "empty" : "count:" + authors.size();
     }
 }
