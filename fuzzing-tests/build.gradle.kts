@@ -29,6 +29,7 @@ group = "io.micronaut.fuzzing"
 dependencies {
     implementation(mn.micronaut.http.server.netty)
     implementation(mn.micronaut.jackson.databind)
+    implementation(mn.jackson.databind)
     implementation(mn.reactor)
 
     implementation(mnLogging.logback.classic)
