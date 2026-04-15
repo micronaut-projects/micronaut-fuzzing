@@ -28,6 +28,7 @@ group = "io.micronaut.fuzzing"
 
 dependencies {
     implementation(mn.micronaut.http.server.netty)
+    implementation("io.netty.contrib:netty-codec-multipart-core")
     implementation(mn.micronaut.jackson.databind)
     implementation(mn.jackson.databind)
     implementation(mn.reactor)
@@ -92,6 +93,10 @@ tasks.named<JazzerTask>("jazzer") {
         "io.micronaut.fuzzing.http.EmbeddedHttpTarget",
         //"io.micronaut.fuzzing.http.MediaTypeTarget",
         //"io.netty.handler.HttpRequestDecoderFuzzer"
+        //"io.micronaut.fuzzing.http.UriMatchTemplateTarget",
+        //"io.micronaut.fuzzing.http.TypeConversionTarget",
+        //"io.micronaut.fuzzing.http.ContentNegotiationTarget",
+        //"io.micronaut.fuzzing.http.MultipartTarget",
     ))
     val jvmArgs = mutableListOf(
         "-Xmx512M",
