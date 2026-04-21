@@ -8,6 +8,8 @@ dependencies {
     implementation(mn.jackson.databind)
     implementation(projects.micronautFuzzingApi)
     compileOnly(mn.micronaut.core)
+
+    testImplementation(mnTest.junit.jupiter.engine)
 }
 
 tasks {
