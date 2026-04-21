@@ -36,6 +36,8 @@ import io.micronaut.http.annotation.Produces;
 import static io.micronaut.http.MediaType.MULTIPART_FORM_DATA;
 import io.micronaut.http.HttpResponse;
 
+import java.util.List;
+
 @Singleton
 @Controller
 public final class SimpleController {
@@ -48,6 +50,7 @@ public final class SimpleController {
     static final String ECHO_HEADER = "/echo-header";
     static final String ECHO_FORM = "/echo-form";
     static final String ECHO_FORM_PAIR = "/echo-form-pair";
+    static final String ECHO_AUTHORS = "/echo-authors";
     static final String UPLOAD_FILE = "/upload-file";
     static final String UPLOAD_FIELDS = "/upload-fields";
     static final String UPLOAD_MIXED = "/upload-mixed";
@@ -112,6 +115,14 @@ public final class SimpleController {
     public String echoFormPair(@Body("foo") String foo, @Body("bar") String bar) {
         return foo + ":" + bar;
     }
+
+    @Post(ECHO_AUTHORS)
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    public String echoAuthors(@Body AuthorForm form) {
+        List<AuthorEntry> authors = form.getAuthors();
+        return authors == null ? "empty" : "count:" + authors.size();
+    }
+
     @Post(value = UPLOAD_FILE, consumes = MULTIPART_FORM_DATA)
     public String uploadFile(@Part("file") CompletedFileUpload file) {
         return "size:" + file.getSize();
