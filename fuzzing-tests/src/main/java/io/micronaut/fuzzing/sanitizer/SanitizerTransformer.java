@@ -65,7 +65,6 @@ public final class SanitizerTransformer implements AgentBuilder.Transformer {
             Method m = Class.forName("com.code_intelligence.jazzer.third_party.net.bytebuddy.agent.ByteBuddyAgent").getMethod("install");
             Instrumentation instrumentation = (Instrumentation) m.invoke(null);
             install(instrumentation);
-            instrumentation.retransformClasses(Class.forName("io.micronaut.fuzzing.sanitizer.SanitizerTransformerTest"));
             installed = true;
         } catch (Exception e) {
             throw new RuntimeException(e);
