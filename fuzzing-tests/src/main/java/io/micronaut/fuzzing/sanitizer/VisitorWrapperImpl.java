@@ -78,7 +78,6 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
             return super.visitField(access, name, descriptor, signature, value);
         }
 
-
         @Override
         public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
             MethodVisitorImpl methodVisitor = new MethodVisitorImpl(
