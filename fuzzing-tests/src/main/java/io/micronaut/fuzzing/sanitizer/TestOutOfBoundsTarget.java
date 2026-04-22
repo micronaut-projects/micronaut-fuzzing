@@ -21,6 +21,8 @@ import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 
+import java.util.Arrays;
+
 /**
  * Fuzzing support type.
  */
@@ -43,7 +45,81 @@ public class TestOutOfBoundsTarget {
         }
     }
 
-    static void main() {
+    public static void main(String[] args) {
+        if (args.length == 1) {
+            runScenario(args[0]);
+            return;
+        }
         LocalJazzerRunner.create(TestOutOfBoundsTarget.class).fuzz();
+    }
+
+    private static void runScenario(String scenario) {
+        switch (scenario) {
+            case "aload" -> runAload();
+            case "copyOf" -> runCopyOf();
+            case "copyOfRange" -> runCopyOfRange();
+            case "arraycopySource" -> runArraycopySource();
+            case "arraycopyDest" -> runArraycopyDest();
+            default -> throw new IllegalArgumentException("Unknown scenario: " + scenario);
+        }
+    }
+
+    private static void runAload() {
+        ByteBuf buffer = ByteBufAllocator.DEFAULT.heapBuffer(16);
+        try {
+            if (buffer.arrayOffset() == 0) {
+                sink = buffer.array()[16];
+            } else {
+                sink = buffer.array()[0];
+            }
+        } finally {
+            buffer.release();
+        }
+    }
+
+    private static void runCopyOf() {
+        ByteBuf parent = ByteBufAllocator.DEFAULT.heapBuffer(32);
+        ByteBuf buffer = parent.retainedSlice(8, 16);
+        try {
+            Arrays.copyOf(buffer.array(), 1);
+        } finally {
+            buffer.release();
+            parent.release();
+        }
+    }
+
+    private static void runCopyOfRange() {
+        ByteBuf parent = ByteBufAllocator.DEFAULT.heapBuffer(32);
+        ByteBuf buffer = parent.retainedSlice(8, 16);
+        try {
+            Arrays.copyOfRange(buffer.array(), 0, 1);
+        } finally {
+            buffer.release();
+            parent.release();
+        }
+    }
+
+    private static void runArraycopySource() {
+        ByteBuf parent = ByteBufAllocator.DEFAULT.heapBuffer(32);
+        ByteBuf buffer = parent.retainedSlice(8, 16);
+        byte[] dest = new byte[1];
+        try {
+            System.arraycopy(buffer.array(), 0, dest, 0, 1);
+        } finally {
+            buffer.release();
+            parent.release();
+        }
+    }
+
+    private static void runArraycopyDest() {
+        ByteBuf parent = ByteBufAllocator.DEFAULT.heapBuffer(32);
+        ByteBuf buffer = parent.retainedSlice(8, 16);
+        byte[] src = new byte[1];
+        try {
+            System.arraycopy(src, 0, buffer.array(), 0, 1);
+        } finally {
+            buffer.release();
+            parent.release();
+        }
     }
 }

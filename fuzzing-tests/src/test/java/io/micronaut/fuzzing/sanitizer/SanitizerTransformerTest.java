@@ -1,16 +1,20 @@
 package io.micronaut.fuzzing.sanitizer;
 
-import com.code_intelligence.jazzer.api.FuzzerSecurityIssueCritical;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.handler.codec.http.HttpRequestDecoder;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SanitizerTransformerTest {
     @BeforeAll
@@ -55,85 +59,60 @@ public class SanitizerTransformerTest {
     }
 
     @Test
-    public void aload() {
-        ByteBuf buffer = ByteBufAllocator.DEFAULT.heapBuffer(16);
-        try {
-            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> {
-                if (buffer.arrayOffset() == 0) {
-                    sink = buffer.array()[16];
-                } else {
-                    sink = buffer.array()[0];
-                }
-            });
-        } finally {
-            buffer.release();
-        }
+    public void aload() throws IOException, InterruptedException {
+        assertScenarioReportsFinding("aload");
     }
 
     @Test
-    public void arraysCopyOf_oob() {
-        ByteBuf parent = ByteBufAllocator.DEFAULT.heapBuffer(32);
-        ByteBuf buffer = parent.retainedSlice(8, 16); // ensure non-zero arrayOffset -> guard path
-        try {
-            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> {
-                // pos == 0, start > 0 => violation
-                Arrays.copyOf(buffer.array(), 1);
-            });
-        } finally {
-            buffer.release();
-            parent.release();
-        }
+    public void arraysCopyOf_oob() throws IOException, InterruptedException {
+        assertScenarioReportsFinding("copyOf");
     }
 
     @Test
-    public void arraysCopyOfRange_oob() {
-        ByteBuf parent = ByteBufAllocator.DEFAULT.heapBuffer(32);
-        ByteBuf buffer = parent.retainedSlice(8, 16); // ensure non-zero arrayOffset -> guard path
-        try {
-            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> {
-                // [from,to) = [0,1) with start > 0 => violation
-                Arrays.copyOfRange(buffer.array(), 0, 1);
-            });
-        } finally {
-            buffer.release();
-            parent.release();
-        }
+    public void arraysCopyOfRange_oob() throws IOException, InterruptedException {
+        assertScenarioReportsFinding("copyOfRange");
     }
 
     @Test
-    public void systemArraycopy_oob_source() {
-        ByteBuf parent = ByteBufAllocator.DEFAULT.heapBuffer(32);
-        ByteBuf buffer = parent.retainedSlice(8, 16); // ensure non-zero arrayOffset -> guard path
-        byte[] dest = new byte[1];
-        try {
-            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> {
-                // srcPos == 0 with start > 0 => violation on source
-                System.arraycopy(buffer.array(), 0, dest, 0, 1);
-            });
-        } finally {
-            buffer.release();
-            parent.release();
-        }
+    public void systemArraycopy_oob_source() throws IOException, InterruptedException {
+        assertScenarioReportsFinding("arraycopySource");
     }
 
     @Test
-    public void systemArraycopy_oob_dest() {
-        ByteBuf parent = ByteBufAllocator.DEFAULT.heapBuffer(32);
-        ByteBuf buffer = parent.retainedSlice(8, 16); // ensure non-zero arrayOffset -> guard path
-        byte[] src = new byte[1];
-        try {
-            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> {
-                // destPos == 0 with start > 0 => violation on destination
-                System.arraycopy(src, 0, buffer.array(), 0, 1);
-            });
-        } finally {
-            buffer.release();
-            parent.release();
-        }
+    public void systemArraycopy_oob_dest() throws IOException, InterruptedException {
+        assertScenarioReportsFinding("arraycopyDest");
     }
 
     @Test
     public void httpObjectDecoderInitializes() {
         new HttpRequestDecoder();
+    }
+
+    private static void assertScenarioReportsFinding(String scenario) throws IOException, InterruptedException {
+        String javaHome = System.getProperty("java.home");
+        String javaBin = javaHome + "/bin/java";
+        String classpath = System.getProperty("java.class.path");
+        Process process = new ProcessBuilder(List.of(
+            javaBin,
+            "--enable-preview",
+            "-cp",
+            classpath,
+            TestOutOfBoundsTarget.class.getName(),
+            scenario
+        )).start();
+        String output;
+        try (InputStream stdout = process.getInputStream();
+             InputStream stderr = process.getErrorStream()) {
+            output = readAll(stdout) + readAll(stderr);
+        }
+        int exitCode = process.waitFor();
+        assertTrue(exitCode != 0, () -> "Expected non-zero exit for scenario " + scenario + ", output:\n" + output);
+        assertTrue(output.contains("Out-of-bounds array access"), () -> "Expected sanitizer finding in output for scenario " + scenario + ", output:\n" + output);
+    }
+
+    private static String readAll(InputStream inputStream) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        inputStream.transferTo(out);
+        return out.toString(StandardCharsets.UTF_8);
     }
 }
