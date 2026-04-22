@@ -101,6 +101,7 @@ public final class SanitizerTransformer implements AgentBuilder.Transformer {
             .disableClassFormatChanges()
             .with(AgentBuilder.Listener.StreamWriting.toSystemError().withErrorsOnly())
             .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
+            .with(AgentBuilder.RedefinitionStrategy.DiscoveryStrategy.Reiterating.INSTANCE)
             .type(matcher).transform(new SanitizerTransformer())
             .installOn(instrumentation);
     }
