@@ -16,6 +16,7 @@
 package io.micronaut.fuzzing.sanitizer;
 
 import com.code_intelligence.jazzer.api.FuzzerSecurityIssueCritical;
+import com.code_intelligence.jazzer.api.Jazzer;
 import io.micronaut.core.annotation.Internal;
 import io.netty.buffer.ByteBuf;
 
@@ -60,7 +61,7 @@ public final class ByteBufArraySanitizer {
         Slot slot = findSlot(array);
         if (slot != null) {
             if (index < slot.start || index >= slot.end) {
-                throw new FuzzerSecurityIssueCritical("Out-of-bounds array access");
+                Jazzer.reportFindingFromHook(new FuzzerSecurityIssueCritical("Out-of-bounds array access"));
             }
             return slot.backing;
         } else {
@@ -147,7 +148,7 @@ public final class ByteBufArraySanitizer {
             int end = slot.end;
             long hi = (long) pos + (long) len;
             if (pos < start || hi > end) {
-                throw new FuzzerSecurityIssueCritical("Out-of-bounds array access");
+                Jazzer.reportFindingFromHook(new FuzzerSecurityIssueCritical("Out-of-bounds array access"));
             }
             return slot.backing;
         } else {
