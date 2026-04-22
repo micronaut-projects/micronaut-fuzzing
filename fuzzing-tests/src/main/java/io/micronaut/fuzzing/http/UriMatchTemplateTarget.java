@@ -21,6 +21,9 @@ import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.http.uri.UriMatchTemplate;
 
+/**
+ * Fuzzing support type.
+ */
 @FuzzTarget
 @HttpDict
 @Dict({
@@ -83,6 +86,7 @@ public class UriMatchTemplateTarget {
                 nested.getVariableNames();
                 nested.getVariables();
             }
+            default -> throw new IllegalStateException("Unexpected scenario: " + scenario);
         }
     }
 }

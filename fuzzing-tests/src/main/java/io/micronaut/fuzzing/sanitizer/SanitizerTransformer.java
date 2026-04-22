@@ -29,8 +29,12 @@ import java.lang.reflect.Method;
 import java.security.ProtectionDomain;
 import java.util.List;
 
+/**
+ * Byte Buddy transformer that rewrites byte-array access patterns for sanitizer checks.
+ */
+public final class SanitizerTransformer implements AgentBuilder.Transformer {
+    private static volatile boolean installed;
 
-public class SanitizerTransformer implements AgentBuilder.Transformer {
     @Override
     public DynamicType.Builder<?> transform(DynamicType.Builder<?> builder, TypeDescription typeDescription, ClassLoader classLoader, JavaModule javaModule, ProtectionDomain protectionDomain) {
         if (classLoader == null) {
@@ -48,6 +52,9 @@ public class SanitizerTransformer implements AgentBuilder.Transformer {
     }
 
     public static void installLocally() {
+        if (installed) {
+            return;
+        }
         String externalJazzerArgs = System.getenv("EXTERNAL_JAZZER_ARGS");
         if (externalJazzerArgs != null && externalJazzerArgs.contains("--nohooks")) {
             System.err.println("Refusing to install custom sanitizer because of `--nohooks` jazzer argument. This prevents interference with jacoco in coverage checking.");
@@ -56,7 +63,10 @@ public class SanitizerTransformer implements AgentBuilder.Transformer {
 
         try {
             Method m = Class.forName("com.code_intelligence.jazzer.third_party.net.bytebuddy.agent.ByteBuddyAgent").getMethod("install");
-            install((Instrumentation) m.invoke(null));
+            Instrumentation instrumentation = (Instrumentation) m.invoke(null);
+            install(instrumentation);
+            instrumentation.retransformClasses(Class.forName("io.micronaut.fuzzing.sanitizer.SanitizerTransformerTest"));
+            installed = true;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -73,6 +83,8 @@ public class SanitizerTransformer implements AgentBuilder.Transformer {
             "com.sun",
             "net.bytebuddy",
             "org.gradle",
+            "org.junit",
+            "org.opentest4j",
             "sun",
             "java",
             "jdk",
@@ -90,7 +102,6 @@ public class SanitizerTransformer implements AgentBuilder.Transformer {
             .disableClassFormatChanges()
             .with(AgentBuilder.Listener.StreamWriting.toSystemError().withErrorsOnly())
             .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
-            .with(AgentBuilder.RedefinitionStrategy.DiscoveryStrategy.Reiterating.INSTANCE)
             .type(matcher).transform(new SanitizerTransformer())
             .installOn(instrumentation);
     }

@@ -28,6 +28,9 @@ import io.netty.handler.codec.http2.Http2FrameCodecBuilder;
 
 import javax.net.ssl.SSLException;
 
+/**
+ * Fuzzing support type.
+ */
 @FuzzTarget
 @HttpDict
 public class HttpClientUpgradeHandlerFuzzer extends HandlerFuzzerBase {

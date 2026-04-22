@@ -31,22 +31,22 @@ import jdk.jfr.Enabled;
 import jdk.jfr.Event;
 import jdk.jfr.StackTrace;
 
-@Dict(EmbeddedChannelFuzzerBase.SEPARATOR)
+/**
+ * Base support for fuzz targets that drive an EmbeddedChannel with split byte input.
+ */
+@Dict("SEP")
 public abstract class EmbeddedChannelFuzzerBase {
     private static final long CPU_TIME_FACTOR = 1024;
-
-    static final String SEPARATOR = "SEP";
-    static final ByteSplitter SPLITTER = ByteSplitter.create(SEPARATOR);
+    private static final String SEPARATOR = "SEP";
+    private static final ByteSplitter SPLITTER = ByteSplitter.create(SEPARATOR);
 
     protected final EmbeddedChannel channel;
-
     protected long baseCpuTime = 500000;
     protected long inputCpuTime = 20;
     protected long outputCpuTime = 0;
     protected boolean hasOutput = false;
 
     private long outputBytes;
-
     private boolean finished = false;
     private boolean exceptionCaught = false;
 
@@ -62,6 +62,11 @@ public abstract class EmbeddedChannelFuzzerBase {
         FastThreadLocalThread.runWithFastThreadLocal(() -> test0(provider));
     }
 
+    /**
+     * Handles exceptions raised while fuzzing the channel.
+     *
+     * @param e The exception to surface
+     */
     protected void onException(Exception e) {
         PlatformDependent.throwException(e);
     }

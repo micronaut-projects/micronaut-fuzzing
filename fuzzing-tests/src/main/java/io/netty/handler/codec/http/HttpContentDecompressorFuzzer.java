@@ -26,6 +26,9 @@ import io.netty.handler.codec.compression.DecompressionException;
 
 import javax.net.ssl.SSLException;
 
+/**
+ * Fuzzing support type.
+ */
 @FuzzTarget
 @HttpDict
 public class HttpContentDecompressorFuzzer extends HandlerFuzzerBase {

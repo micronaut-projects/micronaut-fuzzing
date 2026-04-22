@@ -24,6 +24,9 @@ import io.netty.handler.codec.http.HttpServerCodec;
 
 import javax.net.ssl.SSLException;
 
+/**
+ * Fuzzing support type.
+ */
 @FuzzTarget
 @HttpDict
 public class CorsHandlerFuzzer extends HandlerFuzzerBase {

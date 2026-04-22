@@ -21,6 +21,9 @@ import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 
+/**
+ * Fuzzing support type.
+ */
 @FuzzTarget(enableImplicitly = false)
 public class TestOutOfBoundsTarget {
     static {

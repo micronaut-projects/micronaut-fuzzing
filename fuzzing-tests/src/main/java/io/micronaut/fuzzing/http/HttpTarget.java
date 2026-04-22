@@ -39,6 +39,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Fuzzing support type.
+ */
 @FuzzTarget(enableImplicitly = false) // we prefer EmbeddedHttpTarget for now
 @HttpDict
 public class HttpTarget {

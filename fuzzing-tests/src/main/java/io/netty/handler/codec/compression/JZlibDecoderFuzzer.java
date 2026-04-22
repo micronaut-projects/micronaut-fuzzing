@@ -22,6 +22,9 @@ import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 
 import javax.net.ssl.SSLException;
 
+/**
+ * Fuzzing support type.
+ */
 @FuzzTarget
 @HttpDict
 public class JZlibDecoderFuzzer extends DecompressorFuzzerBase {

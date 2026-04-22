@@ -26,6 +26,9 @@ import io.netty.handler.codec.DecoderException;
 
 import javax.net.ssl.SSLException;
 
+/**
+ * Fuzzing support type.
+ */
 @FuzzTarget
 @HttpDict
 public class Base64DecoderFuzzer extends HandlerFuzzerBase {

@@ -32,6 +32,9 @@ import net.bytebuddy.pool.TypePool;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 
+/**
+ * ASM visitor wrapper that redirects selected byte-array operations to sanitizer helpers.
+ */
 final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
     private static final String BOOLEAN_ARRAY = "[Z";
 
@@ -62,6 +65,7 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
 
     private static final class ClassVisitorImpl extends ClassVisitor {
         private boolean hasBooleanArrayField;
+        private String thisClassName;
 
         ClassVisitorImpl(int api, ClassVisitor classVisitor) {
             super(api, classVisitor);
@@ -77,12 +81,18 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
 
         @Override
         public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
+            thisClassName = name;
             super.visit(version, access, name, signature, superName, interfaces);
         }
 
         @Override
         public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
-            MethodVisitorImpl methodVisitor = new MethodVisitorImpl(Opcodes.ASM9, super.visitMethod(access, name, descriptor, signature, exceptions));
+            MethodVisitorImpl methodVisitor = new MethodVisitorImpl(
+                Opcodes.ASM9,
+                super.visitMethod(access, name, descriptor, signature, exceptions),
+                thisClassName,
+                name
+            );
             if (descriptor.contains(BOOLEAN_ARRAY)) {
                 methodVisitor.ohNoBooleanArray = true;
             }
@@ -94,10 +104,14 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
     }
 
     private static final class MethodVisitorImpl extends MethodVisitor {
-        boolean ohNoBooleanArray;
+        private boolean ohNoBooleanArray;
+        private final String ownerName;
+        private final String methodName;
 
-        MethodVisitorImpl(int api, MethodVisitor methodVisitor) {
+        MethodVisitorImpl(int api, MethodVisitor methodVisitor, String ownerName, String methodName) {
             super(api, methodVisitor);
+            this.ownerName = ownerName;
+            this.methodName = methodName;
         }
 
         @Override

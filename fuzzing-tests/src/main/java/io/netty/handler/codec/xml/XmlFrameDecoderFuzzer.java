@@ -27,6 +27,9 @@ import io.netty.handler.codec.TooLongFrameException;
 
 import javax.net.ssl.SSLException;
 
+/**
+ * Fuzzing support type.
+ */
 @FuzzTarget
 @HttpDict
 public class XmlFrameDecoderFuzzer extends HandlerFuzzerBase {

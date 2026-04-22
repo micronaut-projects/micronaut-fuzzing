@@ -23,6 +23,9 @@ import io.micronaut.http.server.util.DefaultHttpHostResolver;
 import io.micronaut.runtime.server.EmbeddedServer;
 import jakarta.inject.Singleton;
 
+/**
+ * Fuzzing support type.
+ */
 @Singleton
 @Replaces(DefaultHttpHostResolver.class)
 public class StableHttpHostResolver extends DefaultHttpHostResolver {

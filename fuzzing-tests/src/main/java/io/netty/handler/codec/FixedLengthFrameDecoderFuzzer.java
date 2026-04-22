@@ -25,6 +25,9 @@ import io.netty.handler.HandlerFuzzerBase;
 
 import javax.net.ssl.SSLException;
 
+/**
+ * Fuzzing support type.
+ */
 @FuzzTarget
 @HttpDict
 public class FixedLengthFrameDecoderFuzzer extends HandlerFuzzerBase {

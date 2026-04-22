@@ -18,11 +18,14 @@ package io.micronaut.fuzzing;
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 
+/**
+ * Fuzzing support type.
+ */
 @FuzzTarget(enableImplicitly = false)
 public class CpuTestTarget {
     public static void fuzzerTestOneInput(FuzzedDataProvider provider) {
         long start = CpuTimer.currentThreadCpuTimeNanos();
-        System.out.println(collatz(provider.consumeInt()));;
+        System.out.println(collatz(provider.consumeInt()));
         long end = CpuTimer.currentThreadCpuTimeNanos();
         if (end > start + 1_000_000_000L) {
             throw new IllegalStateException("took too long (" + (end - start) + ")");

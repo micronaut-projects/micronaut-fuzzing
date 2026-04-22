@@ -22,6 +22,7 @@ tasks.withType<JavaCompile> {
 
 tasks.withType<Test>() {
     jvmArgs("--enable-preview")
+    systemProperty("io.micronaut.fuzzing.sanitizer.install", "true")
 }
 
 group = "io.micronaut.fuzzing"

@@ -18,8 +18,11 @@ package io.micronaut.fuzzing.http;
 import io.micronaut.core.annotation.Introspected;
 import io.micronaut.core.annotation.Nullable;
 
+/**
+ * Fuzzing support type.
+ */
 @Introspected
-public class AuthorEntry {
+public final class AuthorEntry {
     @Nullable
     private String name;
 

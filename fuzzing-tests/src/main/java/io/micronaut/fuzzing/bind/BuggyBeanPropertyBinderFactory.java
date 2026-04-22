@@ -26,9 +26,12 @@ import io.micronaut.json.bind.JsonBeanPropertyBinderExceptionHandler;
 import jakarta.inject.Singleton;
 
 
+/**
+ * Fuzzing support type.
+ */
 @Factory
 @Requires(property = "fuzzing.buggy-binder", value = "true")
-public class BuggyBeanPropertyBinderFactory {
+public final class BuggyBeanPropertyBinderFactory {
 
     @Singleton
     @Replaces(BeanPropertyBinder.class)

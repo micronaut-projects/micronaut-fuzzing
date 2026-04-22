@@ -29,6 +29,9 @@ import io.netty.handler.codec.http.HttpServerCodec;
 import javax.net.ssl.SSLException;
 import java.nio.channels.ClosedChannelException;
 
+/**
+ * Fuzzing support type.
+ */
 @FuzzTarget
 @HttpDict
 public class WebSocketServerProtocolHandlerFuzzer extends HandlerFuzzerBase {
