@@ -65,7 +65,6 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
 
     private static final class ClassVisitorImpl extends ClassVisitor {
         private boolean hasBooleanArrayField;
-        private String thisClassName;
 
         ClassVisitorImpl(int api, ClassVisitor classVisitor) {
             super(api, classVisitor);
@@ -79,19 +78,12 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
             return super.visitField(access, name, descriptor, signature, value);
         }
 
-        @Override
-        public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
-            thisClassName = name;
-            super.visit(version, access, name, signature, superName, interfaces);
-        }
 
         @Override
         public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
             MethodVisitorImpl methodVisitor = new MethodVisitorImpl(
                 Opcodes.ASM9,
-                super.visitMethod(access, name, descriptor, signature, exceptions),
-                thisClassName,
-                name
+                super.visitMethod(access, name, descriptor, signature, exceptions)
             );
             if (descriptor.contains(BOOLEAN_ARRAY)) {
                 methodVisitor.ohNoBooleanArray = true;
@@ -105,13 +97,9 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
 
     private static final class MethodVisitorImpl extends MethodVisitor {
         private boolean ohNoBooleanArray;
-        private final String ownerName;
-        private final String methodName;
 
-        MethodVisitorImpl(int api, MethodVisitor methodVisitor, String ownerName, String methodName) {
+        MethodVisitorImpl(int api, MethodVisitor methodVisitor) {
             super(api, methodVisitor);
-            this.ownerName = ownerName;
-            this.methodName = methodName;
         }
 
         @Override
