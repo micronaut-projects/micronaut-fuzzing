@@ -31,17 +31,12 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Tracks guarded byte arrays and throws on out-of-bounds access detected through rewritten bytecode.
  */
 public final class ByteBufArraySanitizer {
-    private static final boolean INSTALL_REQUESTED = Boolean.getBoolean("io.micronaut.fuzzing.sanitizer.install");
-
     private static final AtomicInteger NEXT = new AtomicInteger();
     private static final Slot[] SLOTS = new Slot[256];
 
     private static final byte PATTERN_B1 = (byte) 0xd1;
 
     static {
-        if (INSTALL_REQUESTED) {
-            SanitizerTransformer.installLocally();
-        }
         for (int i = 0; i < SLOTS.length; i++) {
             SLOTS[i] = new Slot();
         }
