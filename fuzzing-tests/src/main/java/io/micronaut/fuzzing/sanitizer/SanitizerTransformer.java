@@ -45,7 +45,9 @@ public final class SanitizerTransformer implements AgentBuilder.Transformer {
         } catch (ClassNotFoundException e) {
             return builder;
         }
-
+        if (!typeDescription.getName().contains("fuzzing")) {
+            return builder;
+        }
         return builder
             .visit(TypeConstantAdjustment.INSTANCE)
             .visit(new VisitorWrapperImpl());
@@ -65,6 +67,7 @@ public final class SanitizerTransformer implements AgentBuilder.Transformer {
             Method m = Class.forName("com.code_intelligence.jazzer.third_party.net.bytebuddy.agent.ByteBuddyAgent").getMethod("install");
             Instrumentation instrumentation = (Instrumentation) m.invoke(null);
             install(instrumentation);
+            retransformKnownFuzzingClasses(instrumentation);
             installed = true;
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -91,7 +94,7 @@ public final class SanitizerTransformer implements AgentBuilder.Transformer {
             "io.netty.buffer" // need to ignore nested calls to .array
         );
 
-        ElementMatcher.Junction<NamedElement> matcher = ElementMatchers.nameContains("fuzzing")
+        ElementMatcher.Junction<NamedElement> matcher = ElementMatchers.any()
             .and(ElementMatchers.not(ElementMatchers.named(ByteBufArraySanitizer.class.getName())))
             .and(ElementMatchers.not(ElementMatchers.named(FindingReporter.class.getName())))
             .and(ElementMatchers.not(ElementMatchers.named("io.netty.util.ByteProcessor")));
@@ -107,4 +110,26 @@ public final class SanitizerTransformer implements AgentBuilder.Transformer {
             .type(matcher).transform(new SanitizerTransformer())
             .installOn(instrumentation);
     }
+
+    private static void retransformKnownFuzzingClasses(Instrumentation instrumentation) {
+        Class<?>[] classes = instrumentation.getAllLoadedClasses();
+        for (Class<?> loadedClass : classes) {
+            if (loadedClass == null || !instrumentation.isModifiableClass(loadedClass)) {
+                continue;
+            }
+            String name = loadedClass.getName();
+            if (!name.contains("fuzzing")) {
+                continue;
+            }
+            if (name.equals(ByteBufArraySanitizer.class.getName()) || name.equals(FindingReporter.class.getName())) {
+                continue;
+            }
+            try {
+                instrumentation.retransformClasses(loadedClass);
+            } catch (Throwable ignored) {
+                // Best-effort stabilization for already loaded fuzzing classes only.
+            }
+        }
+    }
+
 }
