@@ -22,6 +22,9 @@ tasks.withType<JavaCompile> {
 
 tasks.withType<Test>() {
     jvmArgs("--enable-preview")
+    testLogging {
+        showStandardStreams = true
+    }
 }
 
 group = "io.micronaut.fuzzing"
