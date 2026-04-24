@@ -29,7 +29,12 @@ import net.bytebuddy.jar.asm.Opcodes;
 import net.bytebuddy.jar.asm.Type;
 import net.bytebuddy.pool.TypePool;
 
+import java.io.IOException;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 
 /**
@@ -39,6 +44,7 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
     private static final String BOOLEAN_ARRAY = "[Z";
     private static final boolean DEBUG = Boolean.parseBoolean(System.getenv("FUZZING_SANITIZER_DEBUG"));
     private static final String DEBUG_CLASS = System.getenv().getOrDefault("FUZZING_SANITIZER_DEBUG_CLASS", "io/netty/util/ByteProcessor");
+    private static final Path DEBUG_FILE = Path.of(System.getenv().getOrDefault("FUZZING_SANITIZER_DEBUG_FILE", "build/sanitizer-debug.log"));
 
     private static final Method BALOAD;
     private static final Method BASTORE;
@@ -181,12 +187,12 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
 
             if (owner.equals(arraysOwner) && name.equals("copyOf")
                 && descriptor.equals(Type.getMethodDescriptor(Type.getType(byte[].class), Type.getType(byte[].class), Type.INT_TYPE))) {
-                debug(this.owner, methodName + " rewriting Arrays.copyOf(byte[]) ");
+                debug(this.owner, methodName + " rewriting Arrays.copyOf(byte[])");
                 invokeStatic(ARRAYS_COPY_OF);
                 return;
             } else if (owner.equals(arraysOwner) && name.equals("copyOfRange")
                 && descriptor.equals(Type.getMethodDescriptor(Type.getType(byte[].class), Type.getType(byte[].class), Type.INT_TYPE, Type.INT_TYPE))) {
-                debug(this.owner, methodName + " rewriting Arrays.copyOfRange(byte[]) ");
+                debug(this.owner, methodName + " rewriting Arrays.copyOfRange(byte[])");
                 invokeStatic(ARRAYS_COPY_OF_RANGE);
                 return;
             } else if (owner.equals(systemOwner) && name.equals("arraycopy")) {
@@ -214,7 +220,21 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
 
     private static void debug(String owner, String message) {
         if (DEBUG && DEBUG_CLASS.equals(owner)) {
-            System.err.println("[sanitizer-debug] " + owner + " :: " + message);
+            try {
+                Path parent = DEBUG_FILE.getParent();
+                if (parent != null) {
+                    Files.createDirectories(parent);
+                }
+                Files.writeString(
+                    DEBUG_FILE,
+                    "[sanitizer-debug] " + owner + " :: " + message + System.lineSeparator(),
+                    StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.APPEND
+                );
+            } catch (IOException ignored) {
+                // Best-effort diagnostics only.
+            }
         }
     }
 }
