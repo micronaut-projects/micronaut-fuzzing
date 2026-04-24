@@ -141,16 +141,14 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
         @Override
         public void visitFrame(int type, int numLocal, Object[] local, int numStack, Object[] stack) {
             for (Object o : local) {
-                if (BOOLEAN_ARRAY.equals(o)) {
+                if (isBooleanArrayFrameEntry(o)) {
                     ohNoBooleanArray = true;
-                    debug(owner, methodName + " boolean[] from frame local: " + Arrays.toString(local) + " stack=" + Arrays.toString(stack));
                     break;
                 }
             }
             for (Object o : stack) {
-                if (BOOLEAN_ARRAY.equals(o)) {
+                if (isBooleanArrayFrameEntry(o)) {
                     ohNoBooleanArray = true;
-                    debug(owner, methodName + " boolean[] from frame stack: locals=" + Arrays.toString(local) + " stack=" + Arrays.toString(stack));
                     break;
                 }
             }
@@ -205,6 +203,13 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
                 return;
             }
             super.visitMethodInsn(opcode, owner, name, descriptor, isInterface);
+        }
+
+        private static boolean isBooleanArrayFrameEntry(Object entry) {
+            if (BOOLEAN_ARRAY.equals(entry)) {
+                return true;
+            }
+            return entry instanceof String s && BOOLEAN_ARRAY.equals(s);
         }
 
         private void invokeStatic(Method method) {
