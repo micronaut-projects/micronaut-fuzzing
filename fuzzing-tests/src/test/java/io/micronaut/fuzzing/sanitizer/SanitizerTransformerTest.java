@@ -12,8 +12,10 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SanitizerTransformerTest {
@@ -59,36 +61,73 @@ public class SanitizerTransformerTest {
     }
 
     @Test
-    public void aload() throws IOException, InterruptedException {
-        assertScenarioReportsFinding("aload");
+    public void aload() {
+        ByteBuf buffer = ByteBufAllocator.DEFAULT.heapBuffer(16);
+        try {
+            assertScenarioReportsFinding(() -> {
+                if (buffer.arrayOffset() == 0) {
+                    sink = buffer.array()[16];
+                } else {
+                    sink = buffer.array()[0];
+                }
+            });
+        } finally {
+            buffer.release();
+        }
     }
 
     @Test
-    public void arraysCopyOf_oob() throws IOException, InterruptedException {
-        assertScenarioReportsFinding("copyOf");
+    public void arraysCopyOf_oob() {
+        ByteBuf parent = ByteBufAllocator.DEFAULT.heapBuffer(32);
+        ByteBuf buffer = parent.retainedSlice(8, 16);
+        try {
+            assertScenarioReportsFinding(() -> Arrays.copyOf(buffer.array(), 1));
+        } finally {
+            buffer.release();
+            parent.release();
+        }
     }
 
     @Test
-    public void arraysCopyOfRange_oob() throws IOException, InterruptedException {
-        assertScenarioReportsFinding("copyOfRange");
+    public void arraysCopyOfRange_oob() {
+        ByteBuf parent = ByteBufAllocator.DEFAULT.heapBuffer(32);
+        ByteBuf buffer = parent.retainedSlice(8, 16);
+        try {
+            assertScenarioReportsFinding(() -> Arrays.copyOfRange(buffer.array(), 0, 1));
+        } finally {
+            buffer.release();
+            parent.release();
+        }
     }
 
     @Test
-    public void systemArraycopy_oob_source() throws IOException, InterruptedException {
-        assertScenarioReportsFinding("arraycopySource");
+    public void systemArraycopy_oob_source() {
+        ByteBuf parent = ByteBufAllocator.DEFAULT.heapBuffer(32);
+        ByteBuf buffer = parent.retainedSlice(8, 16);
+        byte[] dest = new byte[1];
+        try {
+            assertScenarioReportsFinding(() -> System.arraycopy(buffer.array(), 0, dest, 0, 1));
+        } finally {
+            buffer.release();
+            parent.release();
+        }
     }
 
     @Test
-    public void systemArraycopy_oob_dest() throws IOException, InterruptedException {
-        assertScenarioReportsFinding("arraycopyDest");
+    public void systemArraycopy_oob_dest() {
+        ByteBuf parent = ByteBufAllocator.DEFAULT.heapBuffer(32);
+        ByteBuf buffer = parent.retainedSlice(8, 16);
+        byte[] src = new byte[1];
+        try {
+            assertScenarioReportsFinding(() -> System.arraycopy(src, 0, buffer.array(), 0, 1));
+        } finally {
+            buffer.release();
+            parent.release();
+        }
     }
 
     @Test
-    public void httpObjectDecoderInitializes() {
-        new HttpRequestDecoder();
-    }
-
-    private static void assertScenarioReportsFinding(String scenario) throws IOException, InterruptedException {
+    public void realJazzerHookStillReportsFinding() throws IOException, InterruptedException {
         String javaHome = System.getProperty("java.home");
         String javaBin = javaHome + "/bin/java";
         String classpath = System.getProperty("java.class.path");
@@ -98,7 +137,7 @@ public class SanitizerTransformerTest {
             "-cp",
             classpath,
             TestOutOfBoundsTarget.class.getName(),
-            scenario
+            "aload"
         )).start();
         String output;
         try (InputStream stdout = process.getInputStream();
@@ -106,13 +145,34 @@ public class SanitizerTransformerTest {
             output = readAll(stdout) + readAll(stderr);
         }
         int exitCode = process.waitFor();
-        assertTrue(exitCode != 0, () -> "Expected non-zero exit for scenario " + scenario + ", output:\n" + output);
-        assertTrue(output.contains("Out-of-bounds array access"), () -> "Expected sanitizer finding in output for scenario " + scenario + ", output:\n" + output);
+        assertTrue(exitCode != 0, () -> "Expected non-zero exit for Jazzer hook integration, output:\n" + output);
+        assertTrue(output.contains("Out-of-bounds array access"), () -> "Expected sanitizer finding in output, output:\n" + output);
+    }
+
+    @Test
+    public void httpObjectDecoderInitializes() {
+        new HttpRequestDecoder();
+    }
+
+    private static void assertScenarioReportsFinding(ThrowingRunnable runnable) {
+        AtomicReference<String> reported = new AtomicReference<>();
+        FindingReporter.Reporter previous = FindingReporter.replaceForTesting(reported::set);
+        try {
+            runnable.run();
+            assertEquals("Out-of-bounds array access", reported.get());
+        } finally {
+            FindingReporter.replaceForTesting(previous);
+        }
     }
 
     private static String readAll(InputStream inputStream) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         inputStream.transferTo(out);
         return out.toString(StandardCharsets.UTF_8);
+    }
+
+    @FunctionalInterface
+    private interface ThrowingRunnable {
+        void run();
     }
 }
