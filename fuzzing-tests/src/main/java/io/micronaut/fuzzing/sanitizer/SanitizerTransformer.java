@@ -20,7 +20,6 @@ import net.bytebuddy.asm.TypeConstantAdjustment;
 import net.bytebuddy.description.NamedElement;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
-import net.bytebuddy.dynamic.scaffold.TypeValidation;
 import net.bytebuddy.matcher.ElementMatcher;
 import net.bytebuddy.matcher.ElementMatchers;
 import net.bytebuddy.utility.JavaModule;
@@ -94,6 +93,7 @@ public final class SanitizerTransformer implements AgentBuilder.Transformer {
 
         ElementMatcher.Junction<NamedElement> matcher = ElementMatchers.any()
             .and(ElementMatchers.not(ElementMatchers.named(ByteBufArraySanitizer.class.getName())))
+            .and(ElementMatchers.not(ElementMatchers.named(FindingReporter.class.getName())))
             .and(ElementMatchers.not(ElementMatchers.named("io.netty.util.ByteProcessor")));
         for (String excludedPackage : excludedPackages) {
             matcher = matcher.and(ElementMatchers.not(ElementMatchers.nameStartsWith(excludedPackage + '.')));
