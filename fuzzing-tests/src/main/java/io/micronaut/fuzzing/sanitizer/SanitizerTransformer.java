@@ -91,7 +91,7 @@ public final class SanitizerTransformer implements AgentBuilder.Transformer {
             "io.netty.buffer" // need to ignore nested calls to .array
         );
 
-        ElementMatcher.Junction<NamedElement> matcher = ElementMatchers.any()
+        ElementMatcher.Junction<NamedElement> matcher = ElementMatchers.nameContains("fuzzing")
             .and(ElementMatchers.not(ElementMatchers.named(ByteBufArraySanitizer.class.getName())))
             .and(ElementMatchers.not(ElementMatchers.named(FindingReporter.class.getName())))
             .and(ElementMatchers.not(ElementMatchers.named("io.netty.util.ByteProcessor")));

@@ -1,7 +1,6 @@
 import io.micronaut.fuzzing.jazzer.JazzerTask
 import io.micronaut.fuzzing.jazzer.PrepareClusterFuzzTask
 import java.time.Duration
-import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 
 plugins {
     id("io.micronaut.build.internal.fuzzing-module")
@@ -21,13 +20,11 @@ tasks.withType<JavaCompile> {
     options.release.set(25)
 }
 
-tasks.withType<Test>().configureEach {
+tasks.withType<Test>() {
     jvmArgs("--enable-preview")
+    maxParallelForks = 1
     testLogging {
         showStandardStreams = true
-    }
-    extensions.configure<JacocoTaskExtension> {
-        isEnabled = false
     }
 }
 
