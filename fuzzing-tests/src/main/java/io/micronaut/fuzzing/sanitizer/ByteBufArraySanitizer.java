@@ -23,12 +23,9 @@ import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Fuzzing support type.
+ * Tracks guarded byte arrays and reports out-of-bounds access detected through rewritten bytecode.
  */
 @Internal
-/**
- * Tracks guarded byte arrays and throws on out-of-bounds access detected through rewritten bytecode.
- */
 public final class ByteBufArraySanitizer {
     private static final AtomicInteger NEXT = new AtomicInteger();
     private static final Slot[] SLOTS = new Slot[256];

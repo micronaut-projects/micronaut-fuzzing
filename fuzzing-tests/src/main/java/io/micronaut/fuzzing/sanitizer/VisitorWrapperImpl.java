@@ -71,6 +71,26 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
         return new ClassVisitorImpl(Opcodes.ASM9, classVisitor, typeDescription.getInternalName());
     }
 
+    private static void debug(String owner, String message) {
+        if (DEBUG && DEBUG_CLASS.equals(owner)) {
+            try {
+                Path parent = DEBUG_FILE.getParent();
+                if (parent != null) {
+                    Files.createDirectories(parent);
+                }
+                Files.writeString(
+                    DEBUG_FILE,
+                    "[sanitizer-debug] " + owner + " :: " + message + System.lineSeparator(),
+                    StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.APPEND
+                );
+            } catch (IOException ignored) {
+                // Best-effort diagnostics only.
+            }
+        }
+    }
+
     private static final class ClassVisitorImpl extends ClassVisitor {
         private final String owner;
         private boolean hasBooleanArrayField;
@@ -223,23 +243,4 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
         }
     }
 
-    private static void debug(String owner, String message) {
-        if (DEBUG && DEBUG_CLASS.equals(owner)) {
-            try {
-                Path parent = DEBUG_FILE.getParent();
-                if (parent != null) {
-                    Files.createDirectories(parent);
-                }
-                Files.writeString(
-                    DEBUG_FILE,
-                    "[sanitizer-debug] " + owner + " :: " + message + System.lineSeparator(),
-                    StandardCharsets.UTF_8,
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.APPEND
-                );
-            } catch (IOException ignored) {
-                // Best-effort diagnostics only.
-            }
-        }
-    }
 }
