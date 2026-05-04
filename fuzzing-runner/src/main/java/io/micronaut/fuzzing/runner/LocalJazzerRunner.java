@@ -41,7 +41,7 @@ import java.util.List;
  * example:
  *
  * <pre>{@code
- * @FuzzTarget
+ * &#64;FuzzTarget
  * public class Example {
  *     public static void fuzzerTestOneInput(byte[] input) {
  *         ...
@@ -122,6 +122,7 @@ public final class LocalJazzerRunner {
                 try {
                     Files.deleteIfExists(dict);
                 } catch (IOException ignored) {
+                    // Best-effort cleanup of a temporary dictionary file.
                 }
             }
         }
@@ -157,6 +158,7 @@ public final class LocalJazzerRunner {
                 MethodHandles.lookup().findStatic(targetClass, "fuzzerInitialize", MethodType.methodType(void.class))
                     .invoke();
             } catch (NoSuchMethodException ignored) {
+                // The optional fuzzerInitialize hook is not present on every target.
             }
             try {
                 MethodHandles.lookup().findStatic(targetClass, "fuzzerTestOneInput", MethodType.methodType(void.class, byte[].class))
