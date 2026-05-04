@@ -31,6 +31,9 @@ import io.netty.contrib.multipart.PostBodyDecoder;
 
 import java.nio.charset.StandardCharsets;
 
+/**
+ * Fuzzing support type.
+ */
 @FuzzTarget
 @HttpDict
 @Dict({
@@ -88,7 +91,9 @@ public class MultipartTarget {
     }
 
     private static String sanitizeBoundary(String raw) {
-        if (raw == null || raw.isEmpty()) return "fuzzBoundary";
+        if (raw == null || raw.isEmpty()) {
+            return "fuzzBoundary";
+        }
         String clean = raw.replaceAll("[^a-zA-Z0-9'()+_,-./:=?]", "x");
         return clean.isEmpty() ? "fuzzBoundary" : clean;
     }

@@ -22,8 +22,11 @@ import io.micronaut.http.annotation.Header;
 import io.micronaut.http.annotation.PathVariable;
 import io.micronaut.http.annotation.QueryValue;
 
+/**
+ * Fuzzing support type.
+ */
 @Introspected
-public class RequestData {
+public final class RequestData {
     @PathVariable
     private String id;
 

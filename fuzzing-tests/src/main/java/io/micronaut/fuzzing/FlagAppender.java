@@ -18,6 +18,9 @@ package io.micronaut.fuzzing;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.AppenderBase;
 
+/**
+ * Fuzzing support type.
+ */
 public class FlagAppender extends AppenderBase<ILoggingEvent> {
     private static volatile boolean triggered = false;
 

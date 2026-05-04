@@ -21,6 +21,9 @@ import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 
 import java.util.Map;
 
+/**
+ * Fuzzing support type.
+ */
 @FuzzTarget
 public class EmbeddedHttp2Target extends EmbeddedHttpTarget {
     private static final EmbeddedHttpTarget.ContextHolder HTTP2 = new EmbeddedHttpTarget.ContextHolder(Map.of("micronaut.server.http-version", "2.0"));

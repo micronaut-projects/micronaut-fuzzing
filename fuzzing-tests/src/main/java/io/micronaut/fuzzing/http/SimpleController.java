@@ -20,8 +20,8 @@ import io.micronaut.http.annotation.Body;
 import io.micronaut.http.annotation.Consumes;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Get;
-import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.Header;
+import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.PathVariable;
 import io.micronaut.http.annotation.QueryValue;
 import io.micronaut.core.annotation.Nullable;
@@ -36,8 +36,10 @@ import io.micronaut.http.annotation.Produces;
 import static io.micronaut.http.MediaType.MULTIPART_FORM_DATA;
 import io.micronaut.http.HttpResponse;
 
-import java.util.List;
 
+/**
+ * Simple HTTP endpoints used by fuzzing tests.
+ */
 @Singleton
 @Controller
 public final class SimpleController {
@@ -58,7 +60,7 @@ public final class SimpleController {
     static final String ECHO_REQUEST_BEAN = "/echo-request-bean";
     static final String ECHO_COOKIE = "/echo-cookie";
     static final String UPLOAD_MULTIPLE = "/upload-multiple";
-    static final String ECHO_NEGOTIATED  = "/echo-negotiated";
+    static final String ECHO_NEGOTIATED = "/echo-negotiated";
     static final String ECHO_MULTI_ACCEPT = "/echo-multi-accept";
 
     @Get
@@ -89,6 +91,7 @@ public final class SimpleController {
     public String echoPieceJson(@Body("foo") String foo) {
         return foo;
     }
+
     @Get(ECHO_QUERY + "{?foo}")
     public String echoQuery(@QueryValue String foo) {
         return foo;
@@ -127,37 +130,44 @@ public final class SimpleController {
     public String uploadFile(@Part("file") CompletedFileUpload file) {
         return "size:" + file.getSize();
     }
+
     @Post(value = UPLOAD_FIELDS, consumes = MULTIPART_FORM_DATA)
     public String uploadFields(@Part("username") String username,
-                               @Part("email") String email) {
+                                @Part("email") String email) {
         return username + "/" + email;
     }
+
     @Post(value = UPLOAD_MIXED, consumes = MULTIPART_FORM_DATA)
     public String uploadMixed(@Part("name") String name,
                               @Part("data") CompletedFileUpload data) {
         return name + ":" + data.getSize();
     }
+
     @Get(ECHO_BEAN + "{?keyword,page,active}")
     public String echoBean(SearchQuery query) {
         return query.getKeyword() + ":"
             + query.getPage() + ":"
             + query.getActive();
     }
+
     @Get(ECHO_REQUEST_BEAN + "/{id}{?filter}")
     public String echoRequestBean(@RequestBean RequestData data) {
         return data.getId() + ":"
             + data.getFilter() + ":"
             + data.getVersion();
     }
+
     @Get(ECHO_COOKIE)
     public String echoCookie(@CookieValue("session") @Nullable String session,
                              @CookieValue("theme") @Nullable String theme) {
         return session + ":" + theme;
     }
+
     @Post(value = UPLOAD_MULTIPLE, consumes = MULTIPART_FORM_DATA)
     public String uploadMultiple(@Part("files") CompletedFileUpload[] files) {
         return "count:" + files.length;
     }
+
     @Get(ECHO_NEGOTIATED)
     @Produces({MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
     public String echoNegotiated(@QueryValue @Nullable String value) {

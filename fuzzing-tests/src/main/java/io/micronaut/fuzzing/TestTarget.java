@@ -18,6 +18,9 @@ package io.micronaut.fuzzing;
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 
+/**
+ * Fuzzing support type.
+ */
 @FuzzTarget(enableImplicitly = false)
 public class TestTarget {
     public static void fuzzerTestOneInput(FuzzedDataProvider provider) {

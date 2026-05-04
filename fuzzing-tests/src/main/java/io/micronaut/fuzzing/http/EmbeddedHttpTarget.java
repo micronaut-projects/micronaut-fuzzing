@@ -30,6 +30,9 @@ import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
+/**
+ * Fuzzing support type.
+ */
 @FuzzTarget
 @HttpDict
 @Dict({

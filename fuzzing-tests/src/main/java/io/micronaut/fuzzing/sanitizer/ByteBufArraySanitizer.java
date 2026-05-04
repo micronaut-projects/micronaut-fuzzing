@@ -1,3 +1,18 @@
+/*
+ * Copyright 2017-2026 original authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.micronaut.fuzzing.sanitizer;
 
 import com.code_intelligence.jazzer.api.FuzzerSecurityIssueCritical;
@@ -9,16 +24,19 @@ import java.lang.ref.SoftReference;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * Tracks guarded byte arrays and reports out-of-bounds access detected through rewritten bytecode.
+ */
 @Internal
 public final class ByteBufArraySanitizer {
-    private static final AtomicInteger next = new AtomicInteger();
-    private static final Slot[] slots = new Slot[256];
+    private static final AtomicInteger NEXT = new AtomicInteger();
+    private static final Slot[] SLOTS = new Slot[256];
 
     private static final byte PATTERN_B1 = (byte) 0xd1;
 
     static {
-        for (int i = 0; i < slots.length; i++) {
-            slots[i] = new Slot();
+        for (int i = 0; i < SLOTS.length; i++) {
+            SLOTS[i] = new Slot();
         }
     }
 
@@ -52,7 +70,7 @@ public final class ByteBufArraySanitizer {
         if (guard[0] != PATTERN_B1 || guard.length < 2) {
             return null;
         }
-        Slot slot = slots[guard[1] & 0xff];
+        Slot slot = SLOTS[guard[1] & 0xff];
         SoftReference<byte[]> ref = slot.guard;
         if (ref == null || ref.get() != guard) {
             return null;
@@ -79,10 +97,10 @@ public final class ByteBufArraySanitizer {
         byte[] guard = new byte[array.length];
         guard[0] = PATTERN_B1;
 
-        int i = next.getAndIncrement();
+        int i = NEXT.getAndIncrement();
         guard[1] = (byte) i;
 
-        Slot slot = slots[i % slots.length];
+        Slot slot = SLOTS[i % SLOTS.length];
         slot.backing = array;
         slot.guard = new SoftReference<>(guard);
         slot.start = offset;
@@ -125,8 +143,7 @@ public final class ByteBufArraySanitizer {
         if (slot != null) {
             int start = slot.start;
             int end = slot.end;
-            // Validate [pos, pos+len) within [start, end)
-            long hi = (long) pos + (long) len; // avoid overflow surprises
+            long hi = (long) pos + (long) len;
             if (pos < start || hi > end) {
                 Jazzer.reportFindingFromHook(new FuzzerSecurityIssueCritical("Out-of-bounds array access"));
             }
@@ -136,7 +153,7 @@ public final class ByteBufArraySanitizer {
         }
     }
 
-    private static class Slot {
+    private static final class Slot {
         byte[] backing;
         int start;
         int end;

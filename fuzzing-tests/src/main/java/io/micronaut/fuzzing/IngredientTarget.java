@@ -35,7 +35,11 @@ public class IngredientTarget {
         }
     }
 
-    record Ingredient(
+    public static void main(String[] args) {
+        LocalJazzerRunner.create(IngredientTarget.class).fuzz();
+    }
+
+    private record Ingredient(
         String name,
         int massInGrams,
         int priceInCents
@@ -49,9 +53,5 @@ public class IngredientTarget {
         int pricePerKg() {
             return priceInCents * 1000 / massInGrams;
         }
-    }
-
-    public static void main(String[] args) {
-        LocalJazzerRunner.create(IngredientTarget.class).fuzz();
     }
 }
