@@ -8,8 +8,6 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -19,6 +17,8 @@ public class SanitizerTransformerTest {
     static void init() {
         SanitizerTransformer.installLocally();
     }
+
+    private static volatile int sink;
 
     @Test
     public void loadsAreAccurate() {
@@ -55,21 +55,30 @@ public class SanitizerTransformerTest {
     }
 
     @Test
-    public void aload() throws ReflectiveOperationException {
+    public void aload() {
         ByteBuf buffer = ByteBufAllocator.DEFAULT.heapBuffer(16);
         try {
-            assertFinding("aload", new Class<?>[] {ByteBuf.class}, buffer);
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> {
+                if (buffer.arrayOffset() == 0) {
+                    sink = buffer.array()[16];
+                } else {
+                    sink = buffer.array()[0];
+                }
+            });
         } finally {
             buffer.release();
         }
     }
 
     @Test
-    public void arraysCopyOf_oob() throws ReflectiveOperationException {
+    public void arraysCopyOf_oob() {
         ByteBuf parent = ByteBufAllocator.DEFAULT.heapBuffer(32);
         ByteBuf buffer = parent.retainedSlice(8, 16); // ensure non-zero arrayOffset -> guard path
         try {
-            assertFinding("arraysCopyOf", new Class<?>[] {ByteBuf.class}, buffer);
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> {
+                // pos == 0, start > 0 => violation
+                Arrays.copyOf(buffer.array(), 1);
+            });
         } finally {
             buffer.release();
             parent.release();
@@ -77,11 +86,14 @@ public class SanitizerTransformerTest {
     }
 
     @Test
-    public void arraysCopyOfRange_oob() throws ReflectiveOperationException {
+    public void arraysCopyOfRange_oob() {
         ByteBuf parent = ByteBufAllocator.DEFAULT.heapBuffer(32);
         ByteBuf buffer = parent.retainedSlice(8, 16); // ensure non-zero arrayOffset -> guard path
         try {
-            assertFinding("arraysCopyOfRange", new Class<?>[] {ByteBuf.class}, buffer);
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> {
+                // [from,to) = [0,1) with start > 0 => violation
+                Arrays.copyOfRange(buffer.array(), 0, 1);
+            });
         } finally {
             buffer.release();
             parent.release();
@@ -89,12 +101,15 @@ public class SanitizerTransformerTest {
     }
 
     @Test
-    public void systemArraycopy_oob_source() throws ReflectiveOperationException {
+    public void systemArraycopy_oob_source() {
         ByteBuf parent = ByteBufAllocator.DEFAULT.heapBuffer(32);
         ByteBuf buffer = parent.retainedSlice(8, 16); // ensure non-zero arrayOffset -> guard path
         byte[] dest = new byte[1];
         try {
-            assertFinding("systemArraycopySource", new Class<?>[] {ByteBuf.class, byte[].class}, buffer, dest);
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> {
+                // srcPos == 0 with start > 0 => violation on source
+                System.arraycopy(buffer.array(), 0, dest, 0, 1);
+            });
         } finally {
             buffer.release();
             parent.release();
@@ -102,29 +117,23 @@ public class SanitizerTransformerTest {
     }
 
     @Test
-    public void systemArraycopy_oob_dest() throws ReflectiveOperationException {
+    public void systemArraycopy_oob_dest() {
         ByteBuf parent = ByteBufAllocator.DEFAULT.heapBuffer(32);
         ByteBuf buffer = parent.retainedSlice(8, 16); // ensure non-zero arrayOffset -> guard path
         byte[] src = new byte[1];
         try {
-            assertFinding("systemArraycopyDestination", new Class<?>[] {byte[].class, ByteBuf.class}, src, buffer);
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> {
+                // destPos == 0 with start > 0 => violation on destination
+                System.arraycopy(src, 0, buffer.array(), 0, 1);
+            });
         } finally {
             buffer.release();
             parent.release();
         }
-    }
-
-    private static void assertFinding(String methodName, Class<?>[] parameterTypes, Object... arguments) throws ReflectiveOperationException {
-        Method method = Class.forName("io.micronaut.fuzzing.sanitizer.SanitizerTransformerAccessors")
-            .getDeclaredMethod(methodName, parameterTypes);
-        method.setAccessible(true);
-        InvocationTargetException exception = Assertions.assertThrows(InvocationTargetException.class, () -> method.invoke(null, arguments));
-        Assertions.assertInstanceOf(FuzzerSecurityIssueCritical.class, exception.getCause());
     }
 
     @Test
     public void httpObjectDecoderInitializes() {
         new HttpRequestDecoder();
     }
-
 }
