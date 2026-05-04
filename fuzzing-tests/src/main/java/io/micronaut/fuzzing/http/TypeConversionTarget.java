@@ -39,6 +39,9 @@ import java.util.Locale;
 import java.util.UUID;
 
 
+/**
+ * Fuzzing support type.
+ */
 @FuzzTarget
 @Dict({
     "0", "-1", "1",
@@ -162,9 +165,6 @@ public class TypeConversionTarget {
         ConversionService.SHARED.convert(value, targetType);
         APP_CTX_CONVERSION_SERVICE.convert(value, targetType);
     }
-
-
-
 
     public static void main(String[] args) {
         LocalJazzerRunner.create(TypeConversionTarget.class).fuzz();

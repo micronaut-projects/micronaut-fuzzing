@@ -22,6 +22,9 @@ import io.micronaut.http.MediaType;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Fuzzing support type.
+ */
 @FuzzTarget
 public class MediaTypeTarget {
     public static void fuzzerTestOneInput(FuzzedDataProvider input) throws Exception {

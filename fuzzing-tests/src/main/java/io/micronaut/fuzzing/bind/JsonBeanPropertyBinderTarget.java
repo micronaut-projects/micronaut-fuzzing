@@ -38,7 +38,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-
+/**
+ * Fuzzing support type.
+ */
 @FuzzTarget
 @Dict({
     "name=", "age=", "value=", "email=", "id=",
@@ -79,9 +81,9 @@ public class JsonBeanPropertyBinderTarget {
             case 1 -> bindExistingFlat(params);
             case 2 -> bindNewNested(params);
             case 3 -> bindViaArgumentContext(params);
+            default -> throw new IllegalStateException("Unexpected scenario: " + scenario);
         }
     }
-
 
     private static void bindNewFlat(Map<String, Object> params) {
         try {
@@ -107,7 +109,6 @@ public class JsonBeanPropertyBinderTarget {
         }
     }
 
-
     @SuppressWarnings("unchecked")
     private static void bindViaArgumentContext(Map<String, Object> params) {
         Argument<NestedBean> arg = Argument.of(NestedBean.class);
@@ -120,7 +121,6 @@ public class JsonBeanPropertyBinderTarget {
             surfaceIfUnexpected(error.getCause());
         }
     }
-
 
     private static void surfaceIfUnexpected(ConversionErrorException e) {
         surfaceIfUnexpected(e.getCause());
@@ -136,62 +136,112 @@ public class JsonBeanPropertyBinderTarget {
         }
     }
 
-
-
+    /**
+     * Builds a fuzzed property key.
+     *
+     * @param data The fuzzed data provider
+     * @return A fuzzed property key
+     */
     private static String buildKey(FuzzedDataProvider data) {
         return data.consumeString(30);
     }
 
+    public static void main(String[] args) {
+        LocalJazzerRunner.create(JsonBeanPropertyBinderTarget.class).fuzz();
+    }
 
-
-
+    /** Simple flat bean used for binder fuzzing. */
     @Introspected
-    public static class FlatBean {
+    public static final class FlatBean {
         @Nullable private String name;
         @Nullable private Integer age;
         @Nullable private String email;
         @Nullable private Boolean active;
 
-        @Nullable public String getName() { return name; }
-        public void setName(@Nullable String name) { this.name = name; }
+        @Nullable
+        public String getName() {
+            return name;
+        }
 
-        @Nullable public Integer getAge() { return age; }
-        public void setAge(@Nullable Integer age) { this.age = age; }
+        public void setName(@Nullable String name) {
+            this.name = name;
+        }
 
-        @Nullable public String getEmail() { return email; }
-        public void setEmail(@Nullable String email) { this.email = email; }
+        @Nullable
+        public Integer getAge() {
+            return age;
+        }
 
-        @Nullable public Boolean getActive() { return active; }
-        public void setActive(@Nullable Boolean active) { this.active = active; }
+        public void setAge(@Nullable Integer age) {
+            this.age = age;
+        }
+
+        @Nullable
+        public String getEmail() {
+            return email;
+        }
+
+        public void setEmail(@Nullable String email) {
+            this.email = email;
+        }
+
+        @Nullable
+        public Boolean getActive() {
+            return active;
+        }
+
+        public void setActive(@Nullable Boolean active) {
+            this.active = active;
+        }
     }
 
-
+    /** Nested bean used for binder fuzzing. */
     @Introspected
-    public static class NestedBean {
+    public static final class NestedBean {
         @Nullable private List<ItemEntry> items;
         @Nullable private String label;
 
-        @Nullable public List<ItemEntry> getItems() { return items; }
-        public void setItems(@Nullable List<ItemEntry> items) { this.items = items; }
+        @Nullable
+        public List<ItemEntry> getItems() {
+            return items;
+        }
 
-        @Nullable public String getLabel() { return label; }
-        public void setLabel(@Nullable String label) { this.label = label; }
+        public void setItems(@Nullable List<ItemEntry> items) {
+            this.items = items;
+        }
+
+        @Nullable
+        public String getLabel() {
+            return label;
+        }
+
+        public void setLabel(@Nullable String label) {
+            this.label = label;
+        }
     }
 
-
+   /** Item entry used for nested list binding fuzzing. */
     @Introspected
-    public static class ItemEntry {
+    public static final class ItemEntry {
         @Nullable private String value;
         @Nullable private Integer count;
 
-        @Nullable public String getValue() { return value; }
-        public void setValue(@Nullable String value) { this.value = value; }
+        @Nullable
+        public String getValue() {
+            return value;
+        }
 
-        @Nullable public Integer getCount() { return count; }
-        public void setCount(@Nullable Integer count) { this.count = count; }
-    }
+        public void setValue(@Nullable String value) {
+            this.value = value;
+        }
 
-    public static void main(String[] args) {
-        LocalJazzerRunner.create(JsonBeanPropertyBinderTarget.class).fuzz();
+        @Nullable
+        public Integer getCount() {
+            return count;
+        }
+
+        public void setCount(@Nullable Integer count) {
+            this.count = count;
+        }
     }
 }

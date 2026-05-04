@@ -23,6 +23,9 @@ import io.micronaut.http.MediaType;
 
 import java.util.List;
 
+/**
+ * Fuzzing support type.
+ */
 @FuzzTarget
 @HttpDict
 @Dict({
@@ -102,7 +105,9 @@ public class ContentNegotiationTarget {
             int count = data.consumeInt(5, 50);
             StringBuilder accept = new StringBuilder();
             for (int i = 0; i < count; i++) {
-                if (i > 0) accept.append(",");
+                if (i > 0) {
+                    accept.append(",");
+                }
                 accept.append(data.consumeString(20));
                 accept.append(";q=");
                 accept.append(data.consumeString(5));

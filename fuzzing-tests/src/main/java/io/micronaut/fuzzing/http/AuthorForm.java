@@ -20,8 +20,11 @@ import io.micronaut.core.annotation.Nullable;
 import java.util.List;
 
 
+/**
+ * Fuzzing support type.
+ */
 @Introspected
-public class AuthorForm {
+public final class AuthorForm {
     @Nullable
     private List<AuthorEntry> authors;
 
