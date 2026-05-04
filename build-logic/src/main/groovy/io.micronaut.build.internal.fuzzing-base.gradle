@@ -1,6 +1,5 @@
 plugins.withId("java") {
     dependencies {
-        add("testRuntimeOnly", mnTest.junit.jupiter.engine)
         add("testRuntimeOnly", mnTest.junit.platform.launcher)
     }
 }
