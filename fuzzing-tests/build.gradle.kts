@@ -41,6 +41,9 @@ val sanitizerTest by tasks.registering(Test::class) {
     extensions.configure<JacocoTaskExtension> {
         isEnabled = false
     }
+    doFirst {
+        jvmArgumentProviders.removeAll { it.javaClass.name.contains("Jacoco") }
+    }
 }
 
 tasks.named("check") {
