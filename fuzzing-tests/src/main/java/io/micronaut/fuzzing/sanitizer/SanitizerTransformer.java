@@ -77,7 +77,7 @@ public class SanitizerTransformer implements AgentBuilder.Transformer {
             "sun",
             "java",
             "jdk",
-            "io.netty" // avoid rewriting Netty internals and JaCoCo probe arrays
+            "io.netty.buffer" // need to ignore nested calls to .array
         );
 
         ElementMatcher.Junction<NamedElement> matcher = ElementMatchers.any()
