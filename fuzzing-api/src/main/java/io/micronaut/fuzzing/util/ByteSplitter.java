@@ -78,7 +78,7 @@ public final class ByteSplitter {
     /**
      * Iterator for the split pieces.
      */
-    public class ChunkIterator implements Iterator<byte[]> {
+    public final class ChunkIterator implements Iterator<byte[]> {
         private final byte[] input;
 
         private int index = -1;

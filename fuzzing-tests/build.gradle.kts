@@ -24,6 +24,32 @@ tasks.withType<Test>() {
     jvmArgs("--enable-preview")
 }
 
+tasks.named<Test>("test") {
+    exclude("io/micronaut/fuzzing/sanitizer/SanitizerTransformerTest.class")
+}
+
+val sanitizerTest by tasks.registering(Test::class) {
+    description = "Runs sanitizer bytecode transformation tests in an isolated JVM."
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+
+    include("io/micronaut/fuzzing/sanitizer/SanitizerTransformerTest.class")
+    shouldRunAfter(tasks.named("test"))
+
+    extensions.configure<JacocoTaskExtension> {
+        isEnabled = false
+    }
+    doFirst {
+        jvmArgumentProviders.removeAll { it.javaClass.name.contains("Jacoco") }
+    }
+}
+
+tasks.named("check") {
+    dependsOn(sanitizerTest)
+}
+
 group = "io.micronaut.fuzzing"
 
 dependencies {
