@@ -35,6 +35,9 @@ import org.reactivestreams.Publisher;
 import io.micronaut.http.annotation.Produces;
 import static io.micronaut.http.MediaType.MULTIPART_FORM_DATA;
 import io.micronaut.http.HttpResponse;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Optional;
 
 
 /**
@@ -62,6 +65,10 @@ public final class SimpleController {
     static final String UPLOAD_MULTIPLE = "/upload-multiple";
     static final String ECHO_NEGOTIATED = "/echo-negotiated";
     static final String ECHO_MULTI_ACCEPT = "/echo-multi-accept";
+    static final String ECHO_QUERY_POJO = "/echo-query-pojo";
+    static final String ECHO_STATUS = "/echo-status/{status}";
+    static final String ECHO_OPTIONAL_ID = "/echo-optional-id";
+    static final String ECHO_STREAM = "/echo-stream";
 
     @Get
     public String index() {
@@ -181,4 +188,24 @@ public final class SimpleController {
         return HttpResponse.ok(body != null ? body : "empty");
     }
 
+    @Get(ECHO_QUERY_POJO + "{?name,minAge}")
+    public String echoQueryPojo(@QueryValue FilterParams params) {
+        return params.getName() + ":" + params.getMinAge();
+    }
+
+    @Get(ECHO_STATUS)
+    public String echoStatus(@PathVariable Status status) {
+        return status.name();
+    }
+
+    @Get(ECHO_OPTIONAL_ID + "{?id}")
+    public String echoOptionalId(@QueryValue Optional<Integer> id) {
+        return id.map(String::valueOf).orElse("none");
+    }
+
+    @Post(ECHO_STREAM)
+    @Consumes(MediaType.APPLICATION_OCTET_STREAM)
+    public String echoStream(@Body InputStream body) throws IOException {
+        return "bytes:" + body.readAllBytes().length;
+    }
 }
