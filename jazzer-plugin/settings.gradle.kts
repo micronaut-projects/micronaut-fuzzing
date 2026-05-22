@@ -9,10 +9,17 @@ plugins {
 }
 
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
+
+val micronautVersion = File(settingsDir, "../gradle/libs.versions.toml")
+    .readLines()
+    .first { it.startsWith("micronaut = ") }
+    .substringAfter('"')
+    .substringBefore('"')
+
 micronautBuild {
     useStandardizedProjectNames = true
     importMicronautCatalog()
-    importMicronautCatalogFromGAV("io.micronaut:micronaut-core-bom:5.0.0")
+    importMicronautCatalogFromGAV("io.micronaut:micronaut-core-bom:$micronautVersion")
 }
 
 val secring = File(settingsDir, "../secring.gpg").normalize()

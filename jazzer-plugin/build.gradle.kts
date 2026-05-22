@@ -8,8 +8,15 @@ repositories {
     mavenCentral()
 }
 
+val micronautVersion = file("../gradle/libs.versions.toml")
+    .readLines()
+    .first { it.startsWith("micronaut = ") }
+    .substringAfter('"')
+    .substringBefore('"')
+
 dependencies {
-    implementation(mnCore.jackson.databind)
+    implementation(platform("io.micronaut:micronaut-core-bom:$micronautVersion"))
+    implementation("tools.jackson.core:jackson-databind")
     compileOnly(mn.micronaut.core) // annotations
 
     testImplementation(mnTest.junit.jupiter.api)
