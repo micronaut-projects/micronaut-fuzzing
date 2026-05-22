@@ -1,8 +1,8 @@
 package io.micronaut.fuzzing;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.json.JsonMapper;
 import jdk.jfr.consumer.RecordedEvent;
 import jdk.jfr.consumer.RecordingFile;
 
@@ -46,7 +46,7 @@ public class PlotCpuTime {
         ChartConfig config = buildChart(samples);
 
         // Serialize chart config as JSON and build HTML
-        ObjectMapper om = new ObjectMapper().disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
+        ObjectMapper om = JsonMapper.builder().disable(SerializationFeature.FAIL_ON_EMPTY_BEANS).build();
         String configJson = om.writeValueAsString(config);
 
         String html = """
@@ -382,9 +382,8 @@ public class PlotCpuTime {
     public static class ScatterPoint {
         public double x;
         public double y;
-        // custom tooltip text
-        @JsonIgnore
-        public String t;
+        // Custom tooltip text is consumed by local script code and must not be serialized into Chart.js data.
+        private final transient String t;
 
         public ScatterPoint(double x, double y, String tooltip) {
             this.x = x;

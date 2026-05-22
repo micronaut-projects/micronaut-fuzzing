@@ -9,10 +9,10 @@ plugins {
 }
 
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
-
 micronautBuild {
     useStandardizedProjectNames = true
     importMicronautCatalog()
+    importMicronautCatalogFromGAV("io.micronaut:micronaut-core-bom:5.0.0")
 }
 
 val secring = File(settingsDir, "../secring.gpg").normalize()

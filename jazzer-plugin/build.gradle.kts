@@ -9,7 +9,7 @@ repositories {
 }
 
 dependencies {
-    implementation(mn.jackson.databind)
+    implementation(mnCore.jackson.databind)
     compileOnly(mn.micronaut.core) // annotations
 
     testImplementation(mnTest.junit.jupiter.api)

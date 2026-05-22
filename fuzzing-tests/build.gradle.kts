@@ -54,7 +54,7 @@ group = "io.micronaut.fuzzing"
 
 dependencies {
     implementation(mn.micronaut.http.server.netty)
-    implementation("io.netty.contrib:netty-codec-multipart-core")
+    implementation(mn.netty.contrib.multipart.core)
     implementation(mn.micronaut.jackson.databind)
     implementation(mn.jackson.databind)
     implementation(mn.reactor)
