@@ -228,7 +228,10 @@ public class PlotCpuTime {
             double y = (double) actualTime / (double) factor; // normalize using event-provided factor
             double x = inputSize + outputSize;
 
-            points.add(new ScatterPoint(x, y));
+            String tooltip = "in=%d out=%d\\nbase=%d inCpu=%d outCpu=%d\\nactual=%d (/%d=%s)"
+                .formatted(inputSize, outputSize, baseCpuTime, inputCpuTime, outputCpuTime, actualTime, factor, formatDouble(y));
+
+            points.add(new ScatterPoint(x, y, tooltip));
             if (x < minX) minX = x;
             if (x > maxX) maxX = x;
             baseCpu = baseCpuTime;
@@ -262,8 +265,8 @@ public class PlotCpuTime {
             budget.borderWidth = 2;
 
             List<ScatterPoint> budgetPoints = new ArrayList<>(2);
-            budgetPoints.add(new ScatterPoint(minX, y1));
-            budgetPoints.add(new ScatterPoint(maxX, y2));
+            budgetPoints.add(new ScatterPoint(minX, y1, "budget"));
+            budgetPoints.add(new ScatterPoint(maxX, y2, "budget"));
             budget.data = budgetPoints;
 
             datasets.add(budget);
@@ -290,13 +293,26 @@ public class PlotCpuTime {
         options.plugins = new Plugins();
         options.plugins.tooltip = new Tooltip();
         options.plugins.tooltip.callbacks = new TooltipCallbacks();
-        options.plugins.tooltip.callbacks.label = "function(ctx){return 'x=' + ctx.raw.x + ', y=' + ctx.raw.y;}";
+        // Use the point's custom "t" field as tooltip label line when present.
+        options.plugins.tooltip.callbacks.label = "function(ctx){return ctx.raw.t || ('x='+ctx.raw.x+', y='+ctx.raw.y);}";
 
         ChartConfig cfg = new ChartConfig();
         cfg.type = "scatter";
         cfg.data = data;
         cfg.options = options;
         return cfg;
+    }
+
+    private static String formatDouble(double d) {
+        String s = Double.toString(d);
+        if (s.contains("E") || s.contains("e")) {
+            return s;
+        }
+        int idx = s.indexOf('.');
+        if (idx >= 0 && s.length() > idx + 4) {
+            return s.substring(0, idx + 4);
+        }
+        return s;
     }
 
     private static long getLong(RecordedEvent e, String field, long def) {
@@ -366,9 +382,12 @@ public class PlotCpuTime {
     public static class ScatterPoint {
         public double x;
         public double y;
-        public ScatterPoint(double x, double y) {
+        public String t;
+
+        public ScatterPoint(double x, double y, String tooltip) {
             this.x = x;
             this.y = y;
+            this.t = tooltip;
         }
     }
 
