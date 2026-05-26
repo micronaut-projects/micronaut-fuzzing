@@ -1,6 +1,5 @@
 package io.micronaut.fuzzing.processor
 
-import tools.jackson.core.type.TypeReference
 import tools.jackson.databind.ObjectMapper
 import io.micronaut.annotation.processing.test.AbstractTypeElementSpec
 
@@ -22,8 +21,7 @@ class Example {
 }
 """)
         def value = cl.getResources("META-INF/" + DefinedFuzzTarget.DIRECTORY).nextElement().openStream().withCloseable { stream ->
-            mapper.readValue(stream, new TypeReference<List<DefinedFuzzTarget>>() {
-            })
+            mapper.readValue(stream, DefinedFuzzTarget[])
         }
         then:
         value.size() == 1
@@ -49,13 +47,12 @@ class Example {
 }
 """)
         def value = cl.getResources("META-INF/" + DefinedFuzzTarget.DIRECTORY).nextElement().openStream().withCloseable { stream ->
-            mapper.readValue(stream, new TypeReference<List<DefinedFuzzTarget>>() {
-            })
+            mapper.readValue(stream, DefinedFuzzTarget[])
         }
         then:
         value.size() == 1
         when:
-        def single = value.get(0)
+        def single = value[0]
         then:
         single.dictionary().contains("foo")
     }

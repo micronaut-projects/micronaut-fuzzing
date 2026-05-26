@@ -61,8 +61,8 @@ public class FuzzTargetVisitor implements TypeElementVisitor<FuzzTarget, FuzzTar
             }
             targets.add(new DefinedFuzzTarget(
                 element.getName(),
-                manualDict.isEmpty() ? null : manualDict,
-                dictResources.isEmpty() ? null : dictResources,
+                manualDict.isEmpty() ? null : manualDict.toArray(String[]::new),
+                dictResources.isEmpty() ? null : dictResources.toArray(String[]::new),
                 element.booleanValue(FuzzTarget.class, "enableImplicitly").orElse(true)
             ));
         }

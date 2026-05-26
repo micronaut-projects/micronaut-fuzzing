@@ -1,6 +1,5 @@
 package io.micronaut.fuzzing.jazzer;
 
-import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import io.micronaut.fuzzing.model.DefinedFuzzTarget;
 import org.gradle.api.DefaultTask;
@@ -71,8 +70,7 @@ public abstract class BaseJazzerTask extends DefaultTask {
                     List<Path> files = stream.toList();
                     for (Path file : files) {
                         try (InputStream inputStream = Files.newInputStream(file)) {
-                            definedFuzzTargets.addAll(objectMapper.readValue(inputStream, new TypeReference<List<DefinedFuzzTarget>>() {
-                            }));
+                            definedFuzzTargets.addAll(List.of(objectMapper.readValue(inputStream, DefinedFuzzTarget[].class)));
                         }
                     }
                 }
