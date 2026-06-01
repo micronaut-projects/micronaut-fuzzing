@@ -386,13 +386,22 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                 esac
                 shift
             done
+            for fallback_dump_classes_dir in "$this_dir"/dumps/*_classes; do
+                if [[ -d "$fallback_dump_classes_dir" ]]; then
+                    dump_classes_dirs+=("$fallback_dump_classes_dir")
+                fi
+            done
             if [[ ${#dump_classes_dirs[@]} -gt 0 ]]; then
                 python3 - "%d" "${dump_classes_dirs[@]}" <<'PY'
             import pathlib
             import sys
 
             max_major_version = int(sys.argv[1])
+            seen = set()
             for dump_classes_dir in sys.argv[2:]:
+                if dump_classes_dir in seen:
+                    continue
+                seen.add(dump_classes_dir)
                 root = pathlib.Path(dump_classes_dir)
                 if not root.exists():
                     continue
