@@ -124,11 +124,11 @@ import java.util.UUID;
 })
 public class TypeConversionTarget {
 
-    private static final ConversionService appCtxConversionService;
+    private static final ConversionService APP_CTX_CONVERSION_SERVICE;
 
     static {
         setLogLevel("io.micronaut", Level.TRACE);
-        appCtxConversionService = ApplicationContext.run().getBean(ConversionService.class);
+        APP_CTX_CONVERSION_SERVICE = ApplicationContext.run().getBean(ConversionService.class);
         setLogLevel("io.micronaut", Level.WARN);
     }
 
@@ -170,14 +170,13 @@ public class TypeConversionTarget {
         loggerContext.getLogger(loggerName).setLevel(level);
     }
 
-
     public static void fuzzerTestOneInput(FuzzedDataProvider data) {
         int typeIndex = data.consumeInt(0, TARGET_TYPES.length - 1);
         Class<?> targetType = TARGET_TYPES[typeIndex];
         String value = data.consumeRemainingAsString();
 
         ConversionService.SHARED.convert(value, targetType);
-        appCtxConversionService.convert(value, targetType);
+        APP_CTX_CONVERSION_SERVICE.convert(value, targetType);
     }
 
     public static void main(String[] args) {

@@ -79,6 +79,7 @@ public class JsonBeanPropertyBinderTarget {
         LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
         loggerContext.getLogger(loggerName).setLevel(level);
     }
+
     public static void fuzzerTestOneInput(FuzzedDataProvider data) {
         int entryCount = data.consumeInt(1, 8);
         Map<String, Object> params = new LinkedHashMap<>();
