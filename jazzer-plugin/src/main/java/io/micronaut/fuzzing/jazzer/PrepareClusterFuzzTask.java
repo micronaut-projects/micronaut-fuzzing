@@ -6,6 +6,7 @@ import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.SetProperty;
+import org.gradle.api.tasks.Classpath;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.Nested;
@@ -15,6 +16,7 @@ import org.gradle.api.tasks.TaskAction;
 import org.gradle.process.ExecOperations;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.gradle.work.DisableCachingByDefault;
 
 import javax.annotation.Nonnull;
 import javax.inject.Inject;
@@ -34,6 +36,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -42,11 +45,13 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+@DisableCachingByDefault(because = "Prepares OSS-Fuzz output directories and executable wrapper scripts")
 public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
     private static final Logger LOG = LoggerFactory.getLogger(PrepareClusterFuzzTask.class);
 
     @InputFiles
     @Nonnull
+    @Classpath
     public abstract ConfigurableFileCollection getSourcePath();
 
     @OutputDirectory
@@ -75,6 +80,14 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
     @Input
     @Optional
     public abstract Property<String> getSetupScript();
+
+    /**
+     * Maximum class file major version to write to OSS-Fuzz coverage sources. This does not affect
+     * the classpath used to execute fuzz targets.
+     */
+    @Input
+    @Optional
+    public abstract Property<Integer> getCoverageClassFileMajorVersion();
 
     /**
      * Introspector-specific settings. Note that these don't affect the actual fuzzing, only the
@@ -318,6 +331,7 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
 
             ClassNameMatcher introspectorIncludes = compileIntrospectorIncludes();
             ClassNameMatcher introspectorExcludes = compileIntrospectorExcludes();
+            Integer coverageClassFileMajorVersion = validateCoverageClassFileMajorVersion();
             classRoots.walkFileTree(classRoot -> new SimpleFileVisitor<>() {
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
@@ -330,7 +344,11 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                             Files.createDirectories(classDest.getParent());
                         } catch (FileAlreadyExistsException ignored) {
                         }
-                        Files.copy(file, classDest, StandardCopyOption.REPLACE_EXISTING);
+                        if (coverageClassFileMajorVersion == null) {
+                            Files.copy(file, classDest, StandardCopyOption.REPLACE_EXISTING);
+                        } else {
+                            Files.write(classDest, limitClassFileMajorVersion(Files.readAllBytes(file), coverageClassFileMajorVersion));
+                        }
 
                         String sourceName = classRelative.toString();
                         sourceName = sourceName.substring(0, sourceName.length() - ".class".length()) + ".java";
@@ -344,6 +362,32 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
             });
 
         }
+    }
+
+    private Integer validateCoverageClassFileMajorVersion() {
+        Integer majorVersion = getCoverageClassFileMajorVersion().getOrNull();
+        if (majorVersion != null && (majorVersion <= 0 || majorVersion > 0xffff)) {
+            throw new IllegalArgumentException("coverageClassFileMajorVersion must be between 1 and 65535");
+        }
+        return majorVersion;
+    }
+
+    static byte[] limitClassFileMajorVersion(byte[] classFile, int maxMajorVersion) {
+        if (classFile.length < 8 ||
+            classFile[0] != (byte) 0xca ||
+            classFile[1] != (byte) 0xfe ||
+            classFile[2] != (byte) 0xba ||
+            classFile[3] != (byte) 0xbe) {
+            return classFile;
+        }
+        int majorVersion = ((classFile[6] & 0xff) << 8) | (classFile[7] & 0xff);
+        if (majorVersion <= maxMajorVersion) {
+            return classFile;
+        }
+        byte[] compatible = Arrays.copyOf(classFile, classFile.length);
+        compatible[6] = (byte) (maxMajorVersion >>> 8);
+        compatible[7] = (byte) maxMajorVersion;
+        return compatible;
     }
 
     public interface Introspector {

@@ -6,7 +6,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PrepareClusterFuzzTaskTest {
@@ -78,4 +80,56 @@ class PrepareClusterFuzzTaskTest {
         assertEquals(names.size(), Set.copyOf(names.values()).size(),
             "all assigned names must be unique");
     }
+
+    @Test
+    void capsCoverageClassFileMajorVersion() {
+        byte[] classFile = minimalClassFile(69);
+
+        byte[] compatible = PrepareClusterFuzzTask.limitClassFileMajorVersion(classFile, 68);
+
+        assertEquals(68, classFileMajorVersion(compatible));
+        assertEquals(69, classFileMajorVersion(classFile));
+    }
+
+    @Test
+    void leavesEqualClassFileVersionUnchanged() {
+        byte[] classFile = minimalClassFile(68);
+
+        byte[] compatible = PrepareClusterFuzzTask.limitClassFileMajorVersion(classFile, 68);
+
+        assertArrayEquals(classFile, compatible);
+        assertSame(classFile, compatible);
+    }
+
+    @Test
+    void leavesOlderClassFileVersionUnchanged() {
+        byte[] classFile = minimalClassFile(61);
+
+        byte[] compatible = PrepareClusterFuzzTask.limitClassFileMajorVersion(classFile, 68);
+
+        assertArrayEquals(classFile, compatible);
+        assertSame(classFile, compatible);
+    }
+
+    @Test
+    void leavesNonClassFileBytesUnchanged() {
+        byte[] bytes = new byte[] {1, 2, 3, 4};
+
+        byte[] compatible = PrepareClusterFuzzTask.limitClassFileMajorVersion(bytes, 68);
+
+        assertArrayEquals(bytes, compatible);
+        assertSame(bytes, compatible);
+    }
+
+    private static byte[] minimalClassFile(int majorVersion) {
+        byte[] classFile = new byte[] {(byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe, 0, 0, 0, 0};
+        classFile[6] = (byte) (majorVersion >>> 8);
+        classFile[7] = (byte) majorVersion;
+        return classFile;
+    }
+
+    private static int classFileMajorVersion(byte[] classFile) {
+        return ((classFile[6] & 0xff) << 8) | (classFile[7] & 0xff);
+    }
+
 }

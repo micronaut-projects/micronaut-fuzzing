@@ -61,6 +61,7 @@ public abstract class JazzerPlugin implements Plugin<Project> {
             task.setDescription("Prepare run scripts of the different fuzz targets for ClusterFuzz (OSS-Fuzz) execution");
 
             task.getClasspath().setFrom(jazzerBaseClasspath);
+            task.getOutputDirectory().convention(project.getLayout().getBuildDirectory().dir("cluster-fuzz"));
             task.getSourcePath().setFrom(jazzerBaseClasspath.getIncoming().artifactView(v -> {
                 v.withVariantReselection();
                 v.attributes(attributes -> {
