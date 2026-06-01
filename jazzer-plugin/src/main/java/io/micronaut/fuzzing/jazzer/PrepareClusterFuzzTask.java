@@ -183,16 +183,15 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                 // not when running inside oss-fuzz...
                 line.add("'--jvm_args=" + getJvmArgs().get().stream().map(s -> s.replace(":", "\\:")).collect(Collectors.joining(":")) + "'");
                 line.add("$@");
-                String command = String.join(" ", line);
-                if (coverageClassFileMajorVersion != null) {
-                    command += "\n" + coverageClassFileMajorVersionScript(coverageClassFileMajorVersion);
-                }
                 String sh = """
                 #!/bin/bash
                 # LLVMFuzzerTestOneInput <-- for fuzzer detection (see test_all.py)
                 this_dir=$(dirname "$0")
                 export EXTERNAL_JAZZER_ARGS="$@"
-                """ + getSetupScript().getOrElse("") + "\n" + command;
+                """ + getSetupScript().getOrElse("") + "\n" + String.join(" ", line);
+                if (coverageClassFileMajorVersion != null) {
+                    sh += "\n" + coverageClassFileMajorVersionScript(coverageClassFileMajorVersion);
+                }
                 Path targetPath = getOutputDirectory().file(fileName).get().getAsFile().toPath();
                 Files.writeString(targetPath, sh);
                 Files.setPosixFilePermissions(targetPath, Set.of(
