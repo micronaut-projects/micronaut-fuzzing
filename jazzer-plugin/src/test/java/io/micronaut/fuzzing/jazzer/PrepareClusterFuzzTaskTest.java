@@ -128,6 +128,7 @@ class PrepareClusterFuzzTaskTest {
         assertTrue(script.contains("jazzer_status=$?"));
         assertTrue(script.contains("--dump_classes_dir=*|-dump_classes_dir=*"));
         assertTrue(script.contains("--dump_classes_dir|-dump_classes_dir"));
+        assertTrue(script.contains("$this_dir\"/dumps/*_classes"));
         assertTrue(script.contains("python3 - \"68\""));
         assertTrue(script.contains("exit \"$jazzer_status\""));
     }
