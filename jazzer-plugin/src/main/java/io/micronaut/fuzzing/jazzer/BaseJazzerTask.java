@@ -8,6 +8,7 @@ import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.SetProperty;
 import org.gradle.api.tasks.Classpath;
+import org.gradle.work.DisableCachingByDefault;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.Optional;
@@ -30,6 +31,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+@DisableCachingByDefault(because = "Fuzzing tasks execute external fuzzing tools and prepare OSS-Fuzz directories")
 public abstract class BaseJazzerTask extends DefaultTask {
     private final ObjectMapper objectMapper = new ObjectMapper();
 

@@ -9,8 +9,11 @@ import org.gradle.api.tasks.InputDirectory;
 import org.gradle.api.tasks.InputFile;
 import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.OutputFile;
+import org.gradle.api.tasks.PathSensitive;
+import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.process.ExecOperations;
+import org.gradle.work.DisableCachingByDefault;
 
 import javax.annotation.Nonnull;
 import javax.inject.Inject;
@@ -22,8 +25,10 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
+@DisableCachingByDefault(because = "Runs Jazzer as an external fuzzing process")
 public abstract class JazzerTask extends BaseJazzerTask {
     @InputDirectory
+    @PathSensitive(PathSensitivity.RELATIVE)
     @Optional
     public abstract DirectoryProperty getCorpus();
 
@@ -36,11 +41,13 @@ public abstract class JazzerTask extends BaseJazzerTask {
     public abstract Property<Integer> getJobs();
 
     @InputFile
+    @PathSensitive(PathSensitivity.RELATIVE)
     @Nonnull
     @Optional
     public abstract RegularFileProperty getMinimizeCrashFile();
 
     @InputFile
+    @PathSensitive(PathSensitivity.RELATIVE)
     @Nonnull
     @Optional
     public abstract RegularFileProperty getReproduceCrashFile();

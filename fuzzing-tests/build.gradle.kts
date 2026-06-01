@@ -108,6 +108,7 @@ tasks.withType<PrepareClusterFuzzTask> {
         "--enable-preview"
     )
     javaHome.set("\$this_dir/jdk")
+    coverageClassFileMajorVersion.set(68)
 }
 
 tasks.named<JazzerTask>("jazzer") {
