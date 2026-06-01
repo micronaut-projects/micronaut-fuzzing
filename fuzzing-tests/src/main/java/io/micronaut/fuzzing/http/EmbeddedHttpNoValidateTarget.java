@@ -35,26 +35,7 @@ import java.util.Map;
  */
 @FuzzTarget
 @HttpDict
-@Dict({
-    SimpleController.ECHO_ARRAY,
-    SimpleController.ECHO_PUBLISHER,
-    SimpleController.ECHO_STRING,
-    SimpleController.ECHO_PIECE_JSON,
-    SimpleController.ECHO_QUERY,
-    SimpleController.ECHO_PATH,
-    SimpleController.ECHO_HEADER,
-    SimpleController.ECHO_FORM,
-    SimpleController.ECHO_FORM_PAIR,
-    SimpleController.UPLOAD_FILE,
-    SimpleController.UPLOAD_FIELDS,
-    SimpleController.UPLOAD_MIXED,
-    SimpleController.ECHO_BEAN,
-    SimpleController.ECHO_REQUEST_BEAN,
-    SimpleController.ECHO_COOKIE,
-    SimpleController.UPLOAD_MULTIPLE,
-    SimpleController.ECHO_NEGOTIATED,
-    SimpleController.ECHO_MULTI_ACCEPT,
-})
+@SimpleControllerDict
 public class EmbeddedHttpNoValidateTarget extends EmbeddedChannelFuzzerBase {
     private static final ContextHolder HTTP1 = new ContextHolder(Map.of("micronaut.server.validate-url", false));
 

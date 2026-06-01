@@ -63,10 +63,18 @@ public final class SimpleController {
     static final String ECHO_REQUEST_BEAN = "/echo-request-bean";
     static final String ECHO_COOKIE = "/echo-cookie";
     static final String UPLOAD_MULTIPLE = "/upload-multiple";
+    static final String ECHO_REGEX_ID      = "/users/{id:[0-9]+}";
+    static final String ECHO_REGEX_SLUG    = "/items/{slug:[a-z\\-]+}";
+    static final String ECHO_REGEX_VERSION = "/api/{version:v[0-9]+}";
+    static final String ECHO_REGEX_UUID    = "/resource/{uuid:[0-9a-f\\-]+}";
+    static final String ECHO_MULTI_VAR     = "/users/{userId:[0-9]+}/posts/{postId:[0-9]+}";
+    static final String ECHO_EXT           = "/files/{name}.{ext}";
+    static final String ECHO_WILDCARD      = "/docs/{+path}";
+    static final String ECHO_OPTIONAL      = "/search{/category}";
     static final String ECHO_NEGOTIATED = "/echo-negotiated";
     static final String ECHO_MULTI_ACCEPT = "/echo-multi-accept";
     static final String ECHO_QUERY_POJO = "/echo-query-pojo";
-    static final String ECHO_STATUS = "/echo-status/{status}";
+    static final String ECHO_STATUS       = "/echo-status/";
     static final String ECHO_OPTIONAL_ID = "/echo-optional-id";
     static final String ECHO_STREAM = "/echo-stream";
 
@@ -175,6 +183,41 @@ public final class SimpleController {
         return "count:" + files.length;
     }
 
+    @Get(ECHO_REGEX_ID)
+    public String echoRegexId(@PathVariable String id) {
+        return "user:" + id;
+    }
+
+    @Get(ECHO_REGEX_SLUG)
+    public String echoRegexSlug(@PathVariable String slug) {
+        return "item:" + slug;
+    }
+
+    @Get(ECHO_REGEX_VERSION)
+    public String echoRegexVersion(@PathVariable String version) {
+        return "version:" + version;
+    }
+
+    @Get(ECHO_REGEX_UUID)
+    public String echoRegexUuid(@PathVariable String uuid) {
+        return "uuid:" + uuid;
+    }
+
+    @Get(ECHO_MULTI_VAR)
+    public String echoMultiVar(@PathVariable String userId, @PathVariable String postId) {
+        return "user:" + userId + "/post:" + postId;
+    }
+
+    @Get(ECHO_WILDCARD)
+    public String echoWildcard(@PathVariable String path) {
+        return "docs:" + path;
+    }
+
+    @Get(ECHO_OPTIONAL)
+    public String echoOptional(@PathVariable @Nullable String category) {
+        return "search:" + category;
+    }
+
     @Get(ECHO_NEGOTIATED)
     @Produces({MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
     public String echoNegotiated(@QueryValue @Nullable String value) {
@@ -193,7 +236,7 @@ public final class SimpleController {
         return params.getName() + ":" + params.getMinAge();
     }
 
-    @Get(ECHO_STATUS)
+    @Get(ECHO_STATUS + "{status}")
     public String echoStatus(@PathVariable Status status) {
         return status.name();
     }
