@@ -36,7 +36,6 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -80,14 +79,6 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
     @Input
     @Optional
     public abstract Property<String> getSetupScript();
-
-    /**
-     * Maximum class file major version to write to OSS-Fuzz coverage sources. This does not affect
-     * the classpath used to execute fuzz targets.
-     */
-    @Input
-    @Optional
-    public abstract Property<Integer> getCoverageClassFileMajorVersion();
 
     /**
      * Introspector-specific settings. Note that these don't affect the actual fuzzing, only the
@@ -143,7 +134,6 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
         }
 
         try (ClasspathAccess classpathAccess = new ClasspathAccess()) {
-            Integer coverageClassFileMajorVersion = validateCoverageClassFileMajorVersion();
             List<DefinedFuzzTarget> targets = findFuzzTargets(classpathAccess);
             Map<String, String> targetNames = assignTargetNames(targets.stream().map(DefinedFuzzTarget::targetClass).toList());
             for (DefinedFuzzTarget target : targets) {
@@ -189,9 +179,6 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                 this_dir=$(dirname "$0")
                 export EXTERNAL_JAZZER_ARGS="$@"
                 """ + getSetupScript().getOrElse("") + "\n" + String.join(" ", line);
-                if (coverageClassFileMajorVersion != null) {
-                    sh += "\n" + coverageClassFileMajorVersionScript(coverageClassFileMajorVersion);
-                }
                 Path targetPath = getOutputDirectory().file(fileName).get().getAsFile().toPath();
                 Files.writeString(targetPath, sh);
                 Files.setPosixFilePermissions(targetPath, Set.of(
@@ -335,7 +322,6 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
 
             ClassNameMatcher introspectorIncludes = compileIntrospectorIncludes();
             ClassNameMatcher introspectorExcludes = compileIntrospectorExcludes();
-            Integer coverageClassFileMajorVersion = validateCoverageClassFileMajorVersion();
             classRoots.walkFileTree(classRoot -> new SimpleFileVisitor<>() {
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
@@ -348,11 +334,7 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                             Files.createDirectories(classDest.getParent());
                         } catch (FileAlreadyExistsException ignored) {
                         }
-                        if (coverageClassFileMajorVersion == null) {
-                            Files.copy(file, classDest, StandardCopyOption.REPLACE_EXISTING);
-                        } else {
-                            Files.write(classDest, limitClassFileMajorVersion(Files.readAllBytes(file), coverageClassFileMajorVersion));
-                        }
+                        Files.copy(file, classDest, StandardCopyOption.REPLACE_EXISTING);
 
                         String sourceName = classRelative.toString();
                         sourceName = sourceName.substring(0, sourceName.length() - ".class".length()) + ".java";
@@ -366,84 +348,6 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
             });
 
         }
-    }
-
-    static String coverageClassFileMajorVersionScript(int maxMajorVersion) {
-        return """
-            jazzer_status=$?
-            dump_classes_dirs=()
-            while [[ $# -gt 0 ]]; do
-                case "$1" in
-                    --dump_classes_dir=*|-dump_classes_dir=*)
-                        dump_classes_dirs+=("${1#*=}")
-                        ;;
-                    --dump_classes_dir|-dump_classes_dir)
-                        shift
-                        if [[ $# -gt 0 ]]; then
-                            dump_classes_dirs+=("$1")
-                        fi
-                        ;;
-                esac
-                shift
-            done
-            for fallback_dump_classes_dir in "$this_dir"/dumps/*_classes; do
-                if [[ -d "$fallback_dump_classes_dir" ]]; then
-                    dump_classes_dirs+=("$fallback_dump_classes_dir")
-                fi
-            done
-            if [[ ${#dump_classes_dirs[@]} -gt 0 ]]; then
-                python3 - "%d" "${dump_classes_dirs[@]}" <<'PY'
-            import pathlib
-            import sys
-
-            max_major_version = int(sys.argv[1])
-            seen = set()
-            for dump_classes_dir in sys.argv[2:]:
-                if dump_classes_dir in seen:
-                    continue
-                seen.add(dump_classes_dir)
-                root = pathlib.Path(dump_classes_dir)
-                if not root.exists():
-                    continue
-                for class_file in root.rglob("*.class"):
-                    data = bytearray(class_file.read_bytes())
-                    if len(data) < 8 or data[:4] != bytes((0xca, 0xfe, 0xba, 0xbe)):
-                        continue
-                    major_version = (data[6] << 8) | data[7]
-                    if major_version > max_major_version:
-                        data[6] = (max_major_version >> 8) & 0xff
-                        data[7] = max_major_version & 0xff
-                        class_file.write_bytes(data)
-            PY
-            fi
-            exit "$jazzer_status"
-            """.formatted(maxMajorVersion);
-    }
-
-    private Integer validateCoverageClassFileMajorVersion() {
-        Integer majorVersion = getCoverageClassFileMajorVersion().getOrNull();
-        if (majorVersion != null && (majorVersion <= 0 || majorVersion > 0xffff)) {
-            throw new IllegalArgumentException("coverageClassFileMajorVersion must be between 1 and 65535");
-        }
-        return majorVersion;
-    }
-
-    static byte[] limitClassFileMajorVersion(byte[] classFile, int maxMajorVersion) {
-        if (classFile.length < 8 ||
-            classFile[0] != (byte) 0xca ||
-            classFile[1] != (byte) 0xfe ||
-            classFile[2] != (byte) 0xba ||
-            classFile[3] != (byte) 0xbe) {
-            return classFile;
-        }
-        int majorVersion = ((classFile[6] & 0xff) << 8) | (classFile[7] & 0xff);
-        if (majorVersion <= maxMajorVersion) {
-            return classFile;
-        }
-        byte[] compatible = Arrays.copyOf(classFile, classFile.length);
-        compatible[6] = (byte) (maxMajorVersion >>> 8);
-        compatible[7] = (byte) maxMajorVersion;
-        return compatible;
     }
 
     public interface Introspector {
