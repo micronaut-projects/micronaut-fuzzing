@@ -143,6 +143,7 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
         }
 
         try (ClasspathAccess classpathAccess = new ClasspathAccess()) {
+            Integer coverageClassFileMajorVersion = validateCoverageClassFileMajorVersion();
             List<DefinedFuzzTarget> targets = findFuzzTargets(classpathAccess);
             Map<String, String> targetNames = assignTargetNames(targets.stream().map(DefinedFuzzTarget::targetClass).toList());
             for (DefinedFuzzTarget target : targets) {
@@ -182,12 +183,16 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                 // not when running inside oss-fuzz...
                 line.add("'--jvm_args=" + getJvmArgs().get().stream().map(s -> s.replace(":", "\\:")).collect(Collectors.joining(":")) + "'");
                 line.add("$@");
+                String command = String.join(" ", line);
+                if (coverageClassFileMajorVersion != null) {
+                    command += "\n" + coverageClassFileMajorVersionScript(coverageClassFileMajorVersion);
+                }
                 String sh = """
                 #!/bin/bash
                 # LLVMFuzzerTestOneInput <-- for fuzzer detection (see test_all.py)
                 this_dir=$(dirname "$0")
                 export EXTERNAL_JAZZER_ARGS="$@"
-                """ + getSetupScript().getOrElse("") + "\n" + String.join(" ", line);
+                """ + getSetupScript().getOrElse("") + "\n" + command;
                 Path targetPath = getOutputDirectory().file(fileName).get().getAsFile().toPath();
                 Files.writeString(targetPath, sh);
                 Files.setPosixFilePermissions(targetPath, Set.of(
@@ -362,6 +367,49 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
             });
 
         }
+    }
+
+    static String coverageClassFileMajorVersionScript(int maxMajorVersion) {
+        return """
+            jazzer_status=$?
+            dump_classes_dirs=()
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --dump_classes_dir=*|-dump_classes_dir=*)
+                        dump_classes_dirs+=("${1#*=}")
+                        ;;
+                    --dump_classes_dir|-dump_classes_dir)
+                        shift
+                        if [[ $# -gt 0 ]]; then
+                            dump_classes_dirs+=("$1")
+                        fi
+                        ;;
+                esac
+                shift
+            done
+            if [[ ${#dump_classes_dirs[@]} -gt 0 ]]; then
+                python3 - "%d" "${dump_classes_dirs[@]}" <<'PY'
+            import pathlib
+            import sys
+
+            max_major_version = int(sys.argv[1])
+            for dump_classes_dir in sys.argv[2:]:
+                root = pathlib.Path(dump_classes_dir)
+                if not root.exists():
+                    continue
+                for class_file in root.rglob("*.class"):
+                    data = bytearray(class_file.read_bytes())
+                    if len(data) < 8 or data[:4] != bytes((0xca, 0xfe, 0xba, 0xbe)):
+                        continue
+                    major_version = (data[6] << 8) | data[7]
+                    if major_version > max_major_version:
+                        data[6] = (max_major_version >> 8) & 0xff
+                        data[7] = max_major_version & 0xff
+                        class_file.write_bytes(data)
+            PY
+            fi
+            exit "$jazzer_status"
+            """.formatted(maxMajorVersion);
     }
 
     private Integer validateCoverageClassFileMajorVersion() {
