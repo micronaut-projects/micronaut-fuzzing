@@ -121,6 +121,17 @@ class PrepareClusterFuzzTaskTest {
         assertSame(bytes, compatible);
     }
 
+    @Test
+    void coverageClassFileMajorVersionScriptHandlesJazzerDumpClassesDir() {
+        String script = PrepareClusterFuzzTask.coverageClassFileMajorVersionScript(68);
+
+        assertTrue(script.contains("jazzer_status=$?"));
+        assertTrue(script.contains("--dump_classes_dir=*|-dump_classes_dir=*"));
+        assertTrue(script.contains("--dump_classes_dir|-dump_classes_dir"));
+        assertTrue(script.contains("python3 - \"68\""));
+        assertTrue(script.contains("exit \"$jazzer_status\""));
+    }
+
     private static byte[] minimalClassFile(int majorVersion) {
         byte[] classFile = new byte[] {(byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe, 0, 0, 0, 0};
         classFile[6] = (byte) (majorVersion >>> 8);
