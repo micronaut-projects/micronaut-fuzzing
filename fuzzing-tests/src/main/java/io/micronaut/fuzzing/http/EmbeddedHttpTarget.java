@@ -22,6 +22,8 @@ import io.micronaut.fuzzing.EmbeddedChannelFuzzerBase;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.LoggerContext;
 import io.micronaut.http.server.netty.NettyHttpServer;
 import io.micronaut.runtime.server.EmbeddedServer;
 import org.slf4j.LoggerFactory;
@@ -78,9 +80,16 @@ public class EmbeddedHttpTarget extends EmbeddedChannelFuzzerBase {
             System.setProperty("VM_NAME", vmName);
             LoggerFactory.getLogger(EmbeddedHttpTarget.class).info("Starting embedded HTTP target. VM name is: {}", vmName);
 
+            setLogLevel("io.micronaut", Level.TRACE);
             ApplicationContext ctx = ApplicationContext.run(cfg);
+            setLogLevel("io.micronaut", Level.WARN);
 
             nettyHttpServer = (NettyHttpServer) ctx.getBean(EmbeddedServer.class);
+        }
+
+        private static void setLogLevel(String loggerName, Level level) {
+            LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+            loggerContext.getLogger(loggerName).setLevel(level);
         }
     }
 }

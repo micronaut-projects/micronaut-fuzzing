@@ -15,6 +15,8 @@
  */
 package io.micronaut.fuzzing.bind;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.LoggerContext;
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.context.ApplicationContext;
 import io.micronaut.context.BeanProvider;
@@ -33,6 +35,7 @@ import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 import io.micronaut.json.JsonConfiguration;
 import io.micronaut.json.JsonMapper;
 import io.micronaut.json.bind.JsonBeanPropertyBinderExceptionHandler;
+import org.slf4j.LoggerFactory;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -60,14 +63,22 @@ public class JsonBeanPropertyBinderTarget {
     private static final BeanPropertyBinder BINDER;
 
     static {
+        setLogLevel("io.micronaut", Level.TRACE);
+
         ApplicationContext ctx = ApplicationContext.run(Map.of());
         JsonMapper jsonMapper = ctx.getBean(JsonMapper.class);
         JsonConfiguration jsonConfig = ctx.getBean(JsonConfiguration.class);
         BeanProvider<JsonBeanPropertyBinderExceptionHandler> handlers =
             ctx.getBean(Argument.of(BeanProvider.class, JsonBeanPropertyBinderExceptionHandler.class));
         BINDER = new JsonBeanPropertyBinder(jsonMapper, jsonConfig, handlers);
+
+        setLogLevel("io.micronaut", Level.WARN);
     }
 
+    private static void setLogLevel(String loggerName, Level level) {
+        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+        loggerContext.getLogger(loggerName).setLevel(level);
+    }
     public static void fuzzerTestOneInput(FuzzedDataProvider data) {
         int entryCount = data.consumeInt(1, 8);
         Map<String, Object> params = new LinkedHashMap<>();
