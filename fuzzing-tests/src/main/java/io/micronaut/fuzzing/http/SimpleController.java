@@ -63,14 +63,14 @@ public final class SimpleController {
     static final String ECHO_REQUEST_BEAN = "/echo-request-bean";
     static final String ECHO_COOKIE = "/echo-cookie";
     static final String UPLOAD_MULTIPLE = "/upload-multiple";
-    static final String ECHO_REGEX_ID      = "/users/{id:[0-9]+}";
-    static final String ECHO_REGEX_SLUG    = "/items/{slug:[a-z\\-]+}";
-    static final String ECHO_REGEX_VERSION = "/api/{version:v[0-9]+}";
-    static final String ECHO_REGEX_UUID    = "/resource/{uuid:[0-9a-f\\-]+}";
-    static final String ECHO_MULTI_VAR     = "/users/{userId:[0-9]+}/posts/{postId:[0-9]+}";
-    static final String ECHO_EXT           = "/files/{name}.{ext}";
-    static final String ECHO_WILDCARD      = "/docs/{+path}";
-    static final String ECHO_OPTIONAL      = "/search{/category}";
+    static final String ECHO_REGEX_ID      = "/users";
+    static final String ECHO_REGEX_SLUG    = "/items";
+    static final String ECHO_REGEX_VERSION = "/api";
+    static final String ECHO_REGEX_UUID    = "/resource";
+    static final String ECHO_MULTI_VAR     = "/users";
+    static final String ECHO_EXT           = "/files";
+    static final String ECHO_WILDCARD      = "/docs";
+    static final String ECHO_OPTIONAL      = "/search";
     static final String ECHO_NEGOTIATED = "/echo-negotiated";
     static final String ECHO_MULTI_ACCEPT = "/echo-multi-accept";
     static final String ECHO_QUERY_POJO = "/echo-query-pojo";
@@ -183,37 +183,42 @@ public final class SimpleController {
         return "count:" + files.length;
     }
 
-    @Get(ECHO_REGEX_ID)
+    @Get(ECHO_EXT + "/{name}.{ext}")
+    public String echoExt(@PathVariable String name, @PathVariable String ext) {
+        return name + "." + ext;
+    }
+
+    @Get(ECHO_REGEX_ID + "/{id:[0-9]+}")
     public String echoRegexId(@PathVariable String id) {
         return "user:" + id;
     }
 
-    @Get(ECHO_REGEX_SLUG)
+    @Get(ECHO_REGEX_SLUG + "/{slug:[a-z\\-]+}")
     public String echoRegexSlug(@PathVariable String slug) {
         return "item:" + slug;
     }
 
-    @Get(ECHO_REGEX_VERSION)
+    @Get(ECHO_REGEX_VERSION + "/{version:v[0-9]+}")
     public String echoRegexVersion(@PathVariable String version) {
         return "version:" + version;
     }
 
-    @Get(ECHO_REGEX_UUID)
+    @Get(ECHO_REGEX_UUID + "/{uuid:[0-9a-f\\-]+}")
     public String echoRegexUuid(@PathVariable String uuid) {
         return "uuid:" + uuid;
     }
 
-    @Get(ECHO_MULTI_VAR)
+    @Get(ECHO_MULTI_VAR + "/{userId:[0-9]+}/posts/{postId:[0-9]+}")
     public String echoMultiVar(@PathVariable String userId, @PathVariable String postId) {
         return "user:" + userId + "/post:" + postId;
     }
 
-    @Get(ECHO_WILDCARD)
+    @Get(ECHO_WILDCARD + "/{+path}")
     public String echoWildcard(@PathVariable String path) {
         return "docs:" + path;
     }
 
-    @Get(ECHO_OPTIONAL)
+    @Get(ECHO_OPTIONAL + "{/category}")
     public String echoOptional(@PathVariable @Nullable String category) {
         return "search:" + category;
     }
