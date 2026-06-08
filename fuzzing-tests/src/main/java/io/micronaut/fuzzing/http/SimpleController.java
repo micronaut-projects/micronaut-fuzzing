@@ -28,6 +28,7 @@ import io.micronaut.core.annotation.Nullable;
 import io.micronaut.http.annotation.CookieValue;
 import io.micronaut.http.annotation.Part;
 import io.micronaut.http.annotation.RequestBean;
+import io.micronaut.http.cookie.Cookie;
 import io.micronaut.http.multipart.CompletedFileUpload;
 import java.util.List;
 import jakarta.inject.Singleton;
@@ -62,6 +63,9 @@ public final class SimpleController {
     static final String UPLOAD_MULTIPLE = "/upload-multiple";
     static final String ECHO_NEGOTIATED = "/echo-negotiated";
     static final String ECHO_MULTI_ACCEPT = "/echo-multi-accept";
+    static final String ECHO_SET_COOKIE    = "/echo-set-cookie";
+    static final String ECHO_MULTI_QUERY   = "/echo-multi-query";
+    static final String ECHO_JSON_OBJECT   = "/echo-json-object";
 
     @Get
     public String index() {
@@ -179,6 +183,21 @@ public final class SimpleController {
     @Produces({MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
     public HttpResponse<String> echoMultiAccept(@Body @Nullable String body) {
         return HttpResponse.ok(body != null ? body : "empty");
+    }
+    @Get(ECHO_SET_COOKIE + "{?value}")
+    public HttpResponse<String> echoSetCookie(@QueryValue @Nullable String value) {
+        return HttpResponse.<String>ok("ok")
+            .cookie(Cookie.of("fuzz-cookie", value != null ? value : "default"));
+    }
+    @Get(ECHO_MULTI_QUERY)
+    public String echoMultiQuery(@QueryValue @Nullable List<String> tag) {
+        return tag == null ? "none" : String.join(",", tag);
+    }
+    @Post(ECHO_JSON_OBJECT)
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public SearchQuery echoJsonObject(@Body SearchQuery query) {
+        return query;
     }
 
 }
