@@ -231,6 +231,7 @@ class SimpleControllerTest {
 
         Assertions.assertEquals("count:1", response);
     }
+
     @Test
     void echoSetCookieWithValue() {
         HttpResponse<String> response = client.toBlocking().exchange(
@@ -278,7 +279,7 @@ class SimpleControllerTest {
     void echoJsonObjectRoundTrip() {
         String body = client.toBlocking().retrieve(
             HttpRequest.POST(SimpleController.ECHO_JSON_OBJECT,
-                    "{\"keyword\":\"micronaut\",\"page\":2,\"active\":true}")
+                "{\"keyword\":\"micronaut\",\"page\":2,\"active\":true}")
                 .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_JSON));
         Assertions.assertTrue(body.contains("micronaut"));
@@ -299,7 +300,7 @@ class SimpleControllerTest {
     void echoJsonObjectNullFields() {
         String body = client.toBlocking().retrieve(
             HttpRequest.POST(SimpleController.ECHO_JSON_OBJECT,
-                    "{\"keyword\":null,\"page\":null,\"active\":null}")
+                "{\"keyword\":null,\"page\":null,\"active\":null}")
                 .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_JSON));
         Assertions.assertNotNull(body);

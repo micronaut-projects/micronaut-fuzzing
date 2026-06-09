@@ -42,20 +42,16 @@ import java.util.Map;
     "{}", "[]", "\"\"",
     "{\"keyword\":\"test\",\"page\":1,\"active\":true}",
 
-
     "{\"a\":", "[[[[", "]]]]", "}}}}",
-
 
     "999999999999999999999999999999",
     "-999999999999999999999999999999",
     "1e9999",
     "1.0e-9999",
 
-
     "\"\\u0000\"",
     "\"\\n\\r\\t\"",
     "\"\\uD800\\uDFFF\"",
-
 
     "{\"a\":1,\"a\":2}",
 
@@ -73,13 +69,14 @@ public class JsonDeserializationTarget {
     public static void fuzzerTestOneInput(FuzzedDataProvider data) throws Exception {
         byte[] raw = data.consumeRemainingAsBytes();
         int scenario = raw.length > 0 ? (raw[0] & 0xFF) % 3 : 0;
-        byte[] json  = raw.length > 1 ? Arrays.copyOfRange(raw, 1, raw.length) : new byte[0];
+        byte[] json = raw.length > 1 ? Arrays.copyOfRange(raw, 1, raw.length) : new byte[0];
 
         switch (scenario) {
             case 0 -> deserializeToMap(json);
             case 1 -> deserializeToPojo(json);
             case 2 -> deserializeToList(json);
-            default -> { }
+            default -> {
+            }
         }
     }
 
