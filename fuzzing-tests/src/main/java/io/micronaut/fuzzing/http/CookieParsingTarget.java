@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package io.micronaut.fuzzing.http;
 
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.Dict;
@@ -25,23 +26,19 @@ import io.netty.handler.codec.http.cookie.ServerCookieEncoder;
 
 import java.util.Collection;
 
-
 @FuzzTarget
 @Dict({
     "session=abc123",
     "theme=dark",
     "id=42",
 
-
     "session=abc123; theme=dark",
     "a=1; b=2; c=3",
-
 
     "name=value; Path=/; HttpOnly",
     "name=value; Secure; SameSite=Strict",
     "name=value; Domain=example.com; Max-Age=3600",
     "name=value; Expires=Thu, 01 Jan 2099 00:00:00 GMT",
-
 
     "=",
     "a=",
@@ -67,6 +64,7 @@ public class CookieParsingTarget {
             case 2 -> encodeDecodeRoundTrip(data);
         }
     }
+
     private static void decodeStrict(FuzzedDataProvider data) {
         String header = data.consumeRemainingAsString();
         try {
@@ -78,6 +76,7 @@ public class CookieParsingTarget {
         } catch (IllegalArgumentException ignored) {
         }
     }
+
     private static void decodeLax(FuzzedDataProvider data) {
         String header = data.consumeRemainingAsString();
         try {
@@ -89,8 +88,9 @@ public class CookieParsingTarget {
         } catch (IllegalArgumentException ignored) {
         }
     }
+
     private static void encodeDecodeRoundTrip(FuzzedDataProvider data) {
-        String name  = data.consumeString(32);
+        String name = data.consumeString(32);
         String value = data.consumeString(64);
         String encoded;
         try {
@@ -102,10 +102,7 @@ public class CookieParsingTarget {
         ServerCookieDecoder.STRICT.decode(encoded);
     }
 
-
+    public static void main(String[] args) {
+        LocalJazzerRunner.create(CookieParsingTarget.class).fuzz();
+    }
 }
-
-public static void main(String[] args) {
-    LocalJazzerRunner.create(CookieParsingTarget.class).fuzz();
-}
-
