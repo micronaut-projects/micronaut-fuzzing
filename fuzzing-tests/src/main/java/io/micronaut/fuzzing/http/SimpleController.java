@@ -15,30 +15,32 @@
  */
 package io.micronaut.fuzzing.http;
 
+import io.micronaut.core.annotation.Nullable;
+import io.micronaut.http.HttpResponse;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.Body;
 import io.micronaut.http.annotation.Consumes;
 import io.micronaut.http.annotation.Controller;
+import io.micronaut.http.annotation.CookieValue;
 import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.Header;
+import io.micronaut.http.annotation.Part;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.PathVariable;
+import io.micronaut.http.annotation.Produces;
 import io.micronaut.http.annotation.QueryValue;
-import io.micronaut.core.annotation.Nullable;
-import io.micronaut.http.annotation.CookieValue;
-import io.micronaut.http.annotation.Part;
 import io.micronaut.http.annotation.RequestBean;
+import io.micronaut.http.cookie.Cookie;
 import io.micronaut.http.multipart.CompletedFileUpload;
-import java.util.List;
 import jakarta.inject.Singleton;
 import org.reactivestreams.Publisher;
-import io.micronaut.http.annotation.Produces;
-import static io.micronaut.http.MediaType.MULTIPART_FORM_DATA;
-import io.micronaut.http.HttpResponse;
+
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 import java.util.Optional;
 
+import static io.micronaut.http.MediaType.MULTIPART_FORM_DATA;
 
 /**
  * Simple HTTP endpoints used by fuzzing tests.
@@ -77,6 +79,9 @@ public final class SimpleController {
     static final String ECHO_STATUS       = "/echo-status/";
     static final String ECHO_OPTIONAL_ID = "/echo-optional-id";
     static final String ECHO_STREAM = "/echo-stream";
+    static final String ECHO_SET_COOKIE = "/echo-set-cookie";
+    static final String ECHO_MULTI_QUERY = "/echo-multi-query";
+    static final String ECHO_JSON_OBJECT = "/echo-json-object";
 
     @Get
     public String index() {
@@ -255,5 +260,23 @@ public final class SimpleController {
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
     public String echoStream(@Body InputStream body) throws IOException {
         return "bytes:" + body.readAllBytes().length;
+    }
+
+    @Get(ECHO_SET_COOKIE + "{?value}")
+    public HttpResponse<String> echoSetCookie(@QueryValue @Nullable String value) {
+        return HttpResponse.<String>ok("ok")
+            .cookie(Cookie.of("fuzz-cookie", value != null ? value : "default"));
+    }
+
+    @Get(ECHO_MULTI_QUERY)
+    public String echoMultiQuery(@QueryValue @Nullable List<String> tag) {
+        return tag == null ? "none" : String.join(",", tag);
+    }
+
+    @Post(ECHO_JSON_OBJECT)
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public SearchQuery echoJsonObject(@Body SearchQuery query) {
+        return query;
     }
 }
