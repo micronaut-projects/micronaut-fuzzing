@@ -1,7 +1,6 @@
 package io.micronaut.fuzzing.jazzer;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import io.micronaut.fuzzing.model.DefinedFuzzTarget;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.file.ConfigurableFileCollection;
@@ -9,6 +8,7 @@ import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.SetProperty;
 import org.gradle.api.tasks.Classpath;
+import org.gradle.work.DisableCachingByDefault;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.Optional;
@@ -31,6 +31,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+@DisableCachingByDefault(because = "Fuzzing tasks execute external fuzzing tools and prepare OSS-Fuzz directories")
 public abstract class BaseJazzerTask extends DefaultTask {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -71,8 +72,7 @@ public abstract class BaseJazzerTask extends DefaultTask {
                     List<Path> files = stream.toList();
                     for (Path file : files) {
                         try (InputStream inputStream = Files.newInputStream(file)) {
-                            definedFuzzTargets.addAll(objectMapper.readValue(inputStream, new TypeReference<List<DefinedFuzzTarget>>() {
-                            }));
+                            definedFuzzTargets.addAll(List.of(objectMapper.readValue(inputStream, DefinedFuzzTarget[].class)));
                         }
                     }
                 }

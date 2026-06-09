@@ -1,8 +1,8 @@
 package io.micronaut.fuzzing;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.json.JsonMapper;
 import jdk.jfr.consumer.RecordedEvent;
 import jdk.jfr.consumer.RecordingFile;
 
@@ -46,7 +46,7 @@ public class PlotCpuTime {
         ChartConfig config = buildChart(samples);
 
         // Serialize chart config as JSON and build HTML
-        ObjectMapper om = new ObjectMapper().disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
+        ObjectMapper om = JsonMapper.builder().disable(SerializationFeature.FAIL_ON_EMPTY_BEANS).build();
         String configJson = om.writeValueAsString(config);
 
         String html = """
@@ -293,7 +293,7 @@ public class PlotCpuTime {
         options.plugins = new Plugins();
         options.plugins.tooltip = new Tooltip();
         options.plugins.tooltip.callbacks = new TooltipCallbacks();
-        // We'll use the point's "t" field as tooltip label line
+        // Use the point's custom "t" field as tooltip label line when present.
         options.plugins.tooltip.callbacks.label = "function(ctx){return ctx.raw.t || ('x='+ctx.raw.x+', y='+ctx.raw.y);}";
 
         ChartConfig cfg = new ChartConfig();
@@ -313,7 +313,7 @@ public class PlotCpuTime {
             return s.substring(0, idx + 4);
         }
         return s;
-        }
+    }
 
     private static long getLong(RecordedEvent e, String field, long def) {
         try {
@@ -382,8 +382,6 @@ public class PlotCpuTime {
     public static class ScatterPoint {
         public double x;
         public double y;
-        // custom tooltip text
-        @JsonIgnore
         public String t;
 
         public ScatterPoint(double x, double y, String tooltip) {

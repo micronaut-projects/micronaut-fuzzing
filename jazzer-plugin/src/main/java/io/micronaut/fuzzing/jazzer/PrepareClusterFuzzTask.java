@@ -6,6 +6,7 @@ import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.SetProperty;
+import org.gradle.api.tasks.Classpath;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.Nested;
@@ -15,6 +16,7 @@ import org.gradle.api.tasks.TaskAction;
 import org.gradle.process.ExecOperations;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.gradle.work.DisableCachingByDefault;
 
 import javax.annotation.Nonnull;
 import javax.inject.Inject;
@@ -42,11 +44,13 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+@DisableCachingByDefault(because = "Prepares OSS-Fuzz output directories and executable wrapper scripts")
 public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
     private static final Logger LOG = LoggerFactory.getLogger(PrepareClusterFuzzTask.class);
 
     @InputFiles
     @Nonnull
+    @Classpath
     public abstract ConfigurableFileCollection getSourcePath();
 
     @OutputDirectory

@@ -11,6 +11,8 @@ repositories {
     mavenCentral()
 }
 
+val ossFuzzJacoco by configurations.creating
+
 micronautBuild {
     javaVersion.set(25)
 }
@@ -53,8 +55,11 @@ tasks.named("check") {
 group = "io.micronaut.fuzzing"
 
 dependencies {
+    ossFuzzJacoco("org.jacoco:org.jacoco.agent:0.8.14:runtime")
+    ossFuzzJacoco("org.jacoco:org.jacoco.cli:0.8.14:nodeps")
+
     implementation(mn.micronaut.http.server.netty)
-    implementation("io.netty.contrib:netty-codec-multipart-core")
+    implementation(mn.netty.contrib.multipart.core)
     implementation(mn.micronaut.jackson.databind)
     implementation(mn.jackson.databind)
     implementation(mn.reactor)
@@ -108,6 +113,27 @@ tasks.withType<PrepareClusterFuzzTask> {
         "--enable-preview"
     )
     javaHome.set("\$this_dir/jdk")
+    doFirst {
+        project.copy {
+            from(ossFuzzJacoco)
+            into(outputDirectory.dir("jacoco").get().asFile)
+        }
+    }
+    val dollar = "$"
+    setupScript.set("""
+        if [[ "${dollar}EXTERNAL_JAZZER_ARGS" == *"/opt/jacoco-agent.jar"* ]]; then
+            jacoco_agent=$(find "${dollar}this_dir/jacoco" -maxdepth 1 -name 'org.jacoco.agent-*-runtime.jar' -print -quit)
+            jacoco_cli=$(find "${dollar}this_dir/jacoco" -maxdepth 1 -name 'org.jacoco.cli-*-nodeps.jar' -print -quit)
+            if [[ -z "${dollar}jacoco_agent" || -z "${dollar}jacoco_cli" ]]; then
+                echo "Missing bundled JaCoCo jars in ${dollar}this_dir/jacoco" >&2
+                exit 1
+            fi
+            cp "${dollar}jacoco_agent" "/opt/jacoco-agent.jar.${dollar}${dollar}"
+            mv "/opt/jacoco-agent.jar.${dollar}${dollar}" /opt/jacoco-agent.jar
+            cp "${dollar}jacoco_cli" "/opt/jacoco-cli.jar.${dollar}${dollar}"
+            mv "/opt/jacoco-cli.jar.${dollar}${dollar}" /opt/jacoco-cli.jar
+        fi
+    """.trimIndent())
 }
 
 tasks.named<JazzerTask>("jazzer") {

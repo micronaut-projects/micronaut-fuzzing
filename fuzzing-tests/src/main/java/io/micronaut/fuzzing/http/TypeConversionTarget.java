@@ -15,12 +15,15 @@
  */
 package io.micronaut.fuzzing.http;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.LoggerContext;
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.context.ApplicationContext;
 import io.micronaut.core.convert.ConversionService;
 import io.micronaut.fuzzing.Dict;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.math.BigDecimal;
@@ -121,8 +124,13 @@ import java.util.UUID;
 })
 public class TypeConversionTarget {
 
-    private static final ConversionService APP_CTX_CONVERSION_SERVICE =
-        ApplicationContext.run().getBean(ConversionService.class);
+    private static final ConversionService APP_CTX_CONVERSION_SERVICE;
+
+    static {
+        setLogLevel("io.micronaut", Level.TRACE);
+        APP_CTX_CONVERSION_SERVICE = ApplicationContext.run().getBean(ConversionService.class);
+        setLogLevel("io.micronaut", Level.WARN);
+    }
 
     private static final Class<?>[] TARGET_TYPES = {
         Integer.class,
@@ -156,6 +164,11 @@ public class TypeConversionTarget {
         URL.class,
         File.class,
     };
+
+    private static void setLogLevel(String loggerName, Level level) {
+        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+        loggerContext.getLogger(loggerName).setLevel(level);
+    }
 
     public static void fuzzerTestOneInput(FuzzedDataProvider data) {
         int typeIndex = data.consumeInt(0, TARGET_TYPES.length - 1);
