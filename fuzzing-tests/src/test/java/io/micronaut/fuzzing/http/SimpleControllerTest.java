@@ -233,6 +233,53 @@ class SimpleControllerTest {
     }
 
     @Test
+    void echoQueryPojo() {
+        Assertions.assertEquals("Alice:25",
+            client.toBlocking().retrieve(
+                SimpleController.ECHO_QUERY_POJO + "?name=Alice&minAge=25"));
+    }
+
+    @Test
+    void echoQueryPojoAbsent() {
+        Assertions.assertEquals("null:null",
+            client.toBlocking().retrieve(SimpleController.ECHO_QUERY_POJO));
+    }
+
+    @Test
+    void echoStatusActive() {
+        Assertions.assertEquals("ACTIVE",
+            client.toBlocking().retrieve("/echo-status/ACTIVE"));
+    }
+
+    @Test
+    void echoStatusInactive() {
+        Assertions.assertEquals("INACTIVE",
+            client.toBlocking().retrieve("/echo-status/INACTIVE"));
+    }
+
+    @Test
+    void echoOptionalIdPresent() {
+        Assertions.assertEquals("42",
+            client.toBlocking().retrieve(
+                SimpleController.ECHO_OPTIONAL_ID + "?id=42"));
+    }
+
+    @Test
+    void echoOptionalIdAbsent() {
+        Assertions.assertEquals("none",
+            client.toBlocking().retrieve(SimpleController.ECHO_OPTIONAL_ID));
+    }
+
+    @Test
+    void echoStream() {
+        byte[] data = {1, 2, 3, 4, 5};
+        String response = client.toBlocking().retrieve(
+            HttpRequest.POST(SimpleController.ECHO_STREAM, data)
+                .contentType(MediaType.APPLICATION_OCTET_STREAM));
+        Assertions.assertEquals("bytes:5", response);
+    }
+
+    @Test
     void echoSetCookieWithValue() {
         HttpResponse<String> response = client.toBlocking().exchange(
             HttpRequest.GET(SimpleController.ECHO_SET_COOKIE + "?value=hello"),

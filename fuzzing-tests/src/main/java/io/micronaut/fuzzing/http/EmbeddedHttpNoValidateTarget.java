@@ -21,8 +21,6 @@ import io.micronaut.fuzzing.EmbeddedChannelFuzzerBase;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.LoggerContext;
 import io.micronaut.http.server.netty.NettyHttpServer;
 import io.micronaut.runtime.server.EmbeddedServer;
 import org.slf4j.LoggerFactory;
@@ -37,19 +35,19 @@ import java.util.Map;
 @FuzzTarget
 @HttpDict
 @SimpleControllerDict
-public class EmbeddedHttpTarget extends EmbeddedChannelFuzzerBase {
-    private static final ContextHolder HTTP1 = new ContextHolder(Map.of());
+public class EmbeddedHttpNoValidateTarget extends EmbeddedChannelFuzzerBase {
+    private static final ContextHolder HTTP1 = new ContextHolder(Map.of("micronaut.server.validate-url", false));
 
-    EmbeddedHttpTarget(ContextHolder contextHolder) {
+    EmbeddedHttpNoValidateTarget(ContextHolder contextHolder) {
         super(contextHolder.nettyHttpServer.buildEmbeddedChannel(false));
     }
 
     public static void fuzzerTestOneInput(FuzzedDataProvider input) {
-        new EmbeddedHttpTarget(HTTP1).test(input);
+        new EmbeddedHttpNoValidateTarget(HTTP1).test(input);
     }
 
     static void main(String[] args) {
-        LocalJazzerRunner.create(EmbeddedHttpTarget.class).reproduce("GET / HTTP/1.1\r\nContent-Length: 0\r\nHost: localhost\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+        LocalJazzerRunner.create(EmbeddedHttpNoValidateTarget.class).reproduce("GET / HTTP/1.1\r\nContent-Length: 0\r\nHost: localhost\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.UTF_8));
     }
 
     static final class ContextHolder {
@@ -58,18 +56,11 @@ public class EmbeddedHttpTarget extends EmbeddedChannelFuzzerBase {
         ContextHolder(Map<String, Object> cfg) {
             String vmName = ManagementFactory.getRuntimeMXBean().getName();
             System.setProperty("VM_NAME", vmName);
-            LoggerFactory.getLogger(EmbeddedHttpTarget.class).info("Starting embedded HTTP target. VM name is: {}", vmName);
+            LoggerFactory.getLogger(EmbeddedHttpNoValidateTarget.class).info("Starting embedded HTTP target. VM name is: {}", vmName);
 
-            setLogLevel("io.micronaut", Level.TRACE);
             ApplicationContext ctx = ApplicationContext.run(cfg);
-            setLogLevel("io.micronaut", Level.WARN);
 
             nettyHttpServer = (NettyHttpServer) ctx.getBean(EmbeddedServer.class);
-        }
-
-        private static void setLogLevel(String loggerName, Level level) {
-            LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
-            loggerContext.getLogger(loggerName).setLevel(level);
         }
     }
 }
