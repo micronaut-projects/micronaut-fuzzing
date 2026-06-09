@@ -17,7 +17,6 @@ package io.micronaut.fuzzing.http;
 
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.context.ApplicationContext;
-import io.micronaut.fuzzing.Dict;
 import io.micronaut.fuzzing.EmbeddedChannelFuzzerBase;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
