@@ -25,6 +25,9 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.LoggerContext;
 import io.micronaut.http.server.netty.NettyHttpServer;
 import io.micronaut.runtime.server.EmbeddedServer;
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.embedded.EmbeddedChannel;
+import io.netty.util.ReferenceCountUtil;
 import org.slf4j.LoggerFactory;
 
 import java.lang.management.ManagementFactory;
@@ -65,6 +68,24 @@ public class EmbeddedHttpTarget extends EmbeddedChannelFuzzerBase {
             setLogLevel("io.micronaut", Level.WARN);
 
             nettyHttpServer = (NettyHttpServer) ctx.getBean(EmbeddedServer.class);
+            warmUp(nettyHttpServer);
+        }
+
+        private static void warmUp(NettyHttpServer nettyHttpServer) {
+            EmbeddedChannel channel = nettyHttpServer.buildEmbeddedChannel(false);
+            try {
+                byte[] request = "GET / HTTP/1.1\r\nContent-Length: 0\r\nHost: localhost\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.UTF_8);
+                ByteBuf buffer = channel.alloc().buffer(request.length);
+                buffer.writeBytes(request);
+                channel.writeInbound(buffer);
+                channel.finish();
+                Object message;
+                while ((message = channel.readOutbound()) != null) {
+                    ReferenceCountUtil.release(message);
+                }
+            } finally {
+                channel.finishAndReleaseAll();
+            }
         }
 
         private static void setLogLevel(String loggerName, Level level) {
