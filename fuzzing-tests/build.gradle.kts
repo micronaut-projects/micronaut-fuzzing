@@ -170,3 +170,22 @@ tasks.named<JazzerTask>("jazzer") {
     maxTotalTime.set(if (collectJfr) Duration.ofMinutes(2) else Duration.ofHours(2))
     //coverageDumpFile.set(layout.buildDirectory.file("cov-report.exec"))
 }
+
+tasks.register<JazzerTask>("reproduceOssFuzz4768382317821952") {
+    description = "Reproduces OSS-Fuzz testcase 4768382317821952 with EmbeddedHttpTarget."
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+
+    classpath.from(tasks.named<JazzerTask>("jazzer").map { it.classpath })
+    targets.set(listOf("io.micronaut.fuzzing.http.EmbeddedHttpTarget"))
+    jvmArgs.set(listOf(
+        "-Xmx512M",
+        "-XX:MaxDirectMemorySize=256M",
+        "-Dio.netty.noUnsafe=true",
+        "-Dio.netty.customResourceLeakDetector=io.netty.util.LeakPresenceDetector",
+        "-Dio.netty.leakDetection.targetRecords=100",
+        "-XX:+ExitOnOutOfMemoryError",
+        "--enable-preview"
+    ))
+    rssLimitMb.set(8192)
+    reproduceCrashFile.set(layout.projectDirectory.file("src/test/resources/oss-fuzz/4768382317821952"))
+}
