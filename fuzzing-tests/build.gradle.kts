@@ -1,5 +1,6 @@
 import io.micronaut.fuzzing.jazzer.JazzerTask
 import io.micronaut.fuzzing.jazzer.PrepareClusterFuzzTask
+import io.micronaut.fuzzing.jazzer.JazzerRegressionTask
 import java.time.Duration
 
 plugins {
@@ -30,6 +31,30 @@ tasks.named<Test>("test") {
     exclude("io/micronaut/fuzzing/sanitizer/SanitizerTransformerTest.class")
 }
 
+val lz4FrameDecoderRegression by tasks.registering(JazzerRegressionTask::class) {
+    description = "Runs the LZ4 frame decoder OSS-Fuzz regression input."
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+
+    targets.set(setOf("io.netty.handler.codec.compression.Lz4FrameDecoderFuzzer"))
+    jvmArgs.set(listOf(
+        "-Dio.netty.customResourceLeakDetector=io.netty.util.LeakPresenceDetector",
+        "-Dio.netty.leakDetection.targetRecords=0",
+        "--enable-preview"
+    ))
+    base64RegressionInputs.put("oss-fuzz-4644981624340480", """
+        TFo0QmxvY2spggAAAP4AAAAAAAoKU0VQO1NFUHRTRVA7U0VQdKlTRVB0S0NBTEVOJ0RBUgB8RVBT
+        RVBTRVBTRVBTRVBNS0FDVElWSVRZU0VQU0VQU0VQUHJBUgB8RWFnbWFTRVBTRVBTRVBTRSpTRVBT
+        RVBDb25uZWN0aW9uOlNFUFNFUFNFUFNFUFNFUFNFUFNFUFNFUFNTRVBTUFNFUFNFUFNFUFNFUFNF
+        UFNFKlNFUFNFUFNFUFNFUFNFUFNFU0VQU0VQU0VQU0VQU0VQU0VQU0VQU0VQU0VTRVBTRVBTRVBT
+        RWFkZFBTRVBTRVBTRSpTRVBTRVBTRVBTRVAAAAB8RVBTRVBTRVBTRVBTRVBTRVBTRVBTRVBTU0VQ
+        U0VQU0VQU0VQPVNFUFNFUFNFKlNFUFNFUFNFUFNFUFNFUFNFUFNFUFNFUFNFUFNFUFNTRVBTUFNF
+        UFNFUFNTRVBTRVBTRVBTRSpTRVBTRVBTRVBTU+FQU+NFUFNFUFNFUFNFUFNFUFNFUFNFKlNFUCNF
+        UFNFUENFUFNFUFNFUFNFUFNFUFNFUFNFUFNFUFNFUFNFUFNTRVBTRVBTRVBTU0VQU0VQU0VQU0VQ
+        U0VTRVBTRVBTRVBTRVBQRVBFU1NTRVBTU0VQU0VQU0VQUHJhZ21TRVBTRVBTRVBTRVBTRVBTRVBT
+        RVBTRSpFUFNFUFNTRVBTRVBTRVA=
+    """.trimIndent())
+}
+
 val sanitizerTest by tasks.registering(Test::class) {
     description = "Runs sanitizer bytecode transformation tests in an isolated JVM."
     group = LifecycleBasePlugin.VERIFICATION_GROUP
@@ -50,6 +75,7 @@ val sanitizerTest by tasks.registering(Test::class) {
 
 tasks.named("check") {
     dependsOn(sanitizerTest)
+    dependsOn(lz4FrameDecoderRegression)
 }
 
 group = "io.micronaut.fuzzing"
@@ -77,7 +103,7 @@ dependencies {
     runtimeOnly("com.github.luben:zstd-jni:1.5.7-6")
     runtimeOnly("com.jcraft:jzlib:1.1.3")
     runtimeOnly("com.ning:compress-lzf:1.1.3")
-    runtimeOnly("org.lz4:lz4-java:1.8.0")
+    implementation("org.lz4:lz4-java:1.8.0")
     runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.82")
     implementation("io.netty:netty-codec-xml")
 
