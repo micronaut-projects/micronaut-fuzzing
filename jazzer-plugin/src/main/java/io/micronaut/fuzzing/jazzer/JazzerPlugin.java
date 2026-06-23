@@ -73,6 +73,8 @@ public abstract class JazzerPlugin implements Plugin<Project> {
 
             task.getClasspath().setFrom(jazzerBaseClasspath);
             task.getOutputDirectory().convention(project.getLayout().getBuildDirectory().dir("cluster-fuzz"));
+            task.getJazzerDriver().convention("jazzer_driver");
+            task.getJazzerAgent().convention("jazzer_agent_deploy.jar");
             task.getSourcePath().setFrom(jazzerBaseClasspath.getIncoming().artifactView(v -> {
                 v.withVariantReselection();
                 v.attributes(attributes -> {
