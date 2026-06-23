@@ -118,6 +118,8 @@ dependencies {
 }
 
 tasks.withType<PrepareClusterFuzzTask> {
+    jazzerDriver.set("micronaut_jazzer_driver")
+    jazzerAgent.set("micronaut_jazzer_agent_deploy.jar")
     introspector {
         includes = listOf("io.micronaut.*")
         excludes = listOf(
