@@ -15,6 +15,7 @@
  */
 package io.micronaut.fuzzing.http;
 
+import io.netty.channel.embedded.EmbeddedChannel;
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.context.ApplicationContext;
 import io.micronaut.fuzzing.Dict;
@@ -46,12 +47,19 @@ import java.util.Map;
 public class EmbeddedHttpBindingTarget extends EmbeddedChannelFuzzerBase {
     private static final ContextHolder HTTP1 = new ContextHolder(Map.of("fuzzing.buggy-binder", "true"));
 
+    private final ContextHolder contextHolder;
+
     EmbeddedHttpBindingTarget(ContextHolder contextHolder) {
-        super(contextHolder.nettyHttpServer.buildEmbeddedChannel(false));
+        this.contextHolder = contextHolder;
         baseCpuTime = 5_000_000;
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider input) {
+    @Override
+    protected EmbeddedChannel setUp() {
+        return contextHolder.nettyHttpServer.buildEmbeddedChannel(false);
+    }
+
+    public static void fuzzerTestOneInput(FuzzedDataProvider input) throws Exception {
         new EmbeddedHttpBindingTarget(HTTP1).test(input);
     }
 

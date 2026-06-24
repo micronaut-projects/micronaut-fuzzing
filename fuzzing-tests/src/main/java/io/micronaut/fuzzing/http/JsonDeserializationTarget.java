@@ -22,6 +22,7 @@ import io.micronaut.fuzzing.Dict;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 import io.micronaut.json.JsonMapper;
+import tools.jackson.core.JacksonException;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -90,7 +91,8 @@ public class JsonDeserializationTarget {
                     }
                 });
             }
-        } catch (IOException | IllegalArgumentException ignored) {
+        } catch (IOException | IllegalArgumentException | JacksonException ignored) {
+            ignoreInvalidInput(ignored);
         }
     }
 
@@ -100,7 +102,8 @@ public class JsonDeserializationTarget {
             if (q != null) {
                 JSON_MAPPER.writeValueAsBytes(q);
             }
-        } catch (IOException | IllegalArgumentException ignored) {
+        } catch (IOException | IllegalArgumentException | JacksonException ignored) {
+            ignoreInvalidInput(ignored);
         }
     }
 
@@ -114,8 +117,14 @@ public class JsonDeserializationTarget {
                     }
                 });
             }
-        } catch (IOException | IllegalArgumentException ignored) {
+        } catch (IOException | IllegalArgumentException | JacksonException ignored) {
+            ignoreInvalidInput(ignored);
         }
+    }
+
+    private static void ignoreInvalidInput(Exception exception) {
+        // Malformed JSON and unsupported JSON-to-type mappings are expected fuzz inputs.
+        exception.getClass();
     }
 
     public static void main(String[] args) {

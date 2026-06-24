@@ -21,6 +21,7 @@ import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.HandlerFuzzerBase;
 import io.netty.handler.codec.DecoderException;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
@@ -44,31 +45,41 @@ public final class SslHandlerFuzzer extends HandlerFuzzerBase implements AutoClo
         }
     }
 
-    private final SslContext context;
+    private final byte flags;
+    private SslContext context;
 
-    private SslHandlerFuzzer(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
-        byte flags = fuzzedDataProvider.consumeByte();
+    private SslHandlerFuzzer(byte flags) {
+        this.flags = flags;
+    }
+
+    @Override
+    protected EmbeddedChannel setUp() {
+        EmbeddedChannel channel = new EmbeddedChannel();
         SslProvider provider = SslProvider.JDK;
         boolean startTls = flag(flags, 1);
-        context = (flag(flags, 5) ? SslContextBuilder.forServer(CERTIFICATE.key(), CERTIFICATE.cert()) : SslContextBuilder.forClient())
-            .sslProvider(provider)
-            .startTls(startTls)
-            .enableOcsp(flag(flags, 2) && provider != SslProvider.JDK)
-            .clientAuth(flag(flags, 3) ? ClientAuth.REQUIRE : flag(flags, 4) ? ClientAuth.OPTIONAL : ClientAuth.NONE)
-            .build();
+        try {
+            context = (flag(flags, 5) ? SslContextBuilder.forServer(CERTIFICATE.key(), CERTIFICATE.cert()) : SslContextBuilder.forClient())
+                .sslProvider(provider)
+                .startTls(startTls)
+                .enableOcsp(flag(flags, 2) && provider != SslProvider.JDK)
+                .clientAuth(flag(flags, 3) ? ClientAuth.REQUIRE : flag(flags, 4) ? ClientAuth.OPTIONAL : ClientAuth.NONE)
+                .build();
+        } catch (SSLException e) {
+            throw new RuntimeException(e);
+        }
         channel.pipeline()
             .addLast(flag(flags, 6) ? context.newHandler(channel.alloc()) : new SslHandler(context.newEngine(channel.alloc()), startTls))
             .addLast(new ErrorHandler());
+        return channel;
     }
 
     private static boolean flag(long input, int i) {
         return ((input >>> i) & 1) != 0;
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
-        SslHandlerFuzzer fuzzer = new SslHandlerFuzzer(fuzzedDataProvider);
-        fuzzer.test(fuzzedDataProvider);
-        fuzzer.close();
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
+        byte flags = fuzzedDataProvider.consumeByte();
+        new SslHandlerFuzzer(flags).test(fuzzedDataProvider);
     }
 
     public static void main(String[] args) {

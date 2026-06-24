@@ -43,11 +43,18 @@ import java.util.Map;
 public class EmbeddedHttpTarget extends EmbeddedChannelFuzzerBase {
     private static final ContextHolder HTTP1 = new ContextHolder(Map.of());
 
+    private final ContextHolder contextHolder;
+
     EmbeddedHttpTarget(ContextHolder contextHolder) {
-        super(contextHolder.nettyHttpServer.buildEmbeddedChannel(false));
+        this.contextHolder = contextHolder;
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider input) {
+    @Override
+    protected EmbeddedChannel setUp() {
+        return contextHolder.nettyHttpServer.buildEmbeddedChannel(false);
+    }
+
+    public static void fuzzerTestOneInput(FuzzedDataProvider input) throws Exception {
         new EmbeddedHttpTarget(HTTP1).test(input);
     }
 

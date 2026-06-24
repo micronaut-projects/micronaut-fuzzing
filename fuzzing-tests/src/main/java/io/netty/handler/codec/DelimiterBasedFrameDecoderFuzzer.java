@@ -22,10 +22,10 @@ import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.HandlerFuzzerBase;
 import io.netty.util.CharsetUtil;
 
-import javax.net.ssl.SSLException;
 
 /**
  * Fuzzing support type.
@@ -33,7 +33,9 @@ import javax.net.ssl.SSLException;
 @FuzzTarget
 @HttpDict
 public class DelimiterBasedFrameDecoderFuzzer extends HandlerFuzzerBase {
-    public DelimiterBasedFrameDecoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
+    @Override
+    protected EmbeddedChannel setUp() {
+        EmbeddedChannel channel = new EmbeddedChannel();
         channel.pipeline()
             .addLast(new DelimiterBasedFrameDecoder(128, Unpooled.copiedBuffer("ABC", CharsetUtil.UTF_8)))
             .addLast(new ChannelInboundHandlerAdapter() {
@@ -45,11 +47,11 @@ public class DelimiterBasedFrameDecoderFuzzer extends HandlerFuzzerBase {
                     super.exceptionCaught(ctx, cause);
                 }
             });
+        return channel;
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
-        var fuzzer = new DelimiterBasedFrameDecoderFuzzer(fuzzedDataProvider);
-        fuzzer.test(fuzzedDataProvider);
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws Exception {
+        new DelimiterBasedFrameDecoderFuzzer().test(fuzzedDataProvider);
     }
 
     public static void main(String[] args) {
