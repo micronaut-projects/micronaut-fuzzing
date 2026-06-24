@@ -16,14 +16,12 @@
 package io.netty.handler;
 
 import io.micronaut.fuzzing.EmbeddedChannelFuzzerBase;
-import io.netty.channel.embedded.EmbeddedChannel;
 
 /**
  * Base class for fuzzing the input of an inbound handler. Will report exceptions thrown by the handler.
  */
 public abstract class HandlerFuzzerBase extends EmbeddedChannelFuzzerBase {
     public HandlerFuzzerBase() {
-        super(new EmbeddedChannel());
         hasOutput = true;
     }
 }

@@ -15,6 +15,7 @@
  */
 package io.micronaut.fuzzing.http;
 
+import io.netty.channel.embedded.EmbeddedChannel;
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.context.ApplicationContext;
 import io.micronaut.fuzzing.EmbeddedChannelFuzzerBase;
@@ -38,11 +39,18 @@ import java.util.Map;
 public class EmbeddedHttpNoValidateTarget extends EmbeddedChannelFuzzerBase {
     private static final ContextHolder HTTP1 = new ContextHolder(Map.of("micronaut.server.validate-url", false));
 
+    private final ContextHolder contextHolder;
+
     EmbeddedHttpNoValidateTarget(ContextHolder contextHolder) {
-        super(contextHolder.nettyHttpServer.buildEmbeddedChannel(false));
+        this.contextHolder = contextHolder;
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider input) {
+    @Override
+    protected EmbeddedChannel setUp() {
+        return contextHolder.nettyHttpServer.buildEmbeddedChannel(false);
+    }
+
+    public static void fuzzerTestOneInput(FuzzedDataProvider input) throws Exception {
         new EmbeddedHttpNoValidateTarget(HTTP1).test(input);
     }
 

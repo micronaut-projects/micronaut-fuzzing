@@ -15,13 +15,11 @@
  */
 package io.netty.handler.codec.compression;
 
+import io.netty.channel.embedded.EmbeddedChannel;
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
-import net.jpountz.lz4.LZ4Factory;
-
-import javax.net.ssl.SSLException;
 
 /**
  * Fuzzing support type.
@@ -29,27 +27,23 @@ import javax.net.ssl.SSLException;
 @FuzzTarget
 @HttpDict
 public class Lz4FrameDecoderFuzzer extends DecompressorFuzzerBase {
-    private static final byte[] WARMUP_COMPRESSED_BLOCK = {0x10, 0};
+    private final boolean validateChecksums;
 
-    public Lz4FrameDecoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
-        warmUpLz4();
+    public Lz4FrameDecoderFuzzer(boolean validateChecksums) {
+        this.validateChecksums = validateChecksums;
+    }
+
+    @Override
+    protected EmbeddedChannel setUp() {
+        EmbeddedChannel channel = new EmbeddedChannel();
         channel.pipeline()
-            .addLast(new Lz4FrameDecoder(fuzzedDataProvider.consumeBoolean()));
+            .addLast(new Lz4FrameDecoder(validateChecksums));
+        return channel;
     }
 
-    private static void warmUpLz4() {
-        // lz4-java can load its native implementation during the first decode. Do that before the timed loop.
-        LZ4Factory.fastestInstance().fastDecompressor()
-            .decompress(WARMUP_COMPRESSED_BLOCK, 0, new byte[1], 0, 1);
-
-        Lz4XXHash32 checksum = new Lz4XXHash32(Lz4Constants.DEFAULT_SEED);
-        checksum.update(new byte[0], 0, 0);
-        checksum.getValue();
-    }
-
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
-        var fuzzer = new Lz4FrameDecoderFuzzer(fuzzedDataProvider);
-        fuzzer.test(fuzzedDataProvider);
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
+        boolean validateChecksums = fuzzedDataProvider.consumeBoolean();
+        new Lz4FrameDecoderFuzzer(validateChecksums).test(fuzzedDataProvider);
     }
 
     public static void main(String[] args) {
