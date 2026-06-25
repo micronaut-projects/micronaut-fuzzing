@@ -45,7 +45,7 @@ import java.util.Map;
     "&",
 })
 public class EmbeddedHttpBindingTarget extends EmbeddedChannelFuzzerBase {
-    private static final ContextHolder HTTP1 = new ContextHolder(Map.of("fuzzing.buggy-binder", "true"));
+    private static final ContextHolder HTTP1 = new ContextHolder(Map.of());
 
     private final ContextHolder contextHolder;
 
