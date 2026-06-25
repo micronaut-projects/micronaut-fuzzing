@@ -26,6 +26,7 @@ import io.netty.handler.HandlerFuzzerBase;
 import io.netty.handler.codec.http2.Http2ClientUpgradeCodec;
 import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2FrameCodecBuilder;
+import io.netty.handler.codec.http2.Http2FrameStreamException;
 
 
 /**
@@ -44,7 +45,7 @@ public class HttpClientUpgradeHandlerFuzzer extends HandlerFuzzerBase {
             .addLast(new ChannelInboundHandlerAdapter() {
                 @Override
                 public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-                    if (cause instanceof Http2Exception || cause instanceof IllegalStateException) {
+                    if (isExpected(cause)) {
                         return;
                     }
                     super.exceptionCaught(ctx, cause);
@@ -53,6 +54,18 @@ public class HttpClientUpgradeHandlerFuzzer extends HandlerFuzzerBase {
 
         channel.writeOutbound(new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/", channel.alloc().buffer()));
         return channel;
+    }
+
+    @Override
+    protected void onException(Exception e) {
+        if (isExpected(e)) {
+            return;
+        }
+        super.onException(e);
+    }
+
+    private static boolean isExpected(Throwable cause) {
+        return cause instanceof Http2Exception || cause instanceof Http2FrameStreamException || cause instanceof IllegalStateException;
     }
 
     public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws Exception {
