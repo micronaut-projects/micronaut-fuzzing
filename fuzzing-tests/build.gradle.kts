@@ -71,6 +71,19 @@ val httpClientUpgradeHandlerRegression by tasks.registering(JazzerRegressionTask
     """.trimIndent())
 }
 
+val brotliDecoderRegression by tasks.registering(JazzerRegressionTask::class) {
+    description = "Runs the Brotli decoder OSS-Fuzz regression input."
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+
+    targets.set(setOf("io.netty.handler.codec.compression.BrotliDecoderFuzzer"))
+    jvmArgs.set(listOf(
+        "-Dio.netty.customResourceLeakDetector=io.netty.util.LeakPresenceDetector",
+        "-Dio.netty.leakDetection.targetRecords=0",
+        "--enable-preview"
+    ))
+    base64RegressionInputs.put("oss-fuzz-5310533434933248", "A37///8A")
+}
+
 val sanitizerTest by tasks.registering(Test::class) {
     description = "Runs sanitizer bytecode transformation tests in an isolated JVM."
     group = LifecycleBasePlugin.VERIFICATION_GROUP
@@ -93,6 +106,7 @@ tasks.named("check") {
     dependsOn(sanitizerTest)
     dependsOn(lz4FrameDecoderRegression)
     dependsOn(httpClientUpgradeHandlerRegression)
+    dependsOn(brotliDecoderRegression)
 }
 
 group = "io.micronaut.fuzzing"
@@ -114,8 +128,8 @@ dependencies {
 
     implementation(mnTest.bytebuddy)
 
-    runtimeOnly("com.aayushatharva.brotli4j:native-linux-x86_64:1.20.0")
-    runtimeOnly("com.aayushatharva.brotli4j:brotli4j:1.20.0")
+    runtimeOnly("com.aayushatharva.brotli4j:native-linux-x86_64:1.23.0")
+    runtimeOnly("com.aayushatharva.brotli4j:brotli4j:1.23.0")
     runtimeOnly("com.github.jponge:lzma-java:1.3")
     runtimeOnly("com.github.luben:zstd-jni:1.5.7-6")
     runtimeOnly("com.jcraft:jzlib:1.1.3")
