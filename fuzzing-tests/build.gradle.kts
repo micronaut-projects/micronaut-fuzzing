@@ -55,6 +55,22 @@ val lz4FrameDecoderRegression by tasks.registering(JazzerRegressionTask::class) 
     """.trimIndent())
 }
 
+val httpClientUpgradeHandlerRegression by tasks.registering(JazzerRegressionTask::class) {
+    description = "Runs the HTTP client upgrade handler OSS-Fuzz regression input."
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+
+    targets.set(setOf("io.netty.handler.codec.http.HttpClientUpgradeHandlerFuzzer"))
+    jvmArgs.set(listOf(
+        "-Dio.netty.customResourceLeakDetector=io.netty.util.LeakPresenceDetector",
+        "-Dio.netty.leakDetection.targetRecords=0",
+        "--enable-preview"
+    ))
+    base64RegressionInputs.put("oss-fuzz-5406620929818624", """
+        SFRUUC8wLjIJMTAxIAAABA7+/7ktMQBEDQoNCgAAAAQAAAAAAAAAAUxBQkVMAAAAAAABRf8A2goA
+        AAQAAAAAADAuMhwAAAAAAAAxCQEAAAAAZaXEMjE0AAAAAUX/ANoKAAAEAADMzMzMzMw5NjcyNkk=
+    """.trimIndent())
+}
+
 val sanitizerTest by tasks.registering(Test::class) {
     description = "Runs sanitizer bytecode transformation tests in an isolated JVM."
     group = LifecycleBasePlugin.VERIFICATION_GROUP
@@ -76,6 +92,7 @@ val sanitizerTest by tasks.registering(Test::class) {
 tasks.named("check") {
     dependsOn(sanitizerTest)
     dependsOn(lz4FrameDecoderRegression)
+    dependsOn(httpClientUpgradeHandlerRegression)
 }
 
 group = "io.micronaut.fuzzing"
