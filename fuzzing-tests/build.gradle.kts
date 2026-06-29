@@ -71,6 +71,31 @@ val httpClientUpgradeHandlerRegression by tasks.registering(JazzerRegressionTask
     """.trimIndent())
 }
 
+val httpServerKeepAliveHandlerRegression by tasks.registering(JazzerRegressionTask::class) {
+    description = "Runs the HTTP server keep-alive handler OSS-Fuzz regression input."
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+
+    targets.set(setOf("io.netty.handler.codec.http.HttpServerKeepAliveHandlerFuzzer"))
+    jvmArgs.set(listOf(
+        "-Dio.netty.customResourceLeakDetector=io.netty.util.LeakPresenceDetector",
+        "-Dio.netty.leakDetection.targetRecords=0",
+        "--enable-preview"
+    ))
+    base64RegressionInputs.put("oss-fuzz-6282080858996736", """
+        R0VUIC8gSFRUUC8xLjENCkNvbm5lY3Rpb246IGtlZXAtYWxpdmUNCkF1dGhvcml6YXRpb246IGFh
+        YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFh
+        YWFhYWFhYWENClNFUEdFVCAvIEhUVFAvMS4xDQpDb25uZWN0aW9uOiBrZWVwLWFsaXZlDQpBdXRo
+        b3JpemF0aW9uOiBhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFh
+        YWFhYWFhYWFhYWFhYWFhYWFhDQpTRVBHRVQgLyBIVFRQLzEuMQ0KQ29ubmVjdGlvbjoga2VlcC1h
+        bGl2ZQ0KQXV0aG9yaXphdGlvbjogYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFh
+        YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYQ0KU0VQR0VUIC8gSFRUUC8xLjENCkNvbm5lY3Rpb246
+        IGtlZXAtYWxpdmUNCkF1dGhvcml6YXRpb246IGFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFh
+        YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWENClNFUEdFVCAvIEhUVFAvMS4xDQpD
+        b25uZWN0aW9uOiBrZWVwLWFsaXZlDQpMYXN0LU1vZGlmaWVkOiBubm5ubm5ubm5ubm5ubm5ubm5u
+        bm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5ubm5uDQo=
+    """.trimIndent())
+}
+
 val brotliDecoderRegression by tasks.registering(JazzerRegressionTask::class) {
     description = "Runs the Brotli decoder OSS-Fuzz regression input."
     group = LifecycleBasePlugin.VERIFICATION_GROUP
@@ -106,6 +131,7 @@ tasks.named("check") {
     dependsOn(sanitizerTest)
     dependsOn(lz4FrameDecoderRegression)
     dependsOn(httpClientUpgradeHandlerRegression)
+    dependsOn(httpServerKeepAliveHandlerRegression)
     dependsOn(brotliDecoderRegression)
 }
 
