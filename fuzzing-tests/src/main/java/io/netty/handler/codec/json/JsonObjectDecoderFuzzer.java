@@ -21,6 +21,8 @@ import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 import io.netty.handler.HandlerFuzzerBase;
+import io.netty.handler.codec.CorruptedFrameException;
+import io.netty.handler.codec.TooLongFrameException;
 
 
 /**
@@ -43,6 +45,14 @@ public class JsonObjectDecoderFuzzer extends HandlerFuzzerBase {
         channel.pipeline()
             .addLast(new JsonObjectDecoder(maxObjectLength, streamArrayElements));
         return channel;
+    }
+
+    @Override
+    protected void onException(Exception e) {
+        if (e instanceof CorruptedFrameException || e instanceof TooLongFrameException) {
+            return;
+        }
+        super.onException(e);
     }
 
     public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
