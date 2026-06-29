@@ -29,6 +29,10 @@ import io.netty.handler.HandlerFuzzerBase;
 @FuzzTarget
 @HttpDict
 public class HttpServerKeepAliveHandlerFuzzer extends HandlerFuzzerBase {
+    public HttpServerKeepAliveHandlerFuzzer() {
+        inputCpuTime = 32;
+    }
+
     @Override
     protected EmbeddedChannel setUp() {
         EmbeddedChannel channel = new EmbeddedChannel();
