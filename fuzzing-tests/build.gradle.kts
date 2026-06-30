@@ -150,6 +150,7 @@ dependencies {
     runtimeOnly("com.ning:compress-lzf:1.1.3")
     implementation("org.lz4:lz4-java:1.8.0")
     runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.82")
+    implementation("io.netty:netty-codec-haproxy")
     implementation("io.netty:netty-codec-xml")
 
     annotationProcessor(mn.micronaut.inject.java)
@@ -217,6 +218,7 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.micronaut.fuzzing.http.HttpTarget",
         "io.micronaut.fuzzing.http.EmbeddedHttpTarget",
         //"io.micronaut.fuzzing.http.MediaTypeTarget",
+        "io.netty.handler.codec.haproxy.HAProxyMessageDecoderFuzzer",
         //"io.netty.handler.HttpRequestDecoderFuzzer"
         //"io.micronaut.fuzzing.http.UriMatchTemplateTarget",
         //"io.micronaut.fuzzing.http.TypeConversionTarget",
