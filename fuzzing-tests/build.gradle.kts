@@ -217,6 +217,7 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.micronaut.fuzzing.http.HttpTarget",
         "io.micronaut.fuzzing.http.EmbeddedHttpTarget",
         //"io.micronaut.fuzzing.http.MediaTypeTarget",
+        "io.netty.handler.codec.http.HttpResponseEncoderFuzzer",
         //"io.netty.handler.HttpRequestDecoderFuzzer"
         //"io.micronaut.fuzzing.http.UriMatchTemplateTarget",
         //"io.micronaut.fuzzing.http.TypeConversionTarget",
