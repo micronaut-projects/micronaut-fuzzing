@@ -1,0 +1,115 @@
+# HPACK dictionary for fuzzing
+# Helps Jazzer generate valid HPACK-encoded header blocks
+
+# Indexed header fields (static table)
+# Format: \x80 | index  (for index <= 63)
+"\x82"
+"\x83"
+"\x84"
+"\x85"
+"\x86"
+"\x87"
+"\x88"
+
+# Literal header with incremental indexing (adds to dynamic table)
+"\x40"
+
+# Literal header without indexing
+"\x00"
+
+# Literal header never indexed
+"\x10"
+
+# Dynamic table size update
+"\x20"
+"\x3f"
+
+# Integer encoding — extended (multi-byte)
+"\x7f\x00"
+"\x7f\x01"
+"\x7f\x80\x01"
+"\x7f\xff\x7f"
+
+# Huffman-encoded string prefix
+"\x80"
+"\x81"
+
+# Common header names (literal)
+":method"
+":path"
+":scheme"
+":authority"
+":status"
+"content-type"
+"content-length"
+
+# Common header values
+"GET"
+"POST"
+"/"
+"https"
+"200"
+"application/json"
+
+# ── CAS EXTRÊMES ──────────────────────────────────────────────
+
+# 1. Taille table dynamique — extrêmes
+# Table size = 0 → vide toute la table dynamique
+"\x20"
+# Table size = 4096 (valeur normale)
+"\x3f\xe1\x1f"
+# Table size = 65535 (max raisonnable)
+"\x3f\xe0\xff\x03"
+# Table size = 2097151 (très grande → risque OOM)
+"\x3f\xff\xff\x7f"
+# Table size = max varint 28-bit (268 435 455 bytes)
+"\x3f\xff\xff\xff\x0f"
+
+# 2. Index hors-limites
+# Table statique = 61 entrées (indices 1-61)
+# Index 62 → hors table statique, échoue si table dynamique vide
+"\x7f\x00"
+# Index 126
+"\xfe"
+# Index 127 + extension multi-octet
+"\xff\x00"
+# Index 16383 (max 2 octets)
+"\xff\xff\x7f"
+# Index maximal 32-bit
+"\xff\xff\xff\xff\x07"
+
+# 3. Longueur de chaîne — extrêmes
+# Longueur = 0 (chaîne vide)
+"\x00"
+# Longueur = 127 (max 1 octet)
+"\x7f"
+# Longueur = 128 (premier cas multi-octet)
+"\x7f\x01"
+# Longueur = 65535
+"\x7f\x80\xff\x03"
+# Longueur = 2097151 (potentiel OOM sur allocation)
+"\x7f\xff\xff\x7f"
+
+# 4. Huffman — cas extrêmes
+# Huffman activé (MSB=1) + longueur 0
+"\x80"
+# Huffman + longueur 127 (max 1 octet)
+"\xff"
+# Séquence EOS Huffman (tous les bits à 1 = fin de stream)
+"\xff\xff\xff\xff"
+# Huffman + longueur maximale multi-octets
+"\xff\x80\xff\x03"
+
+# 5. Séquence : vider puis référencer (doit échouer proprement)
+# Reset table à 0 puis tenter indexed header
+"\x20\x82"
+
+# 6. Continuation bytes — integer profondément imbriqué
+# 5 octets de continuation (valeur astronomique)
+"\x7f\x80\x80\x80\x80\x01"
+# 10 octets de continuation (doit être rejeté)
+"\x7f\x80\x80\x80\x80\x80\x80\x80\x80\x80\x01"
+
+# 7. Alternance rapide de tailles de table
+# Vider puis remplir → corrompt l'état interne ?
+"\x20\x3f\xe1\x1f\x20\x3f\xe1\x1f"
