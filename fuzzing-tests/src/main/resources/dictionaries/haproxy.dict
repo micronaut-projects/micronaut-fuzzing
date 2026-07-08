@@ -1,0 +1,61 @@
+# HAProxy PROXY Protocol dictionary for fuzzing
+# Helps Jazzer reach deep parsing code without a seed corpus
+
+"\x0d\x0a\x0d\x0a\x00\x0d\x0a\x51\x55\x49\x54\x0a"
+
+# PROXY v1 text header
+"PROXY TCP4 "
+"PROXY TCP6 "
+"PROXY UNKNOWN\x0d\x0a"
+
+# version=2 + command (high nibble=2, low nibble=command)
+"\x20"
+"\x21"
+
+# address family + protocol
+"\x00"
+"\x11"
+"\x21"
+"\x31"
+
+# TLV types
+"\x01"
+"\x02"
+"\x03"
+"\x04"
+"\x05"
+"\x20"
+"\x21"
+"\x22"
+"\x23"
+"\x24"
+"\x25"
+"\x30"
+"\x31"
+"\x32"
+"\xe0"
+"\xf0"
+
+# Short TLV lengths that exercise validation paths (length < 5)
+"\x00\x01"
+"\x00\x02"
+"\x00\x03"
+"\x00\x04"
+
+# Normal TLV lengths
+"\x00\x05"
+"\x00\x06"
+"\x00\x0c"
+
+# IPv4 addresses
+"\x7f\x00\x00\x01"
+"\x00\x00\x00\x00"
+"\xff\xff\xff\xff"
+
+# IPv6 addresses
+"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01"
+
+# Common ports
+"\x00\x50"
+"\x01\xbb"
+"\x1f\x90"

@@ -16,7 +16,7 @@
 package io.netty.handler.codec.haproxy;
 
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
-import io.micronaut.fuzzing.Dict;
+import io.micronaut.fuzzing.DictResource;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
@@ -32,7 +32,7 @@ import io.netty.handler.codec.TooLongFrameException;
  */
 @FuzzTarget
 @HttpDict
-@Dict({"PROXY ", " TCP4 ", " TCP6 ", " UNKNOWN", "\r\n", "\r\n\r\n\0\r\nQUIT\n"})
+@DictResource("dictionaries/haproxy.dict")
 public class HAProxyMessageDecoderFuzzer extends HandlerFuzzerBase {
     private final int maxTlvSize;
     private final boolean failFast;
