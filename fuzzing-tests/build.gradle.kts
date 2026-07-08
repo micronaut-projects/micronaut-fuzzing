@@ -126,7 +126,7 @@ tasks.named("check") {
 group = "io.micronaut.fuzzing"
 
 dependencies {
-    ossFuzzJacoco("org.jacoco:org.jacoco.agent:0.8.14:runtime")
+    ossFuzzJacoco("org.jacoco:org.jacoco.agent:0.8.15:runtime")
     ossFuzzJacoco("org.jacoco:org.jacoco.cli:0.8.14:nodeps")
 
     implementation(mn.micronaut.http.server.netty)
