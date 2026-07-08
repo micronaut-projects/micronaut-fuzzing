@@ -16,10 +16,12 @@
 package io.netty.handler.codec.http;
 
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
+import io.micronaut.fuzzing.Dict;
 import io.micronaut.fuzzing.FlagAppender;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
+import io.micronaut.fuzzing.util.ByteSplitter;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.util.LeakPresenceDetector;
@@ -31,32 +33,25 @@ import io.netty.util.concurrent.FastThreadLocalThread;
  */
 @FuzzTarget
 @HttpDict
+@Dict({
+    "gzip",
+    "deflate",
+    "br",
+    "zstd",
+    "snappy",
+    "identity",
+    "*",
+    ";q=",
+    ", ",
+    "SEP",
+    "gzip, deflate, br",
+    "br;q=1.0, gzip;q=0.8, *;q=0.1",
+    "zstd;q=0.9, snappy;q=0.5, identity;q=0"
+})
 public final class HttpContentCompressorFuzzer {
+    private static final ByteSplitter SPLITTER = ByteSplitter.create("SEP");
     private static final int MAX_ACCEPT_ENCODING_LENGTH = 128;
     private static final int MAX_BODY_LENGTH = 4096;
-    private static final int MAX_CHUNKS = 16;
-
-    private static final String[] ACCEPT_ENCODINGS = {
-        "gzip",
-        "deflate",
-        "br",
-        "zstd",
-        "snappy",
-        "gzip, deflate, br",
-        "br;q=1.0, gzip;q=0.8, *;q=0.1",
-        "zstd;q=0.9, snappy;q=0.5, identity;q=0",
-        "*",
-        "identity"
-    };
-
-    private static final String[] CONTENT_ENCODINGS = {
-        "gzip",
-        "deflate",
-        "br",
-        "zstd",
-        "snappy",
-        "identity"
-    };
 
     private static final HttpMethod[] METHODS = {
         HttpMethod.GET,
@@ -89,7 +84,7 @@ public final class HttpContentCompressorFuzzer {
             drain(channel);
 
             writeResponse(data, channel, body.length);
-            writeContent(data, channel, body);
+            writeContent(channel, body);
             channel.finish();
         } finally {
             drain(channel);
@@ -111,13 +106,7 @@ public final class HttpContentCompressorFuzzer {
     }
 
     private static String acceptEncoding(FuzzedDataProvider data) {
-        return switch (data.consumeInt(0, 4)) {
-            case 0 -> data.pickValue(ACCEPT_ENCODINGS);
-            case 1 -> data.pickValue(ACCEPT_ENCODINGS) + ", " + data.pickValue(ACCEPT_ENCODINGS);
-            case 2 -> data.pickValue(CONTENT_ENCODINGS) + ";q=" + data.consumeInt(0, 100) / 100.0;
-            case 3 -> "*;q=" + data.consumeInt(0, 100) / 100.0;
-            default -> sanitizeHeaderValue(data.consumeString(MAX_ACCEPT_ENCODING_LENGTH));
-        };
+        return sanitizeHeaderValue(data.consumeString(MAX_ACCEPT_ENCODING_LENGTH));
     }
 
     private static String sanitizeHeaderValue(String value) {
@@ -145,23 +134,22 @@ public final class HttpContentCompressorFuzzer {
             response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/octet-stream");
         }
         if (data.consumeBoolean()) {
-            response.headers().set(HttpHeaderNames.CONTENT_ENCODING, data.pickValue(CONTENT_ENCODINGS));
+            response.headers().set(HttpHeaderNames.CONTENT_ENCODING, sanitizeHeaderValue(data.consumeString(MAX_ACCEPT_ENCODING_LENGTH)));
         }
         channel.writeOutbound(response);
     }
 
-    private static void writeContent(FuzzedDataProvider data, EmbeddedChannel channel, byte[] body) {
-        int chunkCount = body.length == 0 ? 0 : data.consumeInt(0, Math.min(MAX_CHUNKS, body.length));
-        int offset = 0;
-        for (int i = 0; i < chunkCount && offset < body.length; i++) {
-            int length = data.consumeInt(0, body.length - offset);
-            if (length == 0) {
-                continue;
+    private static void writeContent(EmbeddedChannel channel, byte[] body) {
+        ByteSplitter.ChunkIterator chunks = SPLITTER.splitIterator(body);
+        while (chunks.hasNext()) {
+            chunks.proceed();
+            ByteBuf content = buffer(channel, body, chunks.start(), chunks.length());
+            if (chunks.hasNext()) {
+                writeOutbound(channel, new DefaultHttpContent(content));
+            } else {
+                writeOutbound(channel, new DefaultLastHttpContent(content));
             }
-            writeOutbound(channel, new DefaultHttpContent(buffer(channel, body, offset, length)));
-            offset += length;
         }
-        writeOutbound(channel, new DefaultLastHttpContent(buffer(channel, body, offset, body.length - offset)));
     }
 
     private static ByteBuf buffer(EmbeddedChannel channel, byte[] body, int offset, int length) {
