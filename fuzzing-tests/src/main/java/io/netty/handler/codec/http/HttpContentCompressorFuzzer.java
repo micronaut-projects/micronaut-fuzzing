@@ -28,6 +28,13 @@ import io.netty.util.LeakPresenceDetector;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.FastThreadLocalThread;
 
+final class HttpContentCompressorFuzzerConstants {
+    static final String SEPARATOR = "SEP";
+
+    private HttpContentCompressorFuzzerConstants() {
+    }
+}
+
 /**
  * Fuzzing support type.
  */
@@ -43,13 +50,13 @@ import io.netty.util.concurrent.FastThreadLocalThread;
     "*",
     ";q=",
     ", ",
-    "SEP",
+    HttpContentCompressorFuzzerConstants.SEPARATOR,
     "gzip, deflate, br",
     "br;q=1.0, gzip;q=0.8, *;q=0.1",
     "zstd;q=0.9, snappy;q=0.5, identity;q=0"
 })
 public final class HttpContentCompressorFuzzer {
-    private static final ByteSplitter SPLITTER = ByteSplitter.create("SEP");
+    private static final ByteSplitter SPLITTER = ByteSplitter.create(HttpContentCompressorFuzzerConstants.SEPARATOR);
     private static final int MAX_ACCEPT_ENCODING_LENGTH = 128;
     private static final int MAX_BODY_LENGTH = 4096;
 
@@ -81,15 +88,12 @@ public final class HttpContentCompressorFuzzer {
         EmbeddedChannel channel = new EmbeddedChannel(new HttpContentCompressor());
         try {
             writeRequest(data, channel);
-            drain(channel);
+            channel.releaseInbound();
 
             writeResponse(data, channel, body.length);
             writeContent(channel, body);
-            channel.finish();
         } finally {
-            drain(channel);
-            channel.releaseInbound();
-            channel.releaseOutbound();
+            channel.finishAndReleaseAll();
             LeakPresenceDetector.check();
             FlagAppender.checkTriggered();
         }
@@ -167,16 +171,6 @@ public final class HttpContentCompressorFuzzer {
             if (!written) {
                 ReferenceCountUtil.release(message);
             }
-        }
-    }
-
-    private static void drain(EmbeddedChannel channel) {
-        Object message;
-        while ((message = channel.readInbound()) != null) {
-            ReferenceCountUtil.release(message);
-        }
-        while ((message = channel.readOutbound()) != null) {
-            ReferenceCountUtil.release(message);
         }
     }
 
