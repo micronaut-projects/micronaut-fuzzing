@@ -127,7 +127,7 @@ group = "io.micronaut.fuzzing"
 
 dependencies {
     ossFuzzJacoco("org.jacoco:org.jacoco.agent:0.8.15:runtime")
-    ossFuzzJacoco("org.jacoco:org.jacoco.cli:0.8.14:nodeps")
+    ossFuzzJacoco("org.jacoco:org.jacoco.cli:0.8.15:nodeps")
 
     implementation(mn.micronaut.http.server.netty)
     implementation(mn.netty.contrib.multipart.core)
