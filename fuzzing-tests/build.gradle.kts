@@ -84,6 +84,22 @@ val brotliDecoderRegression by tasks.registering(JazzerRegressionTask::class) {
     base64RegressionInputs.put("oss-fuzz-5310533434933248", "A37///8A")
 }
 
+val bzip2DecoderRegression by tasks.registering(JazzerRegressionTask::class) {
+    description = "Runs the Bzip2 decoder OSS-Fuzz regression input."
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+
+    targets.set(setOf("io.netty.handler.codec.compression.Bzip2DecoderFuzzer"))
+    jvmArgs.set(listOf(
+        "-Dio.netty.customResourceLeakDetector=io.netty.util.LeakPresenceDetector",
+        "-Dio.netty.leakDetection.targetRecords=0",
+        "--enable-preview"
+    ))
+    base64RegressionInputs.put("oss-fuzz-5399056135028736", """
+        QlpoNTFBWSZTWUkAAAAAAAAAICAgICAgIAAAQlgtUmVxdWVzdGVkLVdpdGhJTkQgICAAXWphdmEv
+        dXRpbC9BcnJheXMgICAgICAgICAgICAgJAkgb1QgICQgJTU0
+    """.trimIndent())
+}
+
 val jsonObjectDecoderRegression by tasks.registering(JazzerRegressionTask::class) {
     description = "Runs the JSON object decoder OSS-Fuzz regression input."
     group = LifecycleBasePlugin.VERIFICATION_GROUP
@@ -120,6 +136,7 @@ tasks.named("check") {
     dependsOn(lz4FrameDecoderRegression)
     dependsOn(httpClientUpgradeHandlerRegression)
     dependsOn(brotliDecoderRegression)
+    dependsOn(bzip2DecoderRegression)
     dependsOn(jsonObjectDecoderRegression)
 }
 
