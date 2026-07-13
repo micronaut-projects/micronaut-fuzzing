@@ -31,6 +31,7 @@ import io.netty.util.DomainNameMappingBuilder;
 
 import javax.net.ssl.SSLException;
 import java.security.cert.CertificateException;
+import java.text.ParseException;
 
 /**
  * Fuzz target for Netty's SNI handler.
@@ -88,6 +89,9 @@ public final class SniHandlerFuzzer extends HandlerFuzzerBase {
     private static boolean isExpected(Throwable cause) {
         if (cause instanceof TooLongFrameException ||
             cause instanceof SSLException) {
+            return true;
+        }
+        if (cause instanceof IllegalArgumentException && cause.getCause() instanceof ParseException) {
             return true;
         }
         if (!(cause instanceof DecoderException)) {

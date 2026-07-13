@@ -113,6 +113,26 @@ val jsonObjectDecoderRegression by tasks.registering(JazzerRegressionTask::class
     base64RegressionInputs.put("oss-fuzz-5825897350103040", "fgADpg==")
 }
 
+val sniHandlerRegression by tasks.registering(JazzerRegressionTask::class) {
+    description = "Runs the SNI handler OSS-Fuzz regression input."
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+
+    targets.set(setOf("io.netty.handler.ssl.SniHandlerFuzzer"))
+    jvmArgs.set(listOf(
+        "-Dio.netty.customResourceLeakDetector=io.netty.util.LeakPresenceDetector",
+        "-Dio.netty.leakDetection.targetRecords=0",
+        "--enable-preview"
+    ))
+    base64RegressionInputs.put("oss-fuzz-6335646063722496", """
+        FgNdAScBAADNKSn///////+AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIB/gICAYXJy
+        YXmAgICAgICAgIAIgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIACOICA
+        gICAgICAgICAgID//////////////////////////////////////zD///9TRVD/////////////
+        //8BqwAAAAAlhQ4AAq92AAAAAAAAAAANGZgUUFNTiYlhU0VQYWFhYWFhaWFhYQAAAAAAAAAAAAAA
+        AAAAAAAAAABh///////////9//////////8A/////////////////////y7/////////////////
+        /////1NFUP////8eHh4eHh4eHh5FUEVQU0VQU0UAU2FQ
+    """.trimIndent())
+}
+
 val sanitizerTest by tasks.registering(Test::class) {
     description = "Runs sanitizer bytecode transformation tests in an isolated JVM."
     group = LifecycleBasePlugin.VERIFICATION_GROUP
@@ -138,6 +158,7 @@ tasks.named("check") {
     dependsOn(brotliDecoderRegression)
     dependsOn(bzip2DecoderRegression)
     dependsOn(jsonObjectDecoderRegression)
+    dependsOn(sniHandlerRegression)
 }
 
 group = "io.micronaut.fuzzing"
