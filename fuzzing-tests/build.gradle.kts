@@ -24,7 +24,10 @@ tasks.withType<JavaCompile> {
 }
 
 tasks.withType<Test>() {
-    jvmArgs("--enable-preview")
+    jvmArgs(
+        "--enable-preview",
+        "-Dio.netty.customResourceLeakDetector=io.netty.util.LeakPresenceDetector"
+    )
 }
 
 tasks.named<Test>("test") {
@@ -189,6 +192,9 @@ dependencies {
     implementation("org.lz4:lz4-java:1.8.0")
     runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.84")
     implementation("io.netty:netty-codec-xml")
+    implementation("io.netty:netty-codec-haproxy") {
+        version { strictly("4.2.14.Final") }
+    }
 
     annotationProcessor(mn.micronaut.inject.java)
     annotationProcessor(projects.micronautFuzzingAnnotationProcessor)
@@ -253,9 +259,11 @@ tasks.named<JazzerTask>("jazzer") {
     targets.set(listOf(
         //"io.micronaut.fuzzing.toml.TomlTarget",
         //"io.micronaut.fuzzing.http.HttpTarget",
-        "io.micronaut.fuzzing.http.EmbeddedHttpTarget",
+       // "io.micronaut.fuzzing.http.EmbeddedHttpTarget",
         //"io.micronaut.fuzzing.http.MediaTypeTarget",
-        //"io.netty.handler.HttpRequestDecoderFuzzer"
+        //"io.netty.handler.HttpRequestDecoderFuzzer",
+        //"io.netty.handler.codec.haproxy.HAProxyMessageDecoderFuzzer",
+        //"io.netty.handler.ssl.SniHandlerFuzzer",
         //"io.micronaut.fuzzing.http.UriMatchTemplateTarget",
         //"io.micronaut.fuzzing.http.TypeConversionTarget",
         //"io.micronaut.fuzzing.http.ContentNegotiationTarget",
