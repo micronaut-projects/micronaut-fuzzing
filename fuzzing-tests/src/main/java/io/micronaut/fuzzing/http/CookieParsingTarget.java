@@ -26,6 +26,9 @@ import io.netty.handler.codec.http.cookie.ServerCookieEncoder;
 
 import java.util.Collection;
 
+/**
+ * Fuzzes Netty server cookie decoding and encoding.
+ */
 @FuzzTarget
 @Dict({
     "session=abc123",
@@ -57,11 +60,12 @@ import java.util.Collection;
 public class CookieParsingTarget {
 
     public static void fuzzerTestOneInput(FuzzedDataProvider data) {
-        int scenario = data.consumeInt(0, 3);
+        int scenario = data.consumeInt(0, 2);
         switch (scenario) {
             case 0 -> decodeStrict(data);
             case 1 -> decodeLax(data);
             case 2 -> encodeDecodeRoundTrip(data);
+            default -> throw new IllegalStateException("Unexpected scenario");
         }
     }
 
@@ -74,6 +78,7 @@ public class CookieParsingTarget {
                 c.value();
             }
         } catch (IllegalArgumentException ignored) {
+            // Invalid cookie syntax is expected fuzz input for the strict decoder.
         }
     }
 
@@ -86,6 +91,7 @@ public class CookieParsingTarget {
                 c.value();
             }
         } catch (IllegalArgumentException ignored) {
+            // Invalid cookie syntax is expected fuzz input for the lax decoder.
         }
     }
 
