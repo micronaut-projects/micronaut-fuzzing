@@ -1,18 +1,12 @@
 package io.netty.handler.codec.http2;
 
 import com.code_intelligence.jazzer.api.CannedFuzzedDataProvider;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 class CleartextHttp2ServerUpgradeHandlerFuzzerTest {
-    @BeforeAll
-    static void configureLeakDetector() {
-        System.setProperty("io.netty.customResourceLeakDetector", "io.netty.util.LeakPresenceDetector");
-    }
-
     @Test
     void fuzzesPriorKnowledgePrefaceAcrossChunks() throws Exception {
         CleartextHttp2ServerUpgradeHandlerFuzzer.fuzzerTestOneInput(CannedFuzzedDataProvider.create(List.<Object>of(

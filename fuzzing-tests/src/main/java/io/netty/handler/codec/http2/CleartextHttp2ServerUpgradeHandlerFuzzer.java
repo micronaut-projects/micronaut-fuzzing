@@ -20,6 +20,7 @@ import io.micronaut.fuzzing.Dict;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
+import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.HandlerFuzzerBase;
 import io.netty.handler.codec.DecoderException;
 import io.netty.handler.codec.PrematureChannelClosureException;
@@ -27,7 +28,6 @@ import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.HttpServerUpgradeHandler;
 import io.netty.util.AsciiString;
 
-import javax.net.ssl.SSLException;
 import java.nio.channels.ClosedChannelException;
 
 /**
@@ -43,7 +43,9 @@ import java.nio.channels.ClosedChannelException;
     "h2c"
 })
 public class CleartextHttp2ServerUpgradeHandlerFuzzer extends HandlerFuzzerBase {
-    public CleartextHttp2ServerUpgradeHandlerFuzzer(FuzzedDataProvider fuzzedDataProvider) {
+    @Override
+    protected EmbeddedChannel setUp() {
+        EmbeddedChannel channel = new EmbeddedChannel();
         HttpServerCodec serverCodec = new HttpServerCodec();
         HttpServerUpgradeHandler upgradeHandler = new HttpServerUpgradeHandler(serverCodec, protocol -> {
             if (AsciiString.contentEquals(Http2CodecUtil.HTTP_UPGRADE_PROTOCOL_NAME, protocol)) {
@@ -58,6 +60,7 @@ public class CleartextHttp2ServerUpgradeHandlerFuzzer extends HandlerFuzzerBase 
                 upgradeHandler,
                 Http2FrameCodecBuilder.forServer().build()
             ));
+        return channel;
     }
 
     @Override
@@ -66,15 +69,14 @@ public class CleartextHttp2ServerUpgradeHandlerFuzzer extends HandlerFuzzerBase 
             || e instanceof Http2FrameStreamException
             || e instanceof PrematureChannelClosureException
             || e instanceof ClosedChannelException
-            || e instanceof DecoderException && e.getCause() instanceof Http2Exception) {
+            || (e instanceof DecoderException && e.getCause() instanceof Http2Exception)) {
             return;
         }
         super.onException(e);
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
-        var fuzzer = new CleartextHttp2ServerUpgradeHandlerFuzzer(fuzzedDataProvider);
-        fuzzer.test(fuzzedDataProvider);
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws Exception {
+        new CleartextHttp2ServerUpgradeHandlerFuzzer().test(fuzzedDataProvider);
     }
 
     public static void main(String[] args) {

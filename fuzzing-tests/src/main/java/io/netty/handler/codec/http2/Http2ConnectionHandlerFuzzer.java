@@ -20,11 +20,11 @@ import io.micronaut.fuzzing.Dict;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
+import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.HandlerFuzzerBase;
 import io.netty.handler.codec.DecoderException;
 import io.netty.handler.codec.PrematureChannelClosureException;
 
-import javax.net.ssl.SSLException;
 import java.nio.channels.ClosedChannelException;
 
 /**
@@ -39,12 +39,15 @@ import java.nio.channels.ClosedChannelException;
     "\u0000\u0000\u0000\u0004\u0001\u0000\u0000\u0000\u0000"
 })
 public class Http2ConnectionHandlerFuzzer extends HandlerFuzzerBase {
-    public Http2ConnectionHandlerFuzzer(FuzzedDataProvider fuzzedDataProvider) {
+    @Override
+    protected EmbeddedChannel setUp() {
+        EmbeddedChannel channel = new EmbeddedChannel();
         channel.pipeline()
             .addLast(new Http2ConnectionHandlerBuilder()
                 .server(true)
                 .frameListener(new Http2FrameAdapter())
                 .build());
+        return channel;
     }
 
     @Override
@@ -53,15 +56,14 @@ public class Http2ConnectionHandlerFuzzer extends HandlerFuzzerBase {
             || e instanceof Http2FrameStreamException
             || e instanceof PrematureChannelClosureException
             || e instanceof ClosedChannelException
-            || e instanceof DecoderException && e.getCause() instanceof Http2Exception) {
+            || (e instanceof DecoderException && e.getCause() instanceof Http2Exception)) {
             return;
         }
         super.onException(e);
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
-        var fuzzer = new Http2ConnectionHandlerFuzzer(fuzzedDataProvider);
-        fuzzer.test(fuzzedDataProvider);
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws Exception {
+        new Http2ConnectionHandlerFuzzer().test(fuzzedDataProvider);
     }
 
     public static void main(String[] args) {

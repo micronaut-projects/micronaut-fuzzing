@@ -1,7 +1,6 @@
 package io.netty.handler.codec.http2;
 
 import com.code_intelligence.jazzer.api.CannedFuzzedDataProvider;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -14,11 +13,6 @@ class Http2ConnectionHandlerFuzzerTest {
         0,
         0, 0, 0, 0
     };
-
-    @BeforeAll
-    static void configureLeakDetector() {
-        System.setProperty("io.netty.customResourceLeakDetector", "io.netty.util.LeakPresenceDetector");
-    }
 
     @Test
     void fuzzesConnectionPrefaceAndSettingsAcrossChunks() throws Exception {
