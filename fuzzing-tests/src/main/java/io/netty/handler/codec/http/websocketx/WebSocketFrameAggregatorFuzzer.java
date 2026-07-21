@@ -19,111 +19,56 @@ import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.Dict;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
-import io.micronaut.fuzzing.util.ByteSplitter;
-import io.netty.buffer.ByteBuf;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.embedded.EmbeddedChannel;
+import io.netty.handler.HandlerFuzzerBase;
+import io.netty.handler.codec.CorruptedFrameException;
 import io.netty.handler.codec.MessageAggregationException;
 import io.netty.handler.codec.PrematureChannelClosureException;
 import io.netty.handler.codec.TooLongFrameException;
-import io.netty.util.LeakPresenceDetector;
-import io.netty.util.ReferenceCountUtil;
-import io.netty.util.concurrent.FastThreadLocalThread;
 
 /**
  * Fuzzing support type.
  */
 @FuzzTarget
 @Dict({
-    "SEP", "text", "binary", "continuation", "ping", "pong", "close"
+    "text", "binary", "continuation", "ping", "pong", "close",
+    "\u0000\u0000", "\u0001\u0000", "\u0002\u0000", "\b\u0000", "\t\u0000", "\n\u0000",
+    "\u0001\u007e", "\u0002\u007e"
 })
-public class WebSocketFrameAggregatorFuzzer {
-    private static final String SEPARATOR = "SEP";
-    private static final ByteSplitter SPLITTER = ByteSplitter.create(SEPARATOR);
+public final class WebSocketFrameAggregatorFuzzer extends HandlerFuzzerBase {
     private static final int MAX_CONTENT_LENGTH = 1024;
-    private static final int MAX_FRAME_COUNT = 64;
-    private static final int MAX_DATA_FRAME_BYTES = 512;
-    private static final int MAX_CONTROL_FRAME_BYTES = 125;
+    private static final int MAX_FRAME_PAYLOAD_LENGTH = 1024;
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
-        FastThreadLocalThread.runWithFastThreadLocal(() -> test0(fuzzedDataProvider));
+    private final int maxContentLength;
+
+    private WebSocketFrameAggregatorFuzzer(FuzzedDataProvider fuzzedDataProvider) {
+        maxContentLength = fuzzedDataProvider.consumeInt(0, MAX_CONTENT_LENGTH);
     }
 
-    private static void test0(FuzzedDataProvider fuzzedDataProvider) {
-        EmbeddedChannel channel = new EmbeddedChannel(
-            new WebSocketFrameAggregator(fuzzedDataProvider.consumeInt(0, MAX_CONTENT_LENGTH)),
-            new ReleaseAndIgnoreExpectedExceptionsHandler()
+    @Override
+    protected EmbeddedChannel setUp() {
+        return new EmbeddedChannel(
+            new WebSocket08FrameDecoder(false, true, MAX_FRAME_PAYLOAD_LENGTH, true),
+            new WebSocketFrameAggregator(maxContentLength)
         );
-        byte[] allBytes = fuzzedDataProvider.consumeRemainingAsBytes();
-        ByteSplitter.ChunkIterator itr = SPLITTER.splitIterator(allBytes);
-        try {
-            for (int i = 0; i < MAX_FRAME_COUNT && channel.isOpen() && itr.hasNext(); i++) {
-                itr.proceed();
-                channel.writeInbound(nextFrame(channel, allBytes, itr.start(), itr.length()));
-            }
-        } finally {
-            channel.finishAndReleaseAll();
+    }
+
+    @Override
+    protected void onException(Exception e) {
+        if (e instanceof CorruptedFrameException
+            || e instanceof MessageAggregationException
+            || e instanceof PrematureChannelClosureException
+            || e instanceof TooLongFrameException) {
+            return;
         }
-        LeakPresenceDetector.check();
+        super.onException(e);
     }
 
-    private static WebSocketFrame nextFrame(EmbeddedChannel channel, byte[] frameBytes, int offset, int length) {
-        int descriptor = length == 0 ? 0 : frameBytes[offset] & 0xff;
-        boolean finalFragment = (descriptor & 1) != 0;
-        int rsv = descriptor >> 1 & 7;
-        int payloadOffset = offset + Math.min(1, length);
-        int payloadLength = offset + length - payloadOffset;
-
-        return switch ((descriptor >> 4) % 6) {
-            case 0 -> new TextWebSocketFrame(
-                finalFragment, rsv, nextPayload(channel, frameBytes, payloadOffset, payloadLength, MAX_DATA_FRAME_BYTES)
-            );
-            case 1 -> new BinaryWebSocketFrame(
-                finalFragment, rsv, nextPayload(channel, frameBytes, payloadOffset, payloadLength, MAX_DATA_FRAME_BYTES)
-            );
-            case 2 -> new ContinuationWebSocketFrame(
-                finalFragment, rsv, nextPayload(channel, frameBytes, payloadOffset, payloadLength, MAX_DATA_FRAME_BYTES)
-            );
-            case 3 -> new PingWebSocketFrame(
-                finalFragment, rsv, nextPayload(channel, frameBytes, payloadOffset, payloadLength, MAX_CONTROL_FRAME_BYTES)
-            );
-            case 4 -> new PongWebSocketFrame(
-                finalFragment, rsv, nextPayload(channel, frameBytes, payloadOffset, payloadLength, MAX_CONTROL_FRAME_BYTES)
-            );
-            case 5 -> new CloseWebSocketFrame(
-                finalFragment, rsv, nextPayload(channel, frameBytes, payloadOffset, payloadLength, MAX_CONTROL_FRAME_BYTES)
-            );
-            default -> throw new IllegalStateException("Unexpected frame type");
-        };
-    }
-
-    private static ByteBuf nextPayload(EmbeddedChannel channel, byte[] frameBytes, int offset, int payloadLength, int maxLength) {
-        int length = Math.min(maxLength, payloadLength);
-        ByteBuf payload = channel.alloc().buffer(length);
-        payload.writeBytes(frameBytes, offset, length);
-        return payload;
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws Exception {
+        new WebSocketFrameAggregatorFuzzer(fuzzedDataProvider).test(fuzzedDataProvider);
     }
 
     public static void main(String[] args) {
         LocalJazzerRunner.create(WebSocketFrameAggregatorFuzzer.class).fuzz();
-    }
-
-    private static final class ReleaseAndIgnoreExpectedExceptionsHandler extends ChannelInboundHandlerAdapter {
-        @Override
-        public void channelRead(ChannelHandlerContext ctx, Object msg) {
-            ReferenceCountUtil.release(msg);
-        }
-
-        @Override
-        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-            if (cause instanceof MessageAggregationException
-                || cause instanceof PrematureChannelClosureException
-                || cause instanceof TooLongFrameException) {
-                ctx.close();
-                return;
-            }
-            super.exceptionCaught(ctx, cause);
-        }
     }
 }

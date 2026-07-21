@@ -1,7 +1,6 @@
 package io.netty.handler.codec.http.websocketx;
 
 import com.code_intelligence.jazzer.api.CannedFuzzedDataProvider;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -9,18 +8,19 @@ import java.util.List;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 class WebSocketFrameAggregatorFuzzerTest {
-    private static final int TEXT = 0;
-    private static final int PING_FINAL = 3 << 4 | 1;
-    private static final int CONTINUATION = 2 << 4;
-    private static final int FINAL_CONTINUATION = 2 << 4 | 1;
-
-    @BeforeAll
-    static void configureLeakDetector() {
-        System.setProperty("io.netty.customResourceLeakDetector", "io.netty.util.LeakPresenceDetector");
-    }
+    private static final int TEXT = 1;
+    private static final int FINAL_TEXT = 0x80 | TEXT;
+    private static final int BINARY = 2;
+    private static final int FINAL_BINARY = 0x80 | BINARY;
+    private static final int PING_FINAL = 0x80 | 9;
+    private static final int PONG_FINAL = 0x80 | 10;
+    private static final int CLOSE_FINAL = 0x80 | 8;
+    private static final int CONTINUATION = 0;
+    private static final int FINAL_CONTINUATION = 0x80;
+    private static final int RSV1_FINAL_TEXT = 0xc0 | TEXT;
 
     @Test
-    void fuzzesFragmentedFramesWithInterleavedControlFrame() {
+    void fuzzesFragmentedFramesWithInterleavedControlFrame() throws Exception {
         WebSocketFrameAggregatorFuzzer.fuzzerTestOneInput(CannedFuzzedDataProvider.create(List.of(
             16,
             frames(
@@ -33,12 +33,65 @@ class WebSocketFrameAggregatorFuzzerTest {
     }
 
     @Test
-    void handlesOversizedAggregatesAsExpectedNettyValidation() {
+    void handlesOversizedAggregatesAsExpectedNettyValidation() throws Exception {
         WebSocketFrameAggregatorFuzzer.fuzzerTestOneInput(CannedFuzzedDataProvider.create(List.of(
             4,
             frames(
                 frame(TEXT, "test"),
                 frame(FINAL_CONTINUATION, "!")
+            )
+        )));
+    }
+
+    @Test
+    void fuzzesFragmentedBinaryFrames() throws Exception {
+        WebSocketFrameAggregatorFuzzer.fuzzerTestOneInput(CannedFuzzedDataProvider.create(List.of(
+            16,
+            frames(
+                frame(BINARY, new byte[] { 1 }),
+                frame(CONTINUATION, new byte[] { 2 }),
+                frame(FINAL_CONTINUATION, new byte[] { 3 })
+            )
+        )));
+    }
+
+    @Test
+    void fuzzesSingleFinalTextFrame() throws Exception {
+        WebSocketFrameAggregatorFuzzer.fuzzerTestOneInput(CannedFuzzedDataProvider.create(List.of(
+            16,
+            frame(FINAL_TEXT, "hello")
+        )));
+    }
+
+    @Test
+    void decoderReplacementCanReachOldFrameCategories() throws Exception {
+        WebSocketFrameAggregatorFuzzer.fuzzerTestOneInput(CannedFuzzedDataProvider.create(List.of(
+            16,
+            frames(
+                frame(FINAL_TEXT, "text"),
+                frame(FINAL_BINARY, new byte[] { 1, 2, 3 }),
+                frame(PING_FINAL, new byte[] { 4 }),
+                frame(PONG_FINAL, new byte[] { 5 }),
+                closeFrame()
+            )
+        )));
+    }
+
+    @Test
+    void decoderReplacementCanReachRsvPathsAllowedByExtensions() throws Exception {
+        WebSocketFrameAggregatorFuzzer.fuzzerTestOneInput(CannedFuzzedDataProvider.create(List.of(
+            16,
+            frame(RSV1_FINAL_TEXT, "reserved")
+        )));
+    }
+
+    @Test
+    void decoderReplacementCanAggregateRsvFragmentedFrames() throws Exception {
+        WebSocketFrameAggregatorFuzzer.fuzzerTestOneInput(CannedFuzzedDataProvider.create(List.of(
+            16,
+            frames(
+                frame(0x40 | TEXT, "reserved"),
+                frame(FINAL_CONTINUATION, " continuation")
             )
         )));
     }
@@ -68,9 +121,14 @@ class WebSocketFrameAggregatorFuzzerTest {
     }
 
     private static byte[] frame(int descriptor, byte[] payload) {
-        byte[] frame = new byte[payload.length + 1];
+        byte[] frame = new byte[payload.length + 2];
         frame[0] = (byte) descriptor;
-        System.arraycopy(payload, 0, frame, 1, payload.length);
+        frame[1] = (byte) payload.length;
+        System.arraycopy(payload, 0, frame, 2, payload.length);
         return frame;
+    }
+
+    private static byte[] closeFrame() {
+        return frame(CLOSE_FINAL, new byte[] { 3, (byte) 232 });
     }
 }
