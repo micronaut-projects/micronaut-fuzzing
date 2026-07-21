@@ -17,7 +17,7 @@ class Http2ConnectionHandlerFuzzerTest {
     @Test
     void fuzzesConnectionPrefaceAndSettingsAcrossChunks() throws Exception {
         Http2ConnectionHandlerFuzzer.fuzzerTestOneInput(CannedFuzzedDataProvider.create(List.<Object>of(
-            concat(bytes("PRI * HTTP/2.0\r\n\r\nSSEPM\r\n\r\n"), EMPTY_SETTINGS_FRAME)
+            concat(bytes("PRI * HTTP/2.0\r\n\r\nSSEPM\r\n\r\nSEP"), EMPTY_SETTINGS_FRAME)
         )));
     }
 
