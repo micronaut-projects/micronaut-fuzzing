@@ -28,9 +28,26 @@ tasks.withType<Test>() {
 }
 
 tasks.named<Test>("test") {
+    exclude("io/micronaut/fuzzing/sanitizer/SanitizerTransformerTest.class")
+    exclude("io/netty/handler/codec/http/websocketx/WebSocketFrameAggregatorFuzzerTest.class")
+    exclude("io/netty/handler/codec/http2/CleartextHttp2ServerUpgradeHandlerFuzzerTest.class")
+    exclude("io/netty/handler/codec/http2/Http2ConnectionHandlerFuzzerTest.class")
+}
+
+val nettyFuzzerTest by tasks.registering(Test::class) {
+    description = "Runs Netty fuzzer smoke tests in isolated JVMs with leak detection."
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+
+    include("io/netty/handler/codec/http/websocketx/WebSocketFrameAggregatorFuzzerTest.class")
+    include("io/netty/handler/codec/http2/CleartextHttp2ServerUpgradeHandlerFuzzerTest.class")
+    include("io/netty/handler/codec/http2/Http2ConnectionHandlerFuzzerTest.class")
+
+    shouldRunAfter(tasks.named("test"))
     forkEvery = 1
     jvmArgs("-Dio.netty.customResourceLeakDetector=io.netty.util.LeakPresenceDetector")
-    exclude("io/micronaut/fuzzing/sanitizer/SanitizerTransformerTest.class")
 }
 
 val lz4FrameDecoderRegression by tasks.registering(JazzerRegressionTask::class) {
@@ -155,6 +172,7 @@ val sanitizerTest by tasks.registering(Test::class) {
 
 tasks.named("check") {
     dependsOn(sanitizerTest)
+    dependsOn(nettyFuzzerTest)
     dependsOn(lz4FrameDecoderRegression)
     dependsOn(httpClientUpgradeHandlerRegression)
     dependsOn(brotliDecoderRegression)
