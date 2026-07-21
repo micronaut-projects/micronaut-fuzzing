@@ -48,6 +48,13 @@ val nettyFuzzerTest by tasks.registering(Test::class) {
     shouldRunAfter(tasks.named("test"))
     forkEvery = 1
     jvmArgs("-Dio.netty.customResourceLeakDetector=io.netty.util.LeakPresenceDetector")
+
+    extensions.configure<JacocoTaskExtension> {
+        isEnabled = false
+    }
+    doFirst {
+        jvmArgumentProviders.removeAll { it.javaClass.name.contains("Jacoco") }
+    }
 }
 
 val lz4FrameDecoderRegression by tasks.registering(JazzerRegressionTask::class) {
