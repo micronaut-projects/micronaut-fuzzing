@@ -24,6 +24,7 @@ tasks.withType<JavaCompile> {
 
 tasks.withType<Test>() {
     jvmArgs("--enable-preview")
+    systemProperty("io.netty.customResourceLeakDetector", "io.netty.util.LeakPresenceDetector")
 }
 
 tasks.named<Test>("test") {
@@ -72,7 +73,7 @@ dependencies {
     implementation(mnTest.bytebuddy)
 
     runtimeOnly("com.aayushatharva.brotli4j:native-linux-x86_64:1.20.0")
-    runtimeOnly("com.aayushatharva.brotli4j:brotli4j:1.20.0")
+    implementation("com.aayushatharva.brotli4j:brotli4j:1.20.0")
     runtimeOnly("com.github.jponge:lzma-java:1.3")
     runtimeOnly("com.github.luben:zstd-jni:1.5.7-6")
     runtimeOnly("com.jcraft:jzlib:1.1.3")
@@ -142,7 +143,10 @@ tasks.named<JazzerTask>("jazzer") {
     targets.set(listOf(
         //"io.micronaut.fuzzing.toml.TomlTarget",
         //"io.micronaut.fuzzing.http.HttpTarget",
-        "io.micronaut.fuzzing.http.EmbeddedHttpTarget",
+        //"io.micronaut.fuzzing.http.EmbeddedHttpTarget",
+        //"io.netty.handler.codec.base64.Base64EncoderFuzzer",
+        "io.netty.handler.codec.compression.BrotliEncoderFuzzer",
+        //"io.netty.handler.codec.string.StringEncoderFuzzer",
         //"io.micronaut.fuzzing.http.MediaTypeTarget",
         //"io.netty.handler.HttpRequestDecoderFuzzer"
         //"io.micronaut.fuzzing.http.UriMatchTemplateTarget",
