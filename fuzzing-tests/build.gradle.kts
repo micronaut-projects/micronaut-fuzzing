@@ -30,6 +30,9 @@ tasks.withType<Test>() {
 
 tasks.named<Test>("test") {
     exclude("io/micronaut/fuzzing/sanitizer/SanitizerTransformerTest.class")
+    exclude("io/netty/handler/codec/base64/Base64EncoderFuzzerTest.class")
+    exclude("io/netty/handler/codec/compression/BrotliEncoderFuzzerTest.class")
+    exclude("io/netty/handler/codec/string/StringEncoderFuzzerTest.class")
     exclude("io/netty/handler/codec/http/websocketx/WebSocketFrameAggregatorFuzzerTest.class")
     exclude("io/netty/handler/codec/http2/CleartextHttp2ServerUpgradeHandlerFuzzerTest.class")
     exclude("io/netty/handler/codec/http2/Http2ConnectionHandlerFuzzerTest.class")
@@ -45,6 +48,9 @@ val nettyFuzzerTest by tasks.registering(Test::class) {
     include("io/netty/handler/codec/http/websocketx/WebSocketFrameAggregatorFuzzerTest.class")
     include("io/netty/handler/codec/http2/CleartextHttp2ServerUpgradeHandlerFuzzerTest.class")
     include("io/netty/handler/codec/http2/Http2ConnectionHandlerFuzzerTest.class")
+    include("io/netty/handler/codec/base64/Base64EncoderFuzzerTest.class")
+    include("io/netty/handler/codec/compression/BrotliEncoderFuzzerTest.class")
+    include("io/netty/handler/codec/string/StringEncoderFuzzerTest.class")
 
     shouldRunAfter(tasks.named("test"))
     forkEvery = 1
