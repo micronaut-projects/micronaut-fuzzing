@@ -26,7 +26,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 class BrotliEncoderFuzzerTest {
     @Test
-    void fuzzesSinglePayloadWithOptionsPrefix() {
+    void fuzzesSinglePayloadWithProviderOptions() {
         BrotliEncoderFuzzer.fuzzerTestOneInput(CannedFuzzedDataProvider.create(List.of(
             5,
             18,
