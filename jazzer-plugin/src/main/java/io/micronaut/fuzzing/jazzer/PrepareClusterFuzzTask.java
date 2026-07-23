@@ -80,6 +80,12 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
     @Optional
     public abstract Property<String> getSetupScript();
 
+    @Input
+    public abstract Property<String> getJazzerDriver();
+
+    @Input
+    public abstract Property<String> getJazzerAgent();
+
     /**
      * Introspector-specific settings. Note that these don't affect the actual fuzzing, only the
      * introspector report.
@@ -145,7 +151,7 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                 if (jni) {
                     line.add("JAZZER_NATIVE_SANITIZERS_DIR=native-sanitizers");
                 }
-                line.add("$this_dir/jazzer_driver");
+                line.add("$this_dir/" + getJazzerDriver().get());
                 if (jni) {
                     switch (getJni().getSanitizer().getOrElse("")) {
                         case "address" -> line.add("--asan");
@@ -155,7 +161,7 @@ public abstract class PrepareClusterFuzzTask extends BaseJazzerTask {
                         }
                     }
                 }
-                line.add("--agent_path=$this_dir/jazzer_agent_deploy.jar");
+                line.add("--agent_path=$this_dir/" + getJazzerAgent().get());
                 collectArgs(line, target);
                 line.add("--cp=" + String.join(":", cp));
                 String fileName = targetNames.get(target.targetClass());

@@ -17,7 +17,6 @@ package io.micronaut.fuzzing.http;
 
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.context.ApplicationContext;
-import io.micronaut.fuzzing.Dict;
 import io.micronaut.fuzzing.EmbeddedChannelFuzzerBase;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
@@ -26,6 +25,9 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.LoggerContext;
 import io.micronaut.http.server.netty.NettyHttpServer;
 import io.micronaut.runtime.server.EmbeddedServer;
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.embedded.EmbeddedChannel;
+import io.netty.util.ReferenceCountUtil;
 import org.slf4j.LoggerFactory;
 
 import java.lang.management.ManagementFactory;
@@ -37,34 +39,22 @@ import java.util.Map;
  */
 @FuzzTarget
 @HttpDict
-@Dict({
-    SimpleController.ECHO_ARRAY,
-    SimpleController.ECHO_PUBLISHER,
-    SimpleController.ECHO_STRING,
-    SimpleController.ECHO_PIECE_JSON,
-    SimpleController.ECHO_QUERY,
-    SimpleController.ECHO_PATH,
-    SimpleController.ECHO_HEADER,
-    SimpleController.ECHO_FORM,
-    SimpleController.ECHO_FORM_PAIR,
-    SimpleController.UPLOAD_FILE,
-    SimpleController.UPLOAD_FIELDS,
-    SimpleController.UPLOAD_MIXED,
-    SimpleController.ECHO_BEAN,
-    SimpleController.ECHO_REQUEST_BEAN,
-    SimpleController.ECHO_COOKIE,
-    SimpleController.UPLOAD_MULTIPLE,
-    SimpleController.ECHO_NEGOTIATED,
-    SimpleController.ECHO_MULTI_ACCEPT,
-})
+@SimpleControllerDict
 public class EmbeddedHttpTarget extends EmbeddedChannelFuzzerBase {
     private static final ContextHolder HTTP1 = new ContextHolder(Map.of());
 
+    private final ContextHolder contextHolder;
+
     EmbeddedHttpTarget(ContextHolder contextHolder) {
-        super(contextHolder.nettyHttpServer.buildEmbeddedChannel(false));
+        this.contextHolder = contextHolder;
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider input) {
+    @Override
+    protected EmbeddedChannel setUp() {
+        return contextHolder.nettyHttpServer.buildEmbeddedChannel(false);
+    }
+
+    public static void fuzzerTestOneInput(FuzzedDataProvider input) throws Exception {
         new EmbeddedHttpTarget(HTTP1).test(input);
     }
 
@@ -85,6 +75,24 @@ public class EmbeddedHttpTarget extends EmbeddedChannelFuzzerBase {
             setLogLevel("io.micronaut", Level.WARN);
 
             nettyHttpServer = (NettyHttpServer) ctx.getBean(EmbeddedServer.class);
+            warmUp(nettyHttpServer);
+        }
+
+        private static void warmUp(NettyHttpServer nettyHttpServer) {
+            EmbeddedChannel channel = nettyHttpServer.buildEmbeddedChannel(false);
+            try {
+                byte[] request = "GET / HTTP/1.1\r\nContent-Length: 0\r\nHost: localhost\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.UTF_8);
+                ByteBuf buffer = channel.alloc().buffer(request.length);
+                buffer.writeBytes(request);
+                channel.writeInbound(buffer);
+                channel.finish();
+                Object message;
+                while ((message = channel.readOutbound()) != null) {
+                    ReferenceCountUtil.release(message);
+                }
+            } finally {
+                channel.finishAndReleaseAll();
+            }
         }
 
         private static void setLogLevel(String loggerName, Level level) {

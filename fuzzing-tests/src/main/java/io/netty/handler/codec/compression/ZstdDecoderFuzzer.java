@@ -15,12 +15,12 @@
  */
 package io.netty.handler.codec.compression;
 
+import io.netty.channel.embedded.EmbeddedChannel;
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 
-import javax.net.ssl.SSLException;
 
 /**
  * Fuzzing support type.
@@ -28,14 +28,16 @@ import javax.net.ssl.SSLException;
 @FuzzTarget
 @HttpDict
 public class ZstdDecoderFuzzer extends DecompressorFuzzerBase {
-    public ZstdDecoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
+    @Override
+    protected EmbeddedChannel setUp() {
+        EmbeddedChannel channel = new EmbeddedChannel();
         channel.pipeline()
             .addLast(new ZstdDecoder());
+        return channel;
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
-        var fuzzer = new ZstdDecoderFuzzer(fuzzedDataProvider);
-        fuzzer.test(fuzzedDataProvider);
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws Exception {
+        new ZstdDecoderFuzzer().test(fuzzedDataProvider);
     }
 
     public static void main(String[] args) {

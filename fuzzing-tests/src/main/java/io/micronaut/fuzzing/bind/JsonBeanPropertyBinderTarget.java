@@ -19,7 +19,6 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.LoggerContext;
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.context.ApplicationContext;
-import io.micronaut.context.BeanProvider;
 import io.micronaut.core.annotation.Introspected;
 import io.micronaut.core.annotation.Nullable;
 import io.micronaut.core.bind.ArgumentBinder;
@@ -32,9 +31,6 @@ import io.micronaut.core.type.Argument;
 import io.micronaut.fuzzing.Dict;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
-import io.micronaut.json.JsonConfiguration;
-import io.micronaut.json.JsonMapper;
-import io.micronaut.json.bind.JsonBeanPropertyBinderExceptionHandler;
 import org.slf4j.LoggerFactory;
 
 import java.util.LinkedHashMap;
@@ -66,11 +62,7 @@ public class JsonBeanPropertyBinderTarget {
         setLogLevel("io.micronaut", Level.TRACE);
 
         ApplicationContext ctx = ApplicationContext.run(Map.of());
-        JsonMapper jsonMapper = ctx.getBean(JsonMapper.class);
-        JsonConfiguration jsonConfig = ctx.getBean(JsonConfiguration.class);
-        BeanProvider<JsonBeanPropertyBinderExceptionHandler> handlers =
-            ctx.getBean(Argument.of(BeanProvider.class, JsonBeanPropertyBinderExceptionHandler.class));
-        BINDER = new JsonBeanPropertyBinder(jsonMapper, jsonConfig, handlers);
+        BINDER = ctx.getBean(BeanPropertyBinder.class);
 
         setLogLevel("io.micronaut", Level.WARN);
     }
@@ -232,7 +224,7 @@ public class JsonBeanPropertyBinderTarget {
         }
     }
 
-   /** Item entry used for nested list binding fuzzing. */
+    /** Item entry used for nested list binding fuzzing. */
     @Introspected
     public static final class ItemEntry {
         @Nullable private String value;

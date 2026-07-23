@@ -21,12 +21,12 @@ import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.HandlerFuzzerBase;
 import io.netty.handler.codec.DecoderException;
 import io.netty.handler.codec.PrematureChannelClosureException;
 import io.netty.handler.codec.http.HttpServerCodec;
 
-import javax.net.ssl.SSLException;
 import java.nio.channels.ClosedChannelException;
 
 /**
@@ -35,7 +35,9 @@ import java.nio.channels.ClosedChannelException;
 @FuzzTarget
 @HttpDict
 public class WebSocketServerProtocolHandlerFuzzer extends HandlerFuzzerBase {
-    public WebSocketServerProtocolHandlerFuzzer(FuzzedDataProvider fuzzedDataProvider) {
+    @Override
+    protected EmbeddedChannel setUp() {
+        EmbeddedChannel channel = new EmbeddedChannel();
         HttpServerCodec serverCodec = new HttpServerCodec();
         channel.pipeline()
             .addLast(serverCodec)
@@ -52,11 +54,11 @@ public class WebSocketServerProtocolHandlerFuzzer extends HandlerFuzzerBase {
                     super.exceptionCaught(ctx, cause);
                 }
             });
+        return channel;
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
-        var fuzzer = new WebSocketServerProtocolHandlerFuzzer(fuzzedDataProvider);
-        fuzzer.test(fuzzedDataProvider);
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws Exception {
+        new WebSocketServerProtocolHandlerFuzzer().test(fuzzedDataProvider);
     }
 
     public static void main(String[] args) {
