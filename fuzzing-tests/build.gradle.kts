@@ -220,7 +220,7 @@ dependencies {
     runtimeOnly("com.github.luben:zstd-jni:1.5.7-11")
     runtimeOnly("com.jcraft:jzlib:1.1.3")
     runtimeOnly("com.ning:compress-lzf:1.2.0")
-    implementation("org.lz4:lz4-java:1.8.0")
+    implementation("org.lz4:lz4-java:1.8.1")
     runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.84")
     implementation("io.netty:netty-codec-xml")
 
