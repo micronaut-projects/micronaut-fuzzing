@@ -25,10 +25,14 @@ tasks.withType<JavaCompile> {
 
 tasks.withType<Test>() {
     jvmArgs("--enable-preview")
+    systemProperty("io.netty.customResourceLeakDetector", "io.netty.util.LeakPresenceDetector")
 }
 
 tasks.named<Test>("test") {
     exclude("io/micronaut/fuzzing/sanitizer/SanitizerTransformerTest.class")
+    exclude("io/netty/handler/codec/base64/Base64EncoderFuzzerTest.class")
+    exclude("io/netty/handler/codec/compression/BrotliEncoderFuzzerTest.class")
+    exclude("io/netty/handler/codec/string/StringEncoderFuzzerTest.class")
     exclude("io/netty/handler/codec/http/websocketx/WebSocketFrameAggregatorFuzzerTest.class")
     exclude("io/netty/handler/codec/http2/CleartextHttp2ServerUpgradeHandlerFuzzerTest.class")
     exclude("io/netty/handler/codec/http2/Http2ConnectionHandlerFuzzerTest.class")
@@ -44,6 +48,9 @@ val nettyFuzzerTest by tasks.registering(Test::class) {
     include("io/netty/handler/codec/http/websocketx/WebSocketFrameAggregatorFuzzerTest.class")
     include("io/netty/handler/codec/http2/CleartextHttp2ServerUpgradeHandlerFuzzerTest.class")
     include("io/netty/handler/codec/http2/Http2ConnectionHandlerFuzzerTest.class")
+    include("io/netty/handler/codec/base64/Base64EncoderFuzzerTest.class")
+    include("io/netty/handler/codec/compression/BrotliEncoderFuzzerTest.class")
+    include("io/netty/handler/codec/string/StringEncoderFuzzerTest.class")
 
     shouldRunAfter(tasks.named("test"))
     forkEvery = 1
@@ -208,7 +215,7 @@ dependencies {
     implementation(mnTest.bytebuddy)
 
     runtimeOnly("com.aayushatharva.brotli4j:native-linux-x86_64:1.23.0")
-    runtimeOnly("com.aayushatharva.brotli4j:brotli4j:1.23.0")
+    implementation("com.aayushatharva.brotli4j:brotli4j:1.23.0")
     runtimeOnly("com.github.jponge:lzma-java:1.3")
     runtimeOnly("com.github.luben:zstd-jni:1.5.7-11")
     runtimeOnly("com.jcraft:jzlib:1.1.3")
@@ -280,7 +287,10 @@ tasks.named<JazzerTask>("jazzer") {
     targets.set(listOf(
         //"io.micronaut.fuzzing.toml.TomlTarget",
         //"io.micronaut.fuzzing.http.HttpTarget",
-        "io.micronaut.fuzzing.http.EmbeddedHttpTarget",
+        //"io.micronaut.fuzzing.http.EmbeddedHttpTarget",
+        //"io.netty.handler.codec.base64.Base64EncoderFuzzer",
+        "io.netty.handler.codec.compression.BrotliEncoderFuzzer",
+        //"io.netty.handler.codec.string.StringEncoderFuzzer",
         //"io.micronaut.fuzzing.http.MediaTypeTarget",
         //"io.netty.handler.HttpRequestDecoderFuzzer"
         //"io.micronaut.fuzzing.http.UriMatchTemplateTarget",

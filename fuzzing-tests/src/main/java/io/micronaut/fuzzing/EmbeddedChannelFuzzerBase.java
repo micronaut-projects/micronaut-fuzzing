@@ -37,7 +37,7 @@ import jdk.jfr.StackTrace;
 @Dict("SEP")
 public abstract class EmbeddedChannelFuzzerBase {
     private static final long CPU_TIME_FACTOR = 1024;
-    private static final String SEPARATOR = "SEP";
+    public static final String SEPARATOR = "SEP";
     private static final ByteSplitter SPLITTER = ByteSplitter.create(SEPARATOR);
 
     protected long baseCpuTime = 500000;
@@ -80,6 +80,13 @@ public abstract class EmbeddedChannelFuzzerBase {
      */
     protected void onException(Exception e) {
         PlatformDependent.throwException(e);
+    }
+
+    /**
+     * @return Whether to write split input chunks outbound instead of inbound.
+     */
+    protected boolean isOutbound() {
+        return false;
     }
 
     private void test0(byte[] allBytes) {
@@ -130,7 +137,11 @@ public abstract class EmbeddedChannelFuzzerBase {
             ByteBuf buffer = channel.alloc().buffer(itr.length());
             buffer.writeBytes(allBytes, itr.start(), itr.length());
             try {
-                channel.writeInbound(buffer);
+                if (isOutbound()) {
+                    channel.writeOutbound(buffer);
+                } else {
+                    channel.writeInbound(buffer);
+                }
             } catch (Exception e) {
                 handleException(state, e);
                 break; // cancel further input, but still release
