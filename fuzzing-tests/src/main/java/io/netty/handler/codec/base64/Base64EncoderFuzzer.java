@@ -29,7 +29,7 @@ import io.netty.channel.embedded.EmbeddedChannel;
  */
 @FuzzTarget
 @Dict({
-    "SEP", "base64", "hello", "foobar", "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+    "base64", "hello", "foobar", "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 })
 public class Base64EncoderFuzzer extends EmbeddedChannelFuzzerBase {
     private static final Base64Dialect[] DIALECTS = Base64Dialect.values();
