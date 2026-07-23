@@ -33,15 +33,20 @@ import io.netty.channel.embedded.EmbeddedChannel;
 })
 public class Base64EncoderFuzzer extends EmbeddedChannelFuzzerBase {
     private static final Base64Dialect[] DIALECTS = Base64Dialect.values();
+    private final boolean breakLines;
+    private final Base64Dialect dialect;
 
     public Base64EncoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
-        super(new EmbeddedChannel(
-            new Base64Encoder(
-                fuzzedDataProvider.consumeBoolean(),
-                DIALECTS[fuzzedDataProvider.consumeInt(0, DIALECTS.length - 1)]
-            ),
+        breakLines = fuzzedDataProvider.consumeBoolean();
+        dialect = DIALECTS[fuzzedDataProvider.consumeInt(0, DIALECTS.length - 1)];
+    }
+
+    @Override
+    protected EmbeddedChannel setUp() {
+        return new EmbeddedChannel(
+            new Base64Encoder(breakLines, dialect),
             new InboundToOutboundHandler()
-        ));
+        );
     }
 
     public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
