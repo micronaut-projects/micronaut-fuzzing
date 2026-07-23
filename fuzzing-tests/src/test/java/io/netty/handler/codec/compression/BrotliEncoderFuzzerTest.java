@@ -18,43 +18,42 @@ package io.netty.handler.codec.compression;
 import com.code_intelligence.jazzer.api.CannedFuzzedDataProvider;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
 import java.util.List;
 
+import static io.micronaut.fuzzing.EmbeddedChannelFuzzerBase.SEPARATOR;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 class BrotliEncoderFuzzerTest {
     @Test
     void fuzzesSinglePayloadWithOptionsPrefix() {
         BrotliEncoderFuzzer.fuzzerTestOneInput(CannedFuzzedDataProvider.create(List.of(
-            new byte[] { 5, 18, 1, 'h', 'e', 'l', 'l', 'o' }
+            5,
+            18,
+            1,
+            "hello".getBytes(UTF_8)
         )));
     }
 
     @Test
     void fuzzesSeparatedPayloadChunks() {
         BrotliEncoderFuzzer.fuzzerTestOneInput(CannedFuzzedDataProvider.create(List.of(
+            9,
+            22,
+            0,
             join(
-                new byte[] { 9, 22, 0 },
                 "hello".getBytes(UTF_8),
                 "world".getBytes(UTF_8)
             )
         )));
     }
 
-    private static byte[] join(byte[] options, byte[] firstChunk, byte[] secondChunk) {
-        byte[] separator = "SEP".getBytes(UTF_8);
-        byte[] result = new byte[options.length + separator.length + firstChunk.length
-            + separator.length + secondChunk.length];
-        int offset = 0;
-        System.arraycopy(options, 0, result, offset, options.length);
-        offset += options.length;
-        System.arraycopy(separator, 0, result, offset, separator.length);
-        offset += separator.length;
-        System.arraycopy(firstChunk, 0, result, offset, firstChunk.length);
-        offset += firstChunk.length;
-        System.arraycopy(separator, 0, result, offset, separator.length);
-        offset += separator.length;
-        System.arraycopy(secondChunk, 0, result, offset, secondChunk.length);
-        return result;
+    private static byte[] join(byte[] firstChunk, byte[] secondChunk) {
+        byte[] separator = SEPARATOR.getBytes(UTF_8);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.writeBytes(firstChunk);
+        out.writeBytes(separator);
+        out.writeBytes(secondChunk);
+        return out.toByteArray();
     }
 }
