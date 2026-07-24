@@ -86,6 +86,13 @@ val lz4FrameDecoderRegression by tasks.registering(JazzerRegressionTask::class) 
         U0VTRVBTRVBTRVBTRVBQRVBFU1NTRVBTU0VQU0VQU0VQUHJhZ21TRVBTRVBTRVBTRVBTRVBTRVBT
         RVBTRSpFUFNFUFNTRVBTRVBTRVA=
     """.trimIndent())
+    base64RegressionInputs.put("oss-fuzz-5957100319866880", """
+        TFo0QmxvY2suhAAAAABALAAAAGRWVlZUcn5uc2Zlci1FbmNvZGluZ1ZWVlZWVtZWXVZWVlZWVlZ+
+        bnNmZXItRW5jb2RpbmdWVlZWVlZWVl1WVlZWVlZWVoxWVkFjTDRaRkFjY2Vzcy1DcnRvb25sLUFs
+        U1BTRUVQU0VQU0WRgYGBgYGBgUxaNEJsb2NrLoQAAAAAQAAAAGRWVlZUcmFuc2Zlci1FbmNvZGlu
+        Z1ZWVlZWVlZWXVZWVlZWVlZWjFZWQWNMNFpGQWNjQ3Nyc2YtdG9QU0VQoIDzoK2p8gzzoIGAhL7z
+        oIGeKy3zoIGrdjDhhZ8xMzA0nQrzoICiMhE=
+    """.trimIndent())
 }
 
 val httpClientUpgradeHandlerRegression by tasks.registering(JazzerRegressionTask::class) {
@@ -220,7 +227,7 @@ dependencies {
     runtimeOnly("com.github.luben:zstd-jni:1.5.7-11")
     runtimeOnly("com.jcraft:jzlib:1.1.3")
     runtimeOnly("com.ning:compress-lzf:1.2.0")
-    implementation("org.lz4:lz4-java:1.8.0")
+    implementation("at.yawk.lz4:lz4-java:1.11.1")
     runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.84")
     implementation("io.netty:netty-codec-xml")
 
