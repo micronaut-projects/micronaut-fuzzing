@@ -24,6 +24,7 @@ tasks.withType<JavaCompile> {
 
 tasks.withType<Test>() {
     jvmArgs("--enable-preview")
+    systemProperty("io.netty.customResourceLeakDetector", "io.netty.util.LeakPresenceDetector")
 }
 
 tasks.named<Test>("test") {
@@ -77,9 +78,10 @@ dependencies {
     runtimeOnly("com.github.luben:zstd-jni:1.5.7-6")
     runtimeOnly("com.jcraft:jzlib:1.1.3")
     runtimeOnly("com.ning:compress-lzf:1.1.3")
-    runtimeOnly("org.lz4:lz4-java:1.8.0")
+    implementation("org.lz4:lz4-java:1.8.0")
     runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.82")
     implementation("io.netty:netty-codec-xml")
+    implementation("io.netty:netty-codec-redis")
 
     annotationProcessor(mn.micronaut.inject.java)
     annotationProcessor(projects.micronautFuzzingAnnotationProcessor)
@@ -142,7 +144,13 @@ tasks.named<JazzerTask>("jazzer") {
     targets.set(listOf(
         //"io.micronaut.fuzzing.toml.TomlTarget",
         //"io.micronaut.fuzzing.http.HttpTarget",
-        "io.micronaut.fuzzing.http.EmbeddedHttpTarget",
+        //"io.micronaut.fuzzing.http.EmbeddedHttpTarget",
+        //"io.netty.handler.codec.compression.JdkZlibEncoderFuzzer",
+        //"io.netty.handler.codec.compression.Lz4FrameEncoderFuzzer",
+        //"io.netty.handler.codec.compression.SnappyFrameEncoderFuzzer",
+        //"io.netty.handler.codec.compression.ZstdEncoderFuzzer",
+        //"io.netty.handler.codec.http.websocketx.WebSocket08FrameDecoderFuzzer",
+        //"io.netty.handler.codec.redis.RedisDecoderFuzzer",
         //"io.micronaut.fuzzing.http.MediaTypeTarget",
         //"io.netty.handler.HttpRequestDecoderFuzzer"
         //"io.micronaut.fuzzing.http.UriMatchTemplateTarget",
