@@ -24,12 +24,14 @@ import java.lang.foreign.SymbolLookup;
 import java.lang.foreign.ValueLayout;
 
 /**
- * Returns the current thread CPU time using Linux clock_gettime(CLOCK_THREAD_CPUTIME_ID)
+ * Returns the current thread CPU time using clock_gettime(CLOCK_THREAD_CPUTIME_ID)
  * via the Java Foreign Function & Memory API.
  */
 @SuppressWarnings({"Since15", "preview"})
 public final class CpuTimer {
-    private static final int CLOCK_THREAD_CPUTIME_ID = 3;
+    // Linux uses 3; macOS uses 16.
+    private static final int CLOCK_THREAD_CPUTIME_ID =
+        System.getProperty("os.name", "").toLowerCase().contains("mac") ? 16 : 3;
     private static final long NANO_PER_SEC = 1_000_000_000L;
 
     private CpuTimer() {
