@@ -19,6 +19,7 @@ import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.Dict;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
+import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.HandlerFuzzerBase;
 import io.netty.handler.codec.CorruptedFrameException;
 import io.netty.handler.codec.DecoderException;
@@ -37,10 +38,15 @@ import java.nio.channels.ClosedChannelException;
 })
 public class WebSocket08FrameDecoderFuzzer extends HandlerFuzzerBase {
     private static final int MAX_FRAME_PAYLOAD_LENGTH = 65536;
+    private final WebSocketDecoderConfig config;
 
     public WebSocket08FrameDecoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
-        channel.pipeline()
-            .addLast(new WebSocket08FrameDecoder(nextConfig(fuzzedDataProvider)));
+        config = nextConfig(fuzzedDataProvider);
+    }
+
+    @Override
+    protected EmbeddedChannel setUp() {
+        return new EmbeddedChannel(new WebSocket08FrameDecoder(config));
     }
 
     @Override

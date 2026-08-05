@@ -19,6 +19,7 @@ import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.Dict;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
+import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.HandlerFuzzerBase;
 import io.netty.handler.codec.DecoderException;
 import io.netty.handler.codec.PrematureChannelClosureException;
@@ -36,14 +37,21 @@ import java.nio.channels.ClosedChannelException;
 })
 public class RedisDecoderFuzzer extends HandlerFuzzerBase {
     private static final int MAX_INLINE_MESSAGE_LENGTH = 65536;
+    private final int maxInlineMessageLength;
+    private final boolean decodeInlineCommands;
 
     public RedisDecoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
-        channel.pipeline()
-            .addLast(new RedisDecoder(
-                fuzzedDataProvider.consumeInt(1, MAX_INLINE_MESSAGE_LENGTH),
-                FixedRedisMessagePool.INSTANCE,
-                fuzzedDataProvider.consumeBoolean()
-            ));
+        maxInlineMessageLength = fuzzedDataProvider.consumeInt(1, MAX_INLINE_MESSAGE_LENGTH);
+        decodeInlineCommands = fuzzedDataProvider.consumeBoolean();
+    }
+
+    @Override
+    protected EmbeddedChannel setUp() {
+        return new EmbeddedChannel(new RedisDecoder(
+            maxInlineMessageLength,
+            FixedRedisMessagePool.INSTANCE,
+            decodeInlineCommands
+        ));
     }
 
     @Override

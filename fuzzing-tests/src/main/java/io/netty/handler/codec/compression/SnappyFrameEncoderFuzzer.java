@@ -37,9 +37,16 @@ import java.nio.channels.ClosedChannelException;
     "snappy", "content-encoding: snappy\r\n", "hello", "foobar"
 })
 public class SnappyFrameEncoderFuzzer extends EmbeddedChannelFuzzerBase {
+    private final SnappyFrameEncoder encoder;
+
     public SnappyFrameEncoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
-        super(new EmbeddedChannel(nextEncoder(fuzzedDataProvider)));
+        encoder = nextEncoder(fuzzedDataProvider);
         inputCpuTime = 200;
+    }
+
+    @Override
+    protected EmbeddedChannel setUp() {
+        return new EmbeddedChannel(encoder);
     }
 
     @Override

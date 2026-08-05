@@ -41,10 +41,16 @@ public class ZstdEncoderFuzzer extends EmbeddedChannelFuzzerBase {
     private static final int MAX_COMPRESSION_LEVEL = 22;
     private static final int MAX_BLOCK_SIZE = 1 << 20;
     private static final int MAX_ENCODE_SIZE = 1 << 22;
+    private final ZstdEncoder encoder;
 
     public ZstdEncoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
-        super(new EmbeddedChannel(nextEncoder(fuzzedDataProvider)));
+        encoder = nextEncoder(fuzzedDataProvider);
         inputCpuTime = 500;
+    }
+
+    @Override
+    protected EmbeddedChannel setUp() {
+        return new EmbeddedChannel(encoder);
     }
 
     @Override

@@ -47,11 +47,18 @@ public class Lz4FrameEncoderFuzzer extends EmbeddedChannelFuzzerBase {
         LZ4Factory.safeInstance(),
         LZ4Factory.fastestJavaInstance()
     };
+    private final Lz4FrameEncoder encoder;
 
     public Lz4FrameEncoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
-        super(new EmbeddedChannel(nextEncoder(fuzzedDataProvider)));
+        encoder = nextEncoder(fuzzedDataProvider);
         inputCpuTime = 200;
     }
+
+    @Override
+    protected EmbeddedChannel setUp() {
+        return new EmbeddedChannel(encoder);
+    }
+
     @Override
     protected void onException(Exception e) {
         if (e instanceof CompressionException
