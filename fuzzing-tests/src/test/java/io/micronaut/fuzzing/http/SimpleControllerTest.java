@@ -231,4 +231,125 @@ class SimpleControllerTest {
 
         Assertions.assertEquals("count:1", response);
     }
+
+    @Test
+    void echoQueryPojo() {
+        Assertions.assertEquals("Alice:25",
+            client.toBlocking().retrieve(
+                SimpleController.ECHO_QUERY_POJO + "?name=Alice&minAge=25"));
+    }
+
+    @Test
+    void echoQueryPojoAbsent() {
+        Assertions.assertEquals("null:null",
+            client.toBlocking().retrieve(SimpleController.ECHO_QUERY_POJO));
+    }
+
+    @Test
+    void echoStatusActive() {
+        Assertions.assertEquals("ACTIVE",
+            client.toBlocking().retrieve("/echo-status/ACTIVE"));
+    }
+
+    @Test
+    void echoStatusInactive() {
+        Assertions.assertEquals("INACTIVE",
+            client.toBlocking().retrieve("/echo-status/INACTIVE"));
+    }
+
+    @Test
+    void echoOptionalIdPresent() {
+        Assertions.assertEquals("42",
+            client.toBlocking().retrieve(
+                SimpleController.ECHO_OPTIONAL_ID + "?id=42"));
+    }
+
+    @Test
+    void echoOptionalIdAbsent() {
+        Assertions.assertEquals("none",
+            client.toBlocking().retrieve(SimpleController.ECHO_OPTIONAL_ID));
+    }
+
+    @Test
+    void echoStream() {
+        byte[] data = {1, 2, 3, 4, 5};
+        String response = client.toBlocking().retrieve(
+            HttpRequest.POST(SimpleController.ECHO_STREAM, data)
+                .contentType(MediaType.APPLICATION_OCTET_STREAM));
+        Assertions.assertEquals("bytes:5", response);
+    }
+
+    @Test
+    void echoSetCookieWithValue() {
+        HttpResponse<String> response = client.toBlocking().exchange(
+            HttpRequest.GET(SimpleController.ECHO_SET_COOKIE + "?value=hello"),
+            String.class);
+        Assertions.assertEquals(HttpStatus.OK, response.getStatus());
+        String setCookie = response.header("Set-Cookie");
+        Assertions.assertNotNull(setCookie, "Set-Cookie header must be present");
+        Assertions.assertTrue(setCookie.contains("hello"), "cookie value must contain supplied string");
+    }
+
+    @Test
+    void echoSetCookieDefaultWhenAbsent() {
+        HttpResponse<String> response = client.toBlocking().exchange(
+            HttpRequest.GET(SimpleController.ECHO_SET_COOKIE),
+            String.class);
+        Assertions.assertEquals(HttpStatus.OK, response.getStatus());
+        String setCookie = response.header("Set-Cookie");
+        Assertions.assertNotNull(setCookie);
+        Assertions.assertTrue(setCookie.contains("default"));
+    }
+
+    @Test
+    void echoMultiQueryTwoValues() {
+        String body = client.toBlocking().retrieve(
+            HttpRequest.GET(SimpleController.ECHO_MULTI_QUERY + "?tag=foo&tag=bar"));
+        Assertions.assertEquals("foo,bar", body);
+    }
+
+    @Test
+    void echoMultiQuerySingleValue() {
+        String body = client.toBlocking().retrieve(
+            HttpRequest.GET(SimpleController.ECHO_MULTI_QUERY + "?tag=only"));
+        Assertions.assertEquals("only", body);
+    }
+
+    @Test
+    void echoMultiQueryAbsent() {
+        String body = client.toBlocking().retrieve(
+            HttpRequest.GET(SimpleController.ECHO_MULTI_QUERY));
+        Assertions.assertEquals("none", body);
+    }
+
+    @Test
+    void echoJsonObjectRoundTrip() {
+        String body = client.toBlocking().retrieve(
+            HttpRequest.POST(SimpleController.ECHO_JSON_OBJECT,
+                "{\"keyword\":\"micronaut\",\"page\":2,\"active\":true}")
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON));
+        Assertions.assertTrue(body.contains("micronaut"));
+        Assertions.assertTrue(body.contains("2"));
+    }
+
+    @Test
+    void echoJsonObjectEmptyBody() {
+        HttpResponse<String> response = client.toBlocking().exchange(
+            HttpRequest.POST(SimpleController.ECHO_JSON_OBJECT, "{}")
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON),
+            String.class);
+        Assertions.assertEquals(HttpStatus.OK, response.getStatus());
+    }
+
+    @Test
+    void echoJsonObjectNullFields() {
+        String body = client.toBlocking().retrieve(
+            HttpRequest.POST(SimpleController.ECHO_JSON_OBJECT,
+                "{\"keyword\":null,\"page\":null,\"active\":null}")
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON));
+        Assertions.assertNotNull(body);
+    }
 }

@@ -37,29 +37,40 @@ import jdk.jfr.StackTrace;
 @Dict("SEP")
 public abstract class EmbeddedChannelFuzzerBase {
     private static final long CPU_TIME_FACTOR = 1024;
-    private static final String SEPARATOR = "SEP";
+    public static final String SEPARATOR = "SEP";
     private static final ByteSplitter SPLITTER = ByteSplitter.create(SEPARATOR);
 
-    protected final EmbeddedChannel channel;
     protected long baseCpuTime = 500000;
     protected long inputCpuTime = 20;
     protected long outputCpuTime = 0;
+    protected long exceptionCpuTime = 0;
     protected boolean hasOutput = false;
-
-    private long outputBytes;
-    private boolean finished = false;
-    private boolean exceptionCaught = false;
 
     static {
         SanitizerTransformer.installLocally();
     }
 
-    protected EmbeddedChannelFuzzerBase(EmbeddedChannel channel) {
-        this.channel = channel;
+    protected EmbeddedChannelFuzzerBase() {
     }
 
     public final void test(FuzzedDataProvider provider) {
-        FastThreadLocalThread.runWithFastThreadLocal(() -> test0(provider));
+        byte[] allBytes = provider.consumeRemainingAsBytes();
+        try {
+            FastThreadLocalThread.runWithFastThreadLocal(() -> test0(allBytes));
+        } catch (CpuLimitException ignored) {
+            // A fresh JVM can charge one-time Jazzer/Netty class loading to the first input.
+            // Retry the same bytes once and only fail if the input is slow after setup is warm.
+            FastThreadLocalThread.runWithFastThreadLocal(() -> test0(allBytes));
+        }
+    }
+
+    /**
+     * Creates and populates a new channel for one fuzzing attempt.
+     *
+     * @return The channel
+     */
+    protected EmbeddedChannel setUp() {
+        return new EmbeddedChannel();
     }
 
     /**
@@ -71,10 +82,17 @@ public abstract class EmbeddedChannelFuzzerBase {
         PlatformDependent.throwException(e);
     }
 
-    private void test0(FuzzedDataProvider provider) {
-        if (!finished) {
-            finished = true;
-            channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
+    /**
+     * @return Whether to write split input chunks outbound instead of inbound.
+     */
+    protected boolean isOutbound() {
+        return false;
+    }
+
+    private void test0(byte[] allBytes) {
+        EmbeddedChannel channel = setUp();
+        AttemptState state = new AttemptState();
+        channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
                 @Override
                 public void channelRead(ChannelHandlerContext ctx, Object msg) {
                     if (outputCpuTime != 0) {
@@ -87,7 +105,7 @@ public abstract class EmbeddedChannelFuzzerBase {
                             length = 0;
                         }
                         if (length != 0) {
-                            outputBytes += length;
+                            state.outputBytes += length;
                         }
                     }
 
@@ -97,10 +115,10 @@ public abstract class EmbeddedChannelFuzzerBase {
 
                 @Override
                 public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-                    exceptionCaught = true;
+                    state.exceptionCaught = true;
                     if (cause instanceof Exception e) {
                         try {
-                            onException(e);
+                            handleException(state, e);
                         } catch (Exception f) {
                             ctx.fireExceptionCaught(f);
                         }
@@ -108,36 +126,39 @@ public abstract class EmbeddedChannelFuzzerBase {
                         ctx.fireExceptionCaught(cause);
                     }
                 }
-            });
-        }
+        });
 
-        exceptionCaught = false;
-
-        byte[] allBytes = provider.consumeRemainingAsBytes();
         long cpuTimeBudget = baseCpuTime + allBytes.length * inputCpuTime;
 
         ByteSplitter.ChunkIterator itr = SPLITTER.splitIterator(allBytes);
         long start = CpuTimer.currentThreadCpuTimeNanos();
-        while (itr.hasNext() && channel.isOpen() && !exceptionCaught) {
+        while (itr.hasNext() && channel.isOpen() && !state.exceptionCaught) {
             itr.proceed();
             ByteBuf buffer = channel.alloc().buffer(itr.length());
             buffer.writeBytes(allBytes, itr.start(), itr.length());
             try {
-                channel.writeInbound(buffer);
+                if (isOutbound()) {
+                    channel.writeOutbound(buffer);
+                } else {
+                    channel.writeInbound(buffer);
+                }
             } catch (Exception e) {
-                onException(e);
+                handleException(state, e);
                 break; // cancel further input, but still release
             }
         }
         try {
             channel.finish();
         } catch (Exception e) {
-            onException(e);
+            handleException(state, e);
         }
         channel.releaseOutbound();
 
         long end = CpuTimer.currentThreadCpuTimeNanos();
-        cpuTimeBudget += outputBytes * outputCpuTime;
+        cpuTimeBudget += state.outputBytes * outputCpuTime;
+        if (state.handledException) {
+            cpuTimeBudget += exceptionCpuTime;
+        }
 
         LeakPresenceDetector.check();
         FlagAppender.checkTriggered();
@@ -149,15 +170,34 @@ public abstract class EmbeddedChannelFuzzerBase {
             sample.baseCpuTime = baseCpuTime;
             sample.inputCpuTime = inputCpuTime;
             sample.outputCpuTime = outputCpuTime;
+            sample.exceptionCpuTime = exceptionCpuTime;
             sample.inputSize = allBytes.length;
-            sample.outputSize = outputBytes;
+            sample.outputSize = state.outputBytes;
+            sample.handledException = state.handledException;
             sample.actualTime = actualTime;
             sample.commit();
         }
 
         if (actualTime > CPU_TIME_FACTOR * cpuTimeBudget) {
-            throw new RuntimeException("CPU limit triggered. in=" + allBytes.length + " out=" + outputBytes + " actual=" + actualTime);
+            throw new CpuLimitException("CPU limit triggered. in=" + allBytes.length + " out=" + state.outputBytes + " actual=" + actualTime);
         }
+    }
+
+    private void handleException(AttemptState state, Exception e) {
+        onException(e);
+        state.handledException = true;
+    }
+
+    private static final class CpuLimitException extends RuntimeException {
+        CpuLimitException(String message) {
+            super(message);
+        }
+    }
+
+    private static final class AttemptState {
+        long outputBytes;
+        boolean exceptionCaught;
+        boolean handledException;
     }
 
     @Enabled(false)
@@ -167,8 +207,10 @@ public abstract class EmbeddedChannelFuzzerBase {
         long baseCpuTime;
         long inputCpuTime;
         long outputCpuTime;
+        long exceptionCpuTime;
         int inputSize;
         long outputSize;
+        boolean handledException;
         long actualTime;
     }
 }

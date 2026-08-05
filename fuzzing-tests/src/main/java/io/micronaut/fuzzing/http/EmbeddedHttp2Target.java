@@ -32,7 +32,7 @@ public class EmbeddedHttp2Target extends EmbeddedHttpTarget {
         super(contextHolder);
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider input) {
+    public static void fuzzerTestOneInput(FuzzedDataProvider input) throws Exception {
         new EmbeddedHttp2Target(HTTP2).test(input);
     }
 

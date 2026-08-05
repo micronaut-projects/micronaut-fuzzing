@@ -21,11 +21,11 @@ import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.HandlerFuzzerBase;
 import io.netty.handler.codec.CorruptedFrameException;
 import io.netty.handler.codec.TooLongFrameException;
 
-import javax.net.ssl.SSLException;
 
 /**
  * Fuzzing support type.
@@ -33,9 +33,17 @@ import javax.net.ssl.SSLException;
 @FuzzTarget
 @HttpDict
 public class XmlFrameDecoderFuzzer extends HandlerFuzzerBase {
-    public XmlFrameDecoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
+    private final int maxFrameLength;
+
+    XmlFrameDecoderFuzzer(int maxFrameLength) {
+        this.maxFrameLength = maxFrameLength;
+    }
+
+    @Override
+    protected EmbeddedChannel setUp() {
+        EmbeddedChannel channel = new EmbeddedChannel();
         channel.pipeline()
-            .addLast(new XmlFrameDecoder(fuzzedDataProvider.consumeInt(10, 1024)))
+            .addLast(new XmlFrameDecoder(maxFrameLength))
             .addLast(new ChannelInboundHandlerAdapter() {
                 @Override
                 public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
@@ -45,11 +53,12 @@ public class XmlFrameDecoderFuzzer extends HandlerFuzzerBase {
                     super.exceptionCaught(ctx, cause);
                 }
             });
+        return channel;
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
-        var fuzzer = new XmlFrameDecoderFuzzer(fuzzedDataProvider);
-        fuzzer.test(fuzzedDataProvider);
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
+        int maxFrameLength = fuzzedDataProvider.consumeInt(10, 1024);
+        new XmlFrameDecoderFuzzer(maxFrameLength).test(fuzzedDataProvider);
     }
 
     public static void main(String[] args) {

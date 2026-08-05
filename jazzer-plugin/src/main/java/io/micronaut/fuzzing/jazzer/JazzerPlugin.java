@@ -28,13 +28,13 @@ public abstract class JazzerPlugin implements Plugin<Project> {
         });
         jazzerBaseClasspath.getDependencies().add(project.getDependencies().create(project));
 
-        project.getTasks().register("jazzer", JazzerTask.class, task -> {
-            Configuration jazzerWithRuntimeClasspath = project.getConfigurations().create("jazzerWithRuntimeClasspath", c -> {
-                c.extendsFrom(runtimeClasspath);
-                c.exclude(Map.of("group", "io.micronaut.fuzzing", "module", "micronaut-fuzzing-runner"));
-            });
-            jazzerWithRuntimeClasspath.getDependencies().add(project.getDependencies().create(project));
+        Configuration jazzerWithRuntimeClasspath = project.getConfigurations().create("jazzerWithRuntimeClasspath", c -> {
+            c.extendsFrom(runtimeClasspath);
+            c.exclude(Map.of("group", "io.micronaut.fuzzing", "module", "micronaut-fuzzing-runner"));
+        });
+        jazzerWithRuntimeClasspath.getDependencies().add(project.getDependencies().create(project));
 
+        project.afterEvaluate(p -> {
             // add a dependency on jazzer standalone that matches the jazzer-api version
             String jazzerVersion = null;
             for (ResolvedArtifactResult artifact : runtimeClasspath.getIncoming().getArtifacts()) {
@@ -50,11 +50,22 @@ public abstract class JazzerPlugin implements Plugin<Project> {
             if (jazzerVersion != null) {
                 jazzerWithRuntimeClasspath.getDependencies().add(project.getDependencies().create("com.code-intelligence:jazzer:" + jazzerVersion));
             }
+        });
+
+        project.getTasks().withType(JazzerRegressionTask.class).configureEach(task -> {
+            task.getClasspath().setFrom(jazzerWithRuntimeClasspath);
+        });
+
+        project.getTasks().register("jazzer", JazzerTask.class, task -> {
 
             task.setGroup(LifecycleBasePlugin.CHECK_TASK_NAME);
             task.setDescription("Runs jazzer for fuzzing.");
 
             task.getClasspath().setFrom(jazzerWithRuntimeClasspath);
+        });
+        project.getTasks().register("jazzerRegression", JazzerRegressionTask.class, task -> {
+            task.setGroup(LifecycleBasePlugin.CHECK_TASK_NAME);
+            task.setDescription("Runs Jazzer fuzz targets against configured regression inputs.");
         });
         project.getTasks().register("prepareClusterFuzz", PrepareClusterFuzzTask.class, task -> {
             task.setGroup(LifecycleBasePlugin.ASSEMBLE_TASK_NAME);
@@ -62,6 +73,8 @@ public abstract class JazzerPlugin implements Plugin<Project> {
 
             task.getClasspath().setFrom(jazzerBaseClasspath);
             task.getOutputDirectory().convention(project.getLayout().getBuildDirectory().dir("cluster-fuzz"));
+            task.getJazzerDriver().convention("jazzer_driver");
+            task.getJazzerAgent().convention("jazzer_agent_deploy.jar");
             task.getSourcePath().setFrom(jazzerBaseClasspath.getIncoming().artifactView(v -> {
                 v.withVariantReselection();
                 v.attributes(attributes -> {
