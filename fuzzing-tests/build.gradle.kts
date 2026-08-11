@@ -226,10 +226,12 @@ dependencies {
     runtimeOnly("com.github.jponge:lzma-java:1.3")
     runtimeOnly("com.github.luben:zstd-jni:1.5.7-11")
     runtimeOnly("com.jcraft:jzlib:1.1.3")
-    runtimeOnly("com.ning:compress-lzf:1.2.0")
+
+    runtimeOnly("com.ning:compress-lzf:1.1.3")
     implementation("at.yawk.lz4:lz4-java:1.11.1")
     runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.84")
     implementation("io.netty:netty-codec-xml")
+    implementation("io.netty:netty-codec-redis")
 
     annotationProcessor(mn.micronaut.inject.java)
     annotationProcessor(projects.micronautFuzzingAnnotationProcessor)
@@ -295,6 +297,12 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.micronaut.fuzzing.toml.TomlTarget",
         //"io.micronaut.fuzzing.http.HttpTarget",
         //"io.micronaut.fuzzing.http.EmbeddedHttpTarget",
+        //"io.netty.handler.codec.compression.JdkZlibEncoderFuzzer",
+        //"io.netty.handler.codec.compression.Lz4FrameEncoderFuzzer",
+        //"io.netty.handler.codec.compression.SnappyFrameEncoderFuzzer",
+        //"io.netty.handler.codec.compression.ZstdEncoderFuzzer",
+        //"io.netty.handler.codec.http.websocketx.WebSocket08FrameDecoderFuzzer",
+        //"io.netty.handler.codec.redis.RedisDecoderFuzzer",
         //"io.netty.handler.codec.base64.Base64EncoderFuzzer",
         "io.netty.handler.codec.compression.BrotliEncoderFuzzer",
         //"io.netty.handler.codec.string.StringEncoderFuzzer",
