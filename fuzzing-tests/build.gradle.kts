@@ -229,6 +229,7 @@ dependencies {
     runtimeOnly("com.ning:compress-lzf:1.2.0")
     implementation("at.yawk.lz4:lz4-java:1.11.1")
     runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.84")
+    implementation("io.netty:netty-codec-redis")
     implementation("io.netty:netty-codec-xml")
 
     annotationProcessor(mn.micronaut.inject.java)
@@ -295,6 +296,7 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.micronaut.fuzzing.toml.TomlTarget",
         //"io.micronaut.fuzzing.http.HttpTarget",
         //"io.micronaut.fuzzing.http.EmbeddedHttpTarget",
+        //"io.netty.handler.codec.redis.RedisDecoderFuzzer",
         //"io.netty.handler.codec.base64.Base64EncoderFuzzer",
         "io.netty.handler.codec.compression.BrotliEncoderFuzzer",
         //"io.netty.handler.codec.string.StringEncoderFuzzer",
