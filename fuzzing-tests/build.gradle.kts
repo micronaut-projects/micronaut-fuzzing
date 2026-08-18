@@ -227,9 +227,10 @@ dependencies {
     runtimeOnly("com.github.luben:zstd-jni:1.5.7-11")
     runtimeOnly("com.jcraft:jzlib:1.1.3")
     runtimeOnly("com.ning:compress-lzf:1.2.0")
-    implementation("at.yawk.lz4:lz4-java:1.11.1")
+    implementation("at.yawk.lz4:lz4-java:1.11.2")
     runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.84")
     implementation("io.netty:netty-codec-xml")
+    implementation("io.netty:netty-codec-redis")
 
     annotationProcessor(mn.micronaut.inject.java)
     annotationProcessor(projects.micronautFuzzingAnnotationProcessor)
@@ -296,7 +297,7 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.micronaut.fuzzing.http.HttpTarget",
         //"io.micronaut.fuzzing.http.EmbeddedHttpTarget",
         //"io.netty.handler.codec.base64.Base64EncoderFuzzer",
-        "io.netty.handler.codec.compression.BrotliEncoderFuzzer",
+        //"io.netty.handler.codec.compression.BrotliEncoderFuzzer",
         //"io.netty.handler.codec.string.StringEncoderFuzzer",
         //"io.micronaut.fuzzing.http.MediaTypeTarget",
         //"io.netty.handler.HttpRequestDecoderFuzzer"
@@ -304,6 +305,9 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.micronaut.fuzzing.http.TypeConversionTarget",
         //"io.micronaut.fuzzing.http.ContentNegotiationTarget",
         //"io.micronaut.fuzzing.http.MultipartTarget",
+        //"net.jpountz.fuzz.XXHashFuzzer",
+        //"net.jpountz.fuzz.LZ4DecompressorWithLengthFuzzer",
+        //"net.jpountz.fuzz.LZ4BlockInputStreamFuzzer",
     ))
     val jvmArgs = mutableListOf(
         "-Xmx512M",
