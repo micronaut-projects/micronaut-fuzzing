@@ -222,6 +222,7 @@ dependencies {
     implementation(mnTest.bytebuddy)
 
     runtimeOnly("com.aayushatharva.brotli4j:native-linux-x86_64:1.23.0")
+    runtimeOnly("com.aayushatharva.brotli4j:native-osx-aarch64:1.23.0")
     implementation("com.aayushatharva.brotli4j:brotli4j:1.23.0")
     runtimeOnly("com.github.jponge:lzma-java:1.3")
     runtimeOnly("com.github.luben:zstd-jni:1.5.7-11")
@@ -296,7 +297,7 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.micronaut.fuzzing.http.HttpTarget",
         //"io.micronaut.fuzzing.http.EmbeddedHttpTarget",
         //"io.netty.handler.codec.base64.Base64EncoderFuzzer",
-        "io.netty.handler.codec.compression.BrotliEncoderFuzzer",
+        //"io.netty.handler.codec.compression.BrotliEncoderFuzzer",
         //"io.netty.handler.codec.string.StringEncoderFuzzer",
         //"io.micronaut.fuzzing.http.MediaTypeTarget",
         //"io.netty.handler.HttpRequestDecoderFuzzer"
@@ -304,6 +305,12 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.micronaut.fuzzing.http.TypeConversionTarget",
         //"io.micronaut.fuzzing.http.ContentNegotiationTarget",
         //"io.micronaut.fuzzing.http.MultipartTarget",
+        //"io.netty.handler.codec.compression.JdkZlibDecompressorFuzzer",
+        //"io.netty.handler.codec.compression.Bzip2DecompressorFuzzer",
+        //"io.netty.handler.codec.compression.BrotliDecompressorFuzzer",
+        //"io.netty.handler.codec.compression.JdkZlibDecompressorComparisonFuzzer",
+        //"io.netty.handler.codec.compression.Bzip2DecompressorComparisonFuzzer",
+        //"io.netty.handler.codec.compression.BrotliDecompressorComparisonFuzzer",
     ))
     val jvmArgs = mutableListOf(
         "-Xmx512M",
