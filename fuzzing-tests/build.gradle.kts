@@ -224,7 +224,7 @@ dependencies {
     runtimeOnly("com.aayushatharva.brotli4j:native-linux-x86_64:1.23.0")
     implementation("com.aayushatharva.brotli4j:brotli4j:1.23.0")
     runtimeOnly("com.github.jponge:lzma-java:1.3")
-    runtimeOnly("com.github.luben:zstd-jni:1.5.7-11")
+    runtimeOnly("com.github.luben:zstd-jni:1.5.7-16")
     runtimeOnly("com.jcraft:jzlib:1.1.3")
     runtimeOnly("com.ning:compress-lzf:1.2.0")
     implementation("at.yawk.lz4:lz4-java:1.11.1")
