@@ -299,6 +299,7 @@ tasks.named<JazzerTask>("jazzer") {
         "io.netty.handler.codec.compression.BrotliEncoderFuzzer",
         //"io.netty.handler.codec.string.StringEncoderFuzzer",
         //"io.micronaut.fuzzing.http.MediaTypeTarget",
+        "io.netty.handler.codec.http.HttpRequestEncoderFuzzer",
         //"io.netty.handler.HttpRequestDecoderFuzzer"
         //"io.micronaut.fuzzing.http.UriMatchTemplateTarget",
         //"io.micronaut.fuzzing.http.TypeConversionTarget",
