@@ -144,7 +144,6 @@ public abstract class EmbeddedChannelFuzzerBase {
                     channel.writeInbound(buffer);
                 }
             } catch (Exception e) {
-                ReferenceCountUtil.safeRelease(buffer);
                 handleException(state, e);
                 break; // cancel further input, but still release
             }
