@@ -15,108 +15,103 @@
  */
 package io.netty.handler.codec.compression;
 
-import com.code_intelligence.jazzer.api.FuzzedDataProvider;
-import io.micronaut.fuzzing.FlagAppender;
+import io.micronaut.fuzzing.EmbeddedChannelFuzzerBase;
 import io.micronaut.fuzzing.util.ByteSplitter;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.embedded.EmbeddedChannel;
-import io.netty.util.LeakPresenceDetector;
+import io.netty.util.internal.PlatformDependent;
 
-import java.io.ByteArrayOutputStream;
 import java.util.Arrays;
 
 /**
- * Shared differential fuzzing logic for legacy Netty decoders and {@link Decompressor} implementations.
+ * Differential fuzzer base that feeds the same input to a legacy {@link io.netty.channel.ChannelHandler} decoder and
+ * to the direct {@link Decompressor} API, and checks that the outputs agree. If both succeed, the outputs must be
+ * identical. If either fails, the output of one must be a prefix of the other, since both may emit partial data
+ * before detecting corruption.
  */
-abstract class AbstractDecompressorComparisonFuzzer {
-    private static final int MAX_COMPARISON_OUTPUT_SIZE = 1024 * 1024;
+abstract class AbstractDecompressorComparisonFuzzer extends AbstractDirectDecompressorFuzzer {
+    private static final ByteSplitter SPLITTER = ByteSplitter.create(EmbeddedChannelFuzzerBase.SEPARATOR);
 
-    protected abstract EmbeddedChannel newLegacyDecoder(int maxAllocation);
+    /**
+     * Create a channel containing the legacy decoder.
+     *
+     * @param size The fuzzed buffer size parameter, same as passed to {@link #newDecompressor}
+     * @return The channel
+     */
+    protected abstract EmbeddedChannel newLegacyDecoder(int size);
 
-    protected abstract Decompressor newDecompressor(int maxAllocation, ByteBufAllocator allocator);
-
-    protected final void fuzz(FuzzedDataProvider fuzzedDataProvider) {
-        int maxAllocation = fuzzedDataProvider.consumeInt(1, 1024);
-        byte[] input = fuzzedDataProvider.consumeRemainingAsBytes();
-        ByteArrayOutputStream legacyOutput = new ByteArrayOutputStream();
-        ByteArrayOutputStream decompressorOutput = new ByteArrayOutputStream();
-        EmbeddedChannel legacy = newLegacyDecoder(maxAllocation);
-        boolean legacyFailed = false;
-        boolean decompressorFailed = false;
-        boolean decompressorComplete = false;
-        boolean outputLimitReached = false;
-
-        try (Decompressor decompressor = newDecompressor(maxAllocation, ByteBufAllocator.DEFAULT)) {
-            ByteSplitter.ChunkIterator chunks = DecompressorFuzzingSupport.chunks(input);
-            while (chunks.hasNext() && !legacyFailed && !decompressorFailed && !outputLimitReached) {
-                chunks.proceed();
-                try {
-                    legacy.writeInbound(DecompressorFuzzingSupport.inputBuffer(legacy.alloc(), input, chunks));
-                    outputLimitReached |= !drainLegacy(legacy, legacyOutput);
-                } catch (DecompressionException ignored) {
-                    legacyFailed = true;
-                }
-
-                if (!outputLimitReached && decompressor.status() == Decompressor.Status.NEED_INPUT) {
-                    try {
-                        ByteBuf buffer = DecompressorFuzzingSupport.inputBuffer(ByteBufAllocator.DEFAULT, input, chunks);
-                        decompressor.addInput(buffer);
-                        outputLimitReached |= !DecompressorFuzzingSupport.drain(
-                            decompressor, decompressorOutput, MAX_COMPARISON_OUTPUT_SIZE);
-                    } catch (DecompressionException ignored) {
-                        decompressorFailed = true;
-                    }
-                }
-            }
-
-            if (!legacyFailed && !outputLimitReached) {
-                try {
-                    legacy.finish();
-                    outputLimitReached |= !drainLegacy(legacy, legacyOutput);
-                } catch (DecompressionException ignored) {
-                    legacyFailed = true;
-                }
-            }
-            if (!decompressorFailed && !outputLimitReached) {
-                try {
-                    decompressorComplete = DecompressorFuzzingSupport.finish(
-                        decompressor, decompressorOutput, MAX_COMPARISON_OUTPUT_SIZE);
-                } catch (DecompressionException ignored) {
-                    decompressorFailed = true;
-                }
-            }
-
-            if (!legacyFailed && !decompressorFailed && !outputLimitReached && decompressorComplete
-                && !Arrays.equals(legacyOutput.toByteArray(), decompressorOutput.toByteArray())) {
-                throw new AssertionError("The legacy decoder and direct decompressor produced different output");
-            }
-        } finally {
-            legacy.finishAndReleaseAll();
-        }
-        LeakPresenceDetector.check();
-        FlagAppender.checkTriggered();
+    /**
+     * Whether an exception thrown by the legacy decoder is an expected decoding failure.
+     *
+     * @param exception The exception
+     * @return {@code true} if the exception is expected, {@code false} if it should be reported
+     */
+    protected boolean isExpectedLegacyException(Exception exception) {
+        return exception instanceof DecompressionException;
     }
 
-    private static boolean drainLegacy(EmbeddedChannel channel, ByteArrayOutputStream output) {
-        while (true) {
-            ByteBuf buffer = channel.readInbound();
-            if (buffer == null) {
-                return true;
+    @Override
+    final void fuzz(int size, byte[] input) {
+        Result legacy = decompressLegacy(size, input);
+        Result direct = decompress(size, input, ByteBufAllocator.DEFAULT);
+
+        byte[] legacyBytes = legacy.output().bytes.toByteArray();
+        byte[] directBytes = direct.output().bytes.toByteArray();
+        if (legacy.output().truncated || direct.output().truncated || legacy.failed() || direct.failed()) {
+            int common = Math.min(legacyBytes.length, directBytes.length);
+            if (!Arrays.equals(legacyBytes, 0, common, directBytes, 0, common)) {
+                throw new AssertionError("Decompressed output prefix differs. legacyFailed=" + legacy.failed()
+                    + " directFailed=" + direct.failed() + " legacyLength=" + legacyBytes.length
+                    + " directLength=" + directBytes.length);
             }
+        } else if (!Arrays.equals(legacyBytes, directBytes)) {
+            throw new AssertionError("Decompressed output differs. legacyLength=" + legacyBytes.length
+                + " directLength=" + directBytes.length);
+        }
+    }
+
+    private Result decompressLegacy(int size, byte[] input) {
+        OutputCollector output = new OutputCollector();
+        EmbeddedChannel channel = newLegacyDecoder(size);
+        ByteSplitter.ChunkIterator itr = SPLITTER.splitIterator(input);
+        try {
+            while (itr.hasNext()) {
+                itr.proceed();
+                ByteBuf buf = channel.alloc().buffer(itr.length());
+                buf.writeBytes(input, itr.start(), itr.length());
+                channel.writeInbound(buf);
+                drainLegacy(channel, output);
+            }
+            channel.finish();
+            drainLegacy(channel, output);
+            return new Result(output, false);
+        } catch (Exception e) {
+            checkLegacyException(e);
+            return new Result(output, true);
+        } finally {
             try {
-                int readableBytes = buffer.readableBytes();
-                if (readableBytes > DecompressorFuzzingSupport.MAX_OUTPUT_BUFFER_SIZE) {
-                    throw new AssertionError("Legacy decoder produced an output buffer larger than 1 MiB");
-                }
-                if (readableBytes > MAX_COMPARISON_OUTPUT_SIZE - output.size()) {
-                    return false;
-                }
-                byte[] bytes = new byte[readableBytes];
-                buffer.readBytes(bytes);
-                output.writeBytes(bytes);
+                // the decoder may throw again when it sees the channel close
+                channel.finishAndReleaseAll();
+            } catch (Exception e) {
+                checkLegacyException(e);
+            }
+        }
+    }
+
+    private void checkLegacyException(Exception e) {
+        if (!isExpectedLegacyException(e)) {
+            PlatformDependent.throwException(e);
+        }
+    }
+
+    private static void drainLegacy(EmbeddedChannel channel, OutputCollector output) {
+        ByteBuf buf;
+        while ((buf = channel.readInbound()) != null) {
+            try {
+                output.add(buf);
             } finally {
-                buffer.release();
+                buf.release();
             }
         }
     }
