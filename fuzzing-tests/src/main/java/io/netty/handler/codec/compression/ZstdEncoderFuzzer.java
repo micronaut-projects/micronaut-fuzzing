@@ -41,16 +41,21 @@ public class ZstdEncoderFuzzer extends EmbeddedChannelFuzzerBase {
     private static final int MAX_COMPRESSION_LEVEL = 22;
     private static final int MAX_BLOCK_SIZE = 1 << 20;
     private static final int MAX_ENCODE_SIZE = 1 << 22;
-    private final ZstdEncoder encoder;
+    private final int compressionLevel;
+    private final int blockSize;
+    private final int maxEncodeSize;
 
     public ZstdEncoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
-        encoder = nextEncoder(fuzzedDataProvider);
+        compressionLevel = fuzzedDataProvider.consumeInt(MIN_COMPRESSION_LEVEL, MAX_COMPRESSION_LEVEL);
+        blockSize = fuzzedDataProvider.consumeInt(1, MAX_BLOCK_SIZE);
+        maxEncodeSize = fuzzedDataProvider.consumeInt(1, MAX_ENCODE_SIZE);
         inputCpuTime = 500;
     }
 
     @Override
     protected EmbeddedChannel setUp() {
-        return new EmbeddedChannel(encoder);
+        // encoders are not @Sharable, so create a fresh one for each attempt
+        return new EmbeddedChannel(new ZstdEncoder(compressionLevel, blockSize, maxEncodeSize));
     }
 
     @Override
@@ -62,13 +67,6 @@ public class ZstdEncoderFuzzer extends EmbeddedChannelFuzzerBase {
             return;
         }
         super.onException(e);
-    }
-
-    private static ZstdEncoder nextEncoder(FuzzedDataProvider fuzzedDataProvider) {
-        int compressionLevel = fuzzedDataProvider.consumeInt(MIN_COMPRESSION_LEVEL, MAX_COMPRESSION_LEVEL);
-        int blockSize = fuzzedDataProvider.consumeInt(1, MAX_BLOCK_SIZE);
-        int maxEncodeSize = fuzzedDataProvider.consumeInt(1, MAX_ENCODE_SIZE);
-        return new ZstdEncoder(compressionLevel, blockSize, maxEncodeSize);
     }
 
     @Override

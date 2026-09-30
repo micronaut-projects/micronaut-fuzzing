@@ -56,6 +56,21 @@ class ZstdEncoderFuzzerTest {
         )));
     }
 
+    @Test
+    void retriesWithFreshEncoder() throws Exception {
+        CannedFuzzedDataProvider provider = CannedFuzzedDataProvider.create(List.of(
+            3,
+            1024,
+            4096,
+            "hello".getBytes(UTF_8),
+            "hello".getBytes(UTF_8)
+        ));
+        ZstdEncoderFuzzer fuzzer = new ZstdEncoderFuzzer(provider);
+        // the base class retries an input after a CpuLimitException, calling setUp again
+        fuzzer.test(provider);
+        fuzzer.test(provider);
+    }
+
     private static byte[] bytes(char value, int length) {
         byte[] result = new byte[length];
         Arrays.fill(result, (byte) value);
