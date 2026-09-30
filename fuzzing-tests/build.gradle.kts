@@ -228,9 +228,10 @@ dependencies {
     runtimeOnly("com.github.luben:zstd-jni:1.5.7-11")
     runtimeOnly("com.jcraft:jzlib:1.1.3")
     runtimeOnly("com.ning:compress-lzf:1.2.1")
-    implementation("at.yawk.lz4:lz4-java:1.11.1")
+    implementation("at.yawk.lz4:lz4-java:1.11.2")
     runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.84")
     implementation("io.netty:netty-codec-xml")
+    implementation("io.netty:netty-codec-redis")
 
     annotationProcessor(mn.micronaut.inject.java)
     annotationProcessor(projects.micronautFuzzingAnnotationProcessor)
@@ -311,6 +312,9 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.netty.handler.codec.compression.JdkZlibDecompressorComparisonFuzzer",
         //"io.netty.handler.codec.compression.Bzip2DecompressorComparisonFuzzer",
         //"io.netty.handler.codec.compression.BrotliDecompressorComparisonFuzzer",
+        //"net.jpountz.fuzz.XXHashFuzzer",
+        //"net.jpountz.fuzz.LZ4DecompressorWithLengthFuzzer",
+        //"net.jpountz.fuzz.LZ4BlockInputStreamFuzzer",
     ))
     val jvmArgs = mutableListOf(
         "-Xmx512M",
