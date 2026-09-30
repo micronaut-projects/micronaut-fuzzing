@@ -37,16 +37,17 @@ import java.nio.channels.ClosedChannelException;
     "snappy", "content-encoding: snappy\r\n", "hello", "foobar"
 })
 public class SnappyFrameEncoderFuzzer extends EmbeddedChannelFuzzerBase {
-    private final SnappyFrameEncoder encoder;
+    private final boolean jumboFrames;
 
     public SnappyFrameEncoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
-        encoder = nextEncoder(fuzzedDataProvider);
+        jumboFrames = fuzzedDataProvider.consumeBoolean();
         inputCpuTime = 200;
     }
 
     @Override
     protected EmbeddedChannel setUp() {
-        return new EmbeddedChannel(encoder);
+        // encoders are not @Sharable, so create a fresh one for each attempt
+        return new EmbeddedChannel(jumboFrames ? SnappyFrameEncoder.snappyEncoderWithJumboFrames() : new SnappyFrameEncoder());
     }
 
     @Override
@@ -58,13 +59,6 @@ public class SnappyFrameEncoderFuzzer extends EmbeddedChannelFuzzerBase {
             return;
         }
         super.onException(e);
-    }
-
-    private static SnappyFrameEncoder nextEncoder(FuzzedDataProvider fuzzedDataProvider) {
-        if (fuzzedDataProvider.consumeBoolean()) {
-            return SnappyFrameEncoder.snappyEncoderWithJumboFrames();
-        }
-        return new SnappyFrameEncoder();
     }
 
     @Override

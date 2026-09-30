@@ -50,6 +50,19 @@ class SnappyFrameEncoderFuzzerTest {
         )));
     }
 
+    @Test
+    void retriesWithFreshEncoder() throws Exception {
+        CannedFuzzedDataProvider provider = CannedFuzzedDataProvider.create(List.of(
+            false,
+            "small".getBytes(UTF_8),
+            "small".getBytes(UTF_8)
+        ));
+        SnappyFrameEncoderFuzzer fuzzer = new SnappyFrameEncoderFuzzer(provider);
+        // the base class retries an input after a CpuLimitException, calling setUp again
+        fuzzer.test(provider);
+        fuzzer.test(provider);
+    }
+
     private static byte[] bytes(char value, int length) {
         byte[] result = new byte[length];
         Arrays.fill(result, (byte) value);
