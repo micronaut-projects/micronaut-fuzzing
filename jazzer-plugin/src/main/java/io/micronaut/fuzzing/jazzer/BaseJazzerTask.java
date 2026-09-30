@@ -129,8 +129,9 @@ public abstract class BaseJazzerTask extends DefaultTask {
     }
 
     static String joinPlatform(List<String> list) {
-        // todo: ':' won't work on windows
-        return list.stream().map(s -> s.replace(":", "\\:")).collect(Collectors.joining(":"));
+        // This matches the Jazzer behavior, see https://github.com/CodeIntelligenceTesting/jazzer/blob/v0.28.0/src/main/java/com/code_intelligence/jazzer/driver/OptParser.java#L74-L76
+        String separator = File.pathSeparator;
+        return list.stream().map(s -> s.replace(separator, "\\" + separator)).collect(Collectors.joining(separator));
     }
 
     protected final class ClasspathAccess implements Closeable {
