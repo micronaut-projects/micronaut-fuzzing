@@ -28,6 +28,7 @@ import net.jpountz.lz4.LZ4Factory;
 
 import javax.net.ssl.SSLException;
 import java.nio.channels.ClosedChannelException;
+import java.util.function.Supplier;
 import java.util.zip.Adler32;
 import java.util.zip.CRC32;
 import java.util.zip.Checksum;
@@ -47,16 +48,17 @@ public class Lz4FrameEncoderFuzzer extends EmbeddedChannelFuzzerBase {
         LZ4Factory.safeInstance(),
         LZ4Factory.fastestJavaInstance()
     };
-    private final Lz4FrameEncoder encoder;
+    private final Supplier<Lz4FrameEncoder> encoderFactory;
 
     public Lz4FrameEncoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
-        encoder = nextEncoder(fuzzedDataProvider);
+        encoderFactory = nextEncoderFactory(fuzzedDataProvider);
         inputCpuTime = 200;
     }
 
     @Override
     protected EmbeddedChannel setUp() {
-        return new EmbeddedChannel(encoder);
+        // encoders are not @Sharable, so create a fresh one for each attempt
+        return new EmbeddedChannel(encoderFactory.get());
     }
 
     @Override
@@ -70,18 +72,22 @@ public class Lz4FrameEncoderFuzzer extends EmbeddedChannelFuzzerBase {
         super.onException(e);
     }
 
-    private static Lz4FrameEncoder nextEncoder(FuzzedDataProvider fuzzedDataProvider) {
+    private static Supplier<Lz4FrameEncoder> nextEncoderFactory(FuzzedDataProvider fuzzedDataProvider) {
         LZ4Factory factory = FACTORIES[fuzzedDataProvider.consumeInt(0, FACTORIES.length - 1)];
         boolean highCompressor = fuzzedDataProvider.consumeBoolean();
         int blockSize = fuzzedDataProvider.consumeInt(MIN_BLOCK_SIZE, MAX_BLOCK_SIZE);
-        return new Lz4FrameEncoder(factory, highCompressor, blockSize, nextChecksum(fuzzedDataProvider));
+        Supplier<Checksum> checksumFactory = nextChecksumFactory(fuzzedDataProvider);
+        return () -> new Lz4FrameEncoder(factory, highCompressor, blockSize, checksumFactory.get());
     }
 
-    private static Checksum nextChecksum(FuzzedDataProvider fuzzedDataProvider) {
+    private static Supplier<Checksum> nextChecksumFactory(FuzzedDataProvider fuzzedDataProvider) {
         return switch (fuzzedDataProvider.consumeInt(0, 2)) {
-            case 0 -> new Lz4XXHash32(fuzzedDataProvider.consumeInt());
-            case 1 -> new Adler32();
-            case 2 -> new CRC32();
+            case 0 -> {
+                int seed = fuzzedDataProvider.consumeInt();
+                yield () -> new Lz4XXHash32(seed);
+            }
+            case 1 -> Adler32::new;
+            case 2 -> CRC32::new;
             default -> throw new IllegalStateException("Unexpected checksum type");
         };
     }

@@ -59,6 +59,23 @@ class Lz4FrameEncoderFuzzerTest {
         )));
     }
 
+    @Test
+    void retriesWithFreshEncoder() throws Exception {
+        CannedFuzzedDataProvider provider = CannedFuzzedDataProvider.create(List.of(
+            0,
+            false,
+            64,
+            0,
+            0,
+            "hello".getBytes(UTF_8),
+            "hello".getBytes(UTF_8)
+        ));
+        Lz4FrameEncoderFuzzer fuzzer = new Lz4FrameEncoderFuzzer(provider);
+        // the base class retries an input after a CpuLimitException, calling setUp again
+        fuzzer.test(provider);
+        fuzzer.test(provider);
+    }
+
     private static byte[] chunks(byte[] firstChunk, byte[] secondChunk) {
         ByteArrayOutputStream result = new ByteArrayOutputStream();
         result.writeBytes(firstChunk);
