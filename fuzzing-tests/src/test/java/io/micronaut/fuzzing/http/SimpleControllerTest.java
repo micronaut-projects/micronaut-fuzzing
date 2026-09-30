@@ -6,6 +6,7 @@ import io.micronaut.http.HttpStatus;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.client.HttpClient;
 import io.micronaut.http.client.annotation.Client;
+import io.micronaut.http.client.exceptions.HttpClientResponseException;
 import io.micronaut.http.client.multipart.MultipartBody;
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import jakarta.inject.Inject;
@@ -102,8 +103,10 @@ class SimpleControllerTest {
 
     @Test
     void echoBeanAllNull() {
-        Assertions.assertEquals("null:null:null",
-            client.toBlocking().retrieve(SimpleController.ECHO_BEAN));
+        // an absent, non-nullable bean argument is unsatisfied rather than bound as an empty bean
+        HttpClientResponseException e = Assertions.assertThrows(HttpClientResponseException.class,
+            () -> client.toBlocking().retrieve(SimpleController.ECHO_BEAN));
+        Assertions.assertEquals(HttpStatus.BAD_REQUEST, e.getStatus());
     }
 
     @Test
@@ -241,8 +244,10 @@ class SimpleControllerTest {
 
     @Test
     void echoQueryPojoAbsent() {
-        Assertions.assertEquals("null:null",
-            client.toBlocking().retrieve(SimpleController.ECHO_QUERY_POJO));
+        // an absent, non-nullable @QueryValue POJO is unsatisfied rather than bound as an empty bean
+        HttpClientResponseException e = Assertions.assertThrows(HttpClientResponseException.class,
+            () -> client.toBlocking().retrieve(SimpleController.ECHO_QUERY_POJO));
+        Assertions.assertEquals(HttpStatus.BAD_REQUEST, e.getStatus());
     }
 
     @Test
