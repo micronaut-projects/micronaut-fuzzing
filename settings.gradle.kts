@@ -31,6 +31,6 @@ micronautBuild {
     if (providers.environmentVariable("OSSFUZZ_MICRONAUT_BRANCH").isPresent) {
         requiresDevelopmentVersion("micronaut-core", providers.environmentVariable("OSSFUZZ_MICRONAUT_BRANCH").get())
     } else {
-        requiresDevelopmentVersion("micronaut-core", "5.0.x")
+        requiresDevelopmentVersion("micronaut-core", "5.2.x")
     }
 }
