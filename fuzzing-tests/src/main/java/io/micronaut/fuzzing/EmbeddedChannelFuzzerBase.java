@@ -36,8 +36,9 @@ import jdk.jfr.StackTrace;
  */
 @Dict("SEP")
 public abstract class EmbeddedChannelFuzzerBase {
-    private static final long CPU_TIME_FACTOR = 1024;
     public static final String SEPARATOR = "SEP";
+
+    private static final long CPU_TIME_FACTOR = 1024;
     private static final ByteSplitter SPLITTER = ByteSplitter.create(SEPARATOR);
 
     protected long baseCpuTime = 500000;
