@@ -22,12 +22,8 @@ import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 import io.netty.channel.embedded.EmbeddedChannel;
-import io.netty.handler.codec.EncoderException;
-import io.netty.handler.codec.PrematureChannelClosureException;
 import net.jpountz.lz4.LZ4Factory;
 
-import javax.net.ssl.SSLException;
-import java.nio.channels.ClosedChannelException;
 import java.util.function.Supplier;
 import java.util.zip.Adler32;
 import java.util.zip.CRC32;
@@ -61,17 +57,6 @@ public class Lz4FrameEncoderFuzzer extends EmbeddedChannelFuzzerBase {
         return new EmbeddedChannel(encoderFactory.get());
     }
 
-    @Override
-    protected void onException(Exception e) {
-        if (e instanceof CompressionException
-            || e instanceof PrematureChannelClosureException
-            || e instanceof ClosedChannelException
-            || e instanceof EncoderException && e.getCause() instanceof CompressionException) {
-            return;
-        }
-        super.onException(e);
-    }
-
     private static Supplier<Lz4FrameEncoder> nextEncoderFactory(FuzzedDataProvider fuzzedDataProvider) {
         LZ4Factory factory = FACTORIES[fuzzedDataProvider.consumeInt(0, FACTORIES.length - 1)];
         boolean highCompressor = fuzzedDataProvider.consumeBoolean();
@@ -97,7 +82,7 @@ public class Lz4FrameEncoderFuzzer extends EmbeddedChannelFuzzerBase {
         return true;
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
         var fuzzer = new Lz4FrameEncoderFuzzer(fuzzedDataProvider);
         fuzzer.test(fuzzedDataProvider);
     }
