@@ -40,6 +40,7 @@ tasks.named<Test>("test") {
     exclude("io/netty/handler/codec/http/websocketx/WebSocketFrameAggregatorFuzzerTest.class")
     exclude("io/netty/handler/codec/http2/CleartextHttp2ServerUpgradeHandlerFuzzerTest.class")
     exclude("io/netty/handler/codec/http2/Http2ConnectionHandlerFuzzerTest.class")
+    exclude("io/netty/handler/codec/redis/RedisDecoderFuzzerTest.class")
 }
 
 val nettyFuzzerTest by tasks.registering(Test::class) {
@@ -59,6 +60,7 @@ val nettyFuzzerTest by tasks.registering(Test::class) {
     include("io/netty/handler/codec/compression/ZstdEncoderFuzzerTest.class")
     include("io/netty/handler/codec/compression/Lz4FrameEncoderFuzzerTest.class")
     include("io/netty/handler/codec/string/StringEncoderFuzzerTest.class")
+    include("io/netty/handler/codec/redis/RedisDecoderFuzzerTest.class")
 
     shouldRunAfter(tasks.named("test"))
     forkEvery = 1
@@ -238,6 +240,7 @@ dependencies {
     runtimeOnly("com.ning:compress-lzf:1.2.1")
     implementation("at.yawk.lz4:lz4-java:1.12.0")
     runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.84")
+    implementation("io.netty:netty-codec-redis")
     implementation("io.netty:netty-codec-xml")
 
     annotationProcessor(mn.micronaut.inject.java)
@@ -308,6 +311,7 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.netty.handler.codec.http.websocketx.WebSocket08FrameDecoderFuzzer",
         //"io.netty.handler.codec.compression.ZstdEncoderFuzzer",
         //"io.netty.handler.codec.compression.Lz4FrameEncoderFuzzer",
+        //"io.netty.handler.codec.redis.RedisDecoderFuzzer",
         //"io.netty.handler.codec.base64.Base64EncoderFuzzer",
         //"io.netty.handler.codec.compression.BrotliEncoderFuzzer",
         //"io.netty.handler.codec.string.StringEncoderFuzzer",
