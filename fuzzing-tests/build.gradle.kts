@@ -34,6 +34,7 @@ tasks.named<Test>("test") {
     exclude("io/netty/handler/codec/base64/Base64EncoderFuzzerTest.class")
     exclude("io/netty/handler/codec/compression/BrotliEncoderFuzzerTest.class")
     exclude("io/netty/handler/codec/compression/SnappyFrameEncoderFuzzerTest.class")
+    exclude("io/netty/handler/codec/compression/ZstdEncoderFuzzerTest.class")
     exclude("io/netty/handler/codec/string/StringEncoderFuzzerTest.class")
     exclude("io/netty/handler/codec/http/websocketx/WebSocketFrameAggregatorFuzzerTest.class")
     exclude("io/netty/handler/codec/http2/CleartextHttp2ServerUpgradeHandlerFuzzerTest.class")
@@ -54,6 +55,7 @@ val nettyFuzzerTest by tasks.registering(Test::class) {
     include("io/netty/handler/codec/base64/Base64EncoderFuzzerTest.class")
     include("io/netty/handler/codec/compression/BrotliEncoderFuzzerTest.class")
     include("io/netty/handler/codec/compression/SnappyFrameEncoderFuzzerTest.class")
+    include("io/netty/handler/codec/compression/ZstdEncoderFuzzerTest.class")
     include("io/netty/handler/codec/string/StringEncoderFuzzerTest.class")
 
     shouldRunAfter(tasks.named("test"))
@@ -302,6 +304,7 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.micronaut.fuzzing.http.EmbeddedHttpTarget",
         //"io.netty.handler.codec.compression.SnappyFrameEncoderFuzzer",
         //"io.netty.handler.codec.http.websocketx.WebSocket08FrameDecoderFuzzer",
+        //"io.netty.handler.codec.compression.ZstdEncoderFuzzer",
         //"io.netty.handler.codec.base64.Base64EncoderFuzzer",
         //"io.netty.handler.codec.compression.BrotliEncoderFuzzer",
         //"io.netty.handler.codec.string.StringEncoderFuzzer",
