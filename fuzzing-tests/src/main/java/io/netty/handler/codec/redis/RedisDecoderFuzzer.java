@@ -22,10 +22,6 @@ import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.HandlerFuzzerBase;
 import io.netty.handler.codec.DecoderException;
-import io.netty.handler.codec.PrematureChannelClosureException;
-
-import javax.net.ssl.SSLException;
-import java.nio.channels.ClosedChannelException;
 
 /**
  * Fuzzing support type.
@@ -56,16 +52,33 @@ public class RedisDecoderFuzzer extends HandlerFuzzerBase {
 
     @Override
     protected void onException(Exception e) {
-        if (e instanceof RedisCodecException
-            || e instanceof PrematureChannelClosureException
-            || e instanceof ClosedChannelException
-            || e instanceof DecoderException && e.getCause() instanceof RedisCodecException) {
+        // RedisCodecException is not a DecoderException, so ByteToMessageDecoder wraps it in one. RedisDecoder
+        // also wraps any unexpected exception (NPE, IOOBE, ...) in a RedisCodecException with that cause, so
+        // only ignore the validation failures it throws itself, which never have a cause.
+        Throwable t = e instanceof DecoderException && e.getCause() instanceof RedisCodecException ? e.getCause() : e;
+        if (t instanceof RedisCodecException && (t.getCause() == null || isKnownLineFeedBug(t.getCause()))) {
             return;
         }
         super.onException(e);
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
+    /**
+     * RedisDecoder.readLine throws an IllegalArgumentException for a line that starts with LF, because it computes a
+     * negative length for the content before the CR. Remove once https://github.com/netty/netty/pull/17793 is released.
+     */
+    private static boolean isKnownLineFeedBug(Throwable cause) {
+        if (!(cause instanceof IllegalArgumentException)) {
+            return false;
+        }
+        for (StackTraceElement element : cause.getStackTrace()) {
+            if (element.getClassName().equals(RedisDecoder.class.getName())) {
+                return element.getMethodName().equals("readLine");
+            }
+        }
+        return false;
+    }
+
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
         var fuzzer = new RedisDecoderFuzzer(fuzzedDataProvider);
         fuzzer.test(fuzzedDataProvider);
     }
