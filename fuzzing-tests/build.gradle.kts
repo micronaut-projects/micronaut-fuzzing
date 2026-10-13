@@ -30,6 +30,7 @@ tasks.withType<Test>() {
 
 tasks.named<Test>("test") {
     exclude("io/micronaut/fuzzing/sanitizer/SanitizerTransformerTest.class")
+    exclude("io/netty/handler/codec/http/websocketx/WebSocket08FrameDecoderFuzzerTest.class")
     exclude("io/netty/handler/codec/base64/Base64EncoderFuzzerTest.class")
     exclude("io/netty/handler/codec/compression/BrotliEncoderFuzzerTest.class")
     exclude("io/netty/handler/codec/compression/SnappyFrameEncoderFuzzerTest.class")
@@ -47,6 +48,7 @@ val nettyFuzzerTest by tasks.registering(Test::class) {
     classpath = sourceSets.test.get().runtimeClasspath
 
     include("io/netty/handler/codec/http/websocketx/WebSocketFrameAggregatorFuzzerTest.class")
+    include("io/netty/handler/codec/http/websocketx/WebSocket08FrameDecoderFuzzerTest.class")
     include("io/netty/handler/codec/http2/CleartextHttp2ServerUpgradeHandlerFuzzerTest.class")
     include("io/netty/handler/codec/http2/Http2ConnectionHandlerFuzzerTest.class")
     include("io/netty/handler/codec/base64/Base64EncoderFuzzerTest.class")
@@ -299,6 +301,7 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.micronaut.fuzzing.http.HttpTarget",
         //"io.micronaut.fuzzing.http.EmbeddedHttpTarget",
         //"io.netty.handler.codec.compression.SnappyFrameEncoderFuzzer",
+        //"io.netty.handler.codec.http.websocketx.WebSocket08FrameDecoderFuzzer",
         //"io.netty.handler.codec.base64.Base64EncoderFuzzer",
         //"io.netty.handler.codec.compression.BrotliEncoderFuzzer",
         //"io.netty.handler.codec.string.StringEncoderFuzzer",
