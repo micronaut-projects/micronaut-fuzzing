@@ -81,7 +81,7 @@ public class MultipartTarget {
         byte[] bodyBytes = body.toString().getBytes(StandardCharsets.ISO_8859_1);
         PostBodyDecoder decoder = PostBodyDecoder.builder().forMultipartBoundary(boundary);
         try {
-            new FormDemuxer(decoder, CHANNEL, BodySizeLimits.UNLIMITED, BodySizeLimits.UNLIMITED,
+            new FormDemuxer(decoder, boundary, StandardCharsets.UTF_8, CHANNEL, BodySizeLimits.UNLIMITED, BodySizeLimits.UNLIMITED,
                 BYTE_BODY_FACTORY.adapt(Unpooled.wrappedBuffer(bodyBytes)))
                 .fields()
                 .doOnNext(RawFormField::close)
