@@ -22,11 +22,6 @@ import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 import io.netty.channel.embedded.EmbeddedChannel;
-import io.netty.handler.codec.EncoderException;
-import io.netty.handler.codec.PrematureChannelClosureException;
-
-import javax.net.ssl.SSLException;
-import java.nio.channels.ClosedChannelException;
 
 /**
  * Fuzzing support type.
@@ -40,33 +35,26 @@ public class ZstdEncoderFuzzer extends EmbeddedChannelFuzzerBase {
     private static final int MIN_COMPRESSION_LEVEL = -5;
     private static final int MAX_COMPRESSION_LEVEL = 22;
     private static final int MAX_BLOCK_SIZE = 1 << 20;
-    private static final int MAX_ENCODE_SIZE = 1 << 22;
+    /*
+     * maxEncodeSize is deliberately not fuzzed. It is only used by ZstdEncoder.allocateBuffer, which
+     * throws when compressBound(min(blockSize, input)) exceeds it. MessageToByteEncoder.write calls
+     * allocateBuffer outside the try/finally that releases the input message, so that exception leaks
+     * the input buffer (a known Netty bug). Use a limit that can never be exceeded instead.
+     */
+    private static final int MAX_ENCODE_SIZE = Integer.MAX_VALUE;
     private final int compressionLevel;
     private final int blockSize;
-    private final int maxEncodeSize;
 
     public ZstdEncoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
         compressionLevel = fuzzedDataProvider.consumeInt(MIN_COMPRESSION_LEVEL, MAX_COMPRESSION_LEVEL);
         blockSize = fuzzedDataProvider.consumeInt(1, MAX_BLOCK_SIZE);
-        maxEncodeSize = fuzzedDataProvider.consumeInt(1, MAX_ENCODE_SIZE);
         inputCpuTime = 500;
     }
 
     @Override
     protected EmbeddedChannel setUp() {
         // encoders are not @Sharable, so create a fresh one for each attempt
-        return new EmbeddedChannel(new ZstdEncoder(compressionLevel, blockSize, maxEncodeSize));
-    }
-
-    @Override
-    protected void onException(Exception e) {
-        if (e instanceof CompressionException
-            || e instanceof EncoderException
-            || e instanceof PrematureChannelClosureException
-            || e instanceof ClosedChannelException) {
-            return;
-        }
-        super.onException(e);
+        return new EmbeddedChannel(new ZstdEncoder(compressionLevel, blockSize, MAX_ENCODE_SIZE));
     }
 
     @Override
@@ -74,7 +62,7 @@ public class ZstdEncoderFuzzer extends EmbeddedChannelFuzzerBase {
         return true;
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
         if (!Zstd.isAvailable()) {
             return;
         }

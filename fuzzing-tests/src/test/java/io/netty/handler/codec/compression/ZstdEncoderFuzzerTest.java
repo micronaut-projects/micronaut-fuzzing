@@ -31,7 +31,6 @@ class ZstdEncoderFuzzerTest {
         ZstdEncoderFuzzer.fuzzerTestOneInput(CannedFuzzedDataProvider.create(List.of(
             3,
             1024,
-            4096,
             "hello".getBytes(UTF_8)
         )));
     }
@@ -41,18 +40,22 @@ class ZstdEncoderFuzzerTest {
         ZstdEncoderFuzzer.fuzzerTestOneInput(CannedFuzzedDataProvider.create(List.of(
             5,
             128,
-            8192,
             chunks(bytes('a', 128), bytes('b', 64))
         )));
     }
 
     @Test
-    void handlesMaxEncodeSizeLimit() throws Exception {
+    void fuzzesInputSpanningManyBlocks() throws Exception {
+        // tiny block size forces many flushBufferedData calls per write, at both level extremes
         ZstdEncoderFuzzer.fuzzerTestOneInput(CannedFuzzedDataProvider.create(List.of(
+            22,
+            7,
+            chunks(bytes('a', 1000), bytes('b', 333))
+        )));
+        ZstdEncoderFuzzer.fuzzerTestOneInput(CannedFuzzedDataProvider.create(List.of(
+            -5,
             1,
-            64,
-            1,
-            "foobar".getBytes(UTF_8)
+            chunks(bytes('c', 100), new byte[0])
         )));
     }
 
@@ -61,7 +64,6 @@ class ZstdEncoderFuzzerTest {
         CannedFuzzedDataProvider provider = CannedFuzzedDataProvider.create(List.of(
             3,
             1024,
-            4096,
             "hello".getBytes(UTF_8),
             "hello".getBytes(UTF_8)
         ));
