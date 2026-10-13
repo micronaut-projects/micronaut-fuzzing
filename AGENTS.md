@@ -11,12 +11,7 @@
 
 The default branch is `0.2.x`. The build needs JDK 25 and uses `--enable-preview`.
 
-The build compiles against a source checkout of micronaut-core (`checkouts/micronaut-core`), branch `5.2.x` by default. The OSS-Fuzz build sets `OSSFUZZ_MICRONAUT_BRANCH=5.3.x`. When you use Micronaut internals, make sure the code compiles against both:
-
-```
-./gradlew :micronaut-fuzzing-tests:compileJava
-OSSFUZZ_MICRONAUT_BRANCH=5.3.x ./gradlew :micronaut-fuzzing-tests:compileJava
-```
+The build compiles against a source checkout of micronaut-core (`checkouts/micronaut-core`), branch `5.3.x` (see `settings.gradle.kts`). OSS-Fuzz builds against the default branch of micronaut-core and passes it in `OSSFUZZ_MICRONAUT_BRANCH`. Keep the branch in `settings.gradle.kts` the same as micronaut-core's default branch, so that CI catches what would break the OSS-Fuzz build. Targets that use Micronaut internals can break when that branch changes its internal API.
 
 ## Writing a Netty fuzz target
 
