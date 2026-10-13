@@ -21,6 +21,7 @@ The build compiles against a source checkout of micronaut-core (`checkouts/micro
 - Do not create heavyweight objects per input if they register global or thread-local state, such as pooled allocators. Create them once and keep them in a static field.
 - Annotate the class with `@FuzzTarget`, and add a `@Dict`/`@DictResource` with tokens of the input format. Only use `@HttpDict` when the input is HTTP.
 - Add `public static void fuzzerTestOneInput(FuzzedDataProvider)`, which must not declare checked exceptions, and a `main` method that calls `LocalJazzerRunner.create(...).fuzz()`.
+- Keep the input as unstructured as possible. Feed the raw input bytes to the code under test instead of building a well-formed message from fuzzed fields. For example, take the whole text of an HTTP message from the input rather than assembling a request line and headers. A generator that only produces well-formed input misses the bugs that need the structure to be broken. Use the `FuzzedDataProvider` for configuration, and dictionaries to teach the fuzzer the tokens of the format.
 - Prefer an oracle over only checking that nothing crashes: compare two implementations (differential), compress and decompress (round trip), or check invariants of the output.
 
 ### Exception filtering
@@ -41,7 +42,7 @@ The base class reports every exception. Override `onException` only to ignore th
 
 ## Smoke tests
 
-Every new target needs a JUnit smoke test in `fuzzing-tests/src/test/java`. It should use `CannedFuzzedDataProvider` and cover the main code paths. SonarCloud requires 80% coverage on new code.
+Every new target needs a JUnit smoke test in `fuzzing-tests/src/test/java`. It should use `CannedFuzzedDataProvider` and cover the main code paths. SonarCloud reports coverage on new code, but don't add complexity just to raise it.
 
 - Netty smoke tests must be excluded from the `test` task and included in the `nettyFuzzerTest` task in `fuzzing-tests/build.gradle.kts`. That task runs each test class in its own JVM with the leak detector and without JaCoCo, which conflicts with the sanitizer.
 - If the target creates its handlers in `setUp()`, add a test that calls `test()` twice on the same instance, which is what happens on a CPU limit retry.
@@ -51,13 +52,13 @@ Every new target needs a JUnit smoke test in `fuzzing-tests/src/test/java`. It s
 - The `targets` list of the `jazzer` task in `fuzzing-tests/build.gradle.kts` is for local runs and stays commented out. Add new targets as commented-out entries. OSS-Fuzz finds targets through `@FuzzTarget`.
 - To reproduce an OSS-Fuzz finding, add a `JazzerRegressionTask` with the base64-encoded input and make `check` depend on it (see `lz4FrameDecoderRegression`).
 
-## Before opening a PR
+## Before handing off changes
 
 1. Run the checks:
    ```
    ./gradlew :micronaut-fuzzing-tests:compileJava :micronaut-fuzzing-tests:nettyFuzzerTest :micronaut-fuzzing-tests:spotlessCheck :micronaut-fuzzing-tests:checkstyleMain
    ```
-2. Fuzz the new target for a few minutes: temporarily uncomment it in the `jazzer` targets list, run `./gradlew :micronaut-fuzzing-tests:jazzer`, and revert the list afterwards. Fix false positives before opening the PR.
+2. Fuzz the new target for a few minutes: temporarily uncomment it in the `jazzer` targets list, run `./gradlew :micronaut-fuzzing-tests:jazzer`, and revert the list afterwards. Fix false positives before handing off the change.
 3. Every source file needs the license header (see `config/HEADER`).
 
 ## Bugs found in upstream projects
@@ -65,5 +66,7 @@ Every new target needs a JUnit smoke test in `fuzzing-tests/src/test/java`. It s
 When a target finds a bug in Netty, Micronaut or another library:
 
 1. Check whether it is already fixed or reported: look at the current branch, open issues and PRs, and the repository's security advisories.
-2. Decide whether it is security relevant, e.g. a crash, excessive memory or CPU use, or a leak that an attacker can trigger. Report security issues privately through a GitHub security advisory, never in a public issue or PR.
-3. Otherwise, open a PR. For Netty, target the `4.2` branch, use the Motivation/Modification/Result commit message format, end the description with "Discovered by fuzzing.", and add the `found by fuzzing` label.
+2. Decide whether it is security relevant, e.g. a crash, excessive memory or CPU use, or a leak that an attacker can trigger. Security issues must only be reported privately, through a GitHub security advisory, never in a public issue or PR.
+3. Report your findings to the user, with a reproducer and, if possible, a fix. The user decides how to report the bug. For Netty fixes, use the `4.2` branch, the Motivation/Modification/Result commit message format, and end the description with "Discovered by fuzzing." Netty PRs get the `found by fuzzing` label.
+
+Do not open PRs, issues or security advisories, here or upstream, unless the user asks you to.
