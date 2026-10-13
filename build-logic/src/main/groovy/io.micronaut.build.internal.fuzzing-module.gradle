@@ -7,4 +7,10 @@ micronautBuild {
     binaryCompatibility {
         enabledAfter "1.0.0"
     }
+    if (project.name != "fuzzing-api") {
+        descriptor {
+            // there is no fuzzing-core module the build plugin could detect as the main module
+            parentModuleId = "io.micronaut.fuzzing:micronaut-fuzzing-api"
+        }
+    }
 }

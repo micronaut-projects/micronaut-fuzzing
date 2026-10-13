@@ -28,6 +28,7 @@ import io.netty.buffer.Unpooled;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.contrib.multipart.FormDecoderException;
 import io.netty.contrib.multipart.PostBodyDecoder;
+import reactor.core.publisher.Flux;
 
 import java.nio.charset.StandardCharsets;
 
@@ -81,9 +82,10 @@ public class MultipartTarget {
         byte[] bodyBytes = body.toString().getBytes(StandardCharsets.ISO_8859_1);
         PostBodyDecoder decoder = PostBodyDecoder.builder().forMultipartBoundary(boundary);
         try {
-            new FormDemuxer(decoder, boundary, StandardCharsets.UTF_8, CHANNEL, BodySizeLimits.UNLIMITED, BodySizeLimits.UNLIMITED,
-                BYTE_BODY_FACTORY.adapt(Unpooled.wrappedBuffer(bodyBytes)))
-                .fields()
+            // fields() returns a Publisher since micronaut-core 5.3
+            Flux.from(new FormDemuxer(decoder, boundary, StandardCharsets.UTF_8, CHANNEL, BodySizeLimits.UNLIMITED, BodySizeLimits.UNLIMITED,
+                    BYTE_BODY_FACTORY.adapt(Unpooled.wrappedBuffer(bodyBytes)))
+                    .fields())
                 .doOnNext(RawFormField::close)
                 .blockLast();
         } catch (FormDecoderException | ContentLengthExceededException | IllegalArgumentException | IllegalStateException ignored) {
