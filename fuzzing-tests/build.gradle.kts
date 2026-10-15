@@ -41,6 +41,8 @@ tasks.named<Test>("test") {
     exclude("io/netty/handler/codec/http2/CleartextHttp2ServerUpgradeHandlerFuzzerTest.class")
     exclude("io/netty/handler/codec/http2/Http2ConnectionHandlerFuzzerTest.class")
     exclude("io/netty/handler/codec/redis/RedisDecoderFuzzerTest.class")
+    exclude("io/netty/buffer/PooledByteBufAllocatorFuzzerTest.class")
+    exclude("io/netty/buffer/AdaptiveByteBufAllocatorFuzzerTest.class")
 }
 
 val nettyFuzzerTest by tasks.registering(Test::class) {
@@ -61,6 +63,8 @@ val nettyFuzzerTest by tasks.registering(Test::class) {
     include("io/netty/handler/codec/compression/Lz4FrameEncoderFuzzerTest.class")
     include("io/netty/handler/codec/string/StringEncoderFuzzerTest.class")
     include("io/netty/handler/codec/redis/RedisDecoderFuzzerTest.class")
+    include("io/netty/buffer/PooledByteBufAllocatorFuzzerTest.class")
+    include("io/netty/buffer/AdaptiveByteBufAllocatorFuzzerTest.class")
 
     shouldRunAfter(tasks.named("test"))
     forkEvery = 1
@@ -327,6 +331,8 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.netty.handler.codec.compression.JdkZlibDecompressorComparisonFuzzer",
         //"io.netty.handler.codec.compression.Bzip2DecompressorComparisonFuzzer",
         //"io.netty.handler.codec.compression.BrotliDecompressorComparisonFuzzer",
+        //"io.netty.buffer.PooledByteBufAllocatorFuzzer",
+        //"io.netty.buffer.AdaptiveByteBufAllocatorFuzzer",
     ))
     val jvmArgs = mutableListOf(
         "-Xmx512M",

@@ -16,7 +16,10 @@
 package io.netty.buffer;
 
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
+import io.micronaut.fuzzing.FlagAppender;
+import io.netty.util.LeakPresenceDetector;
 import io.netty.util.ReferenceCountUtil;
+import io.netty.util.concurrent.FastThreadLocalThread;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -32,6 +35,8 @@ abstract class ByteBufAllocatorFuzzerBase {
     private static final int MIN_OPERATION_BYTES = 8;
     private static final int MAX_BUFFER_SIZE = 65536;
     private static final int DEFAULT_MAX_COMPONENTS = 64;
+    private static final int MAX_INITIAL_PLAIN_CAPACITY = 4096;
+    private static final int MAX_PLAIN_CAPACITY = 1 << 20;
 
     private final ByteBufAllocator candidateAllocator;
 
@@ -41,28 +46,38 @@ abstract class ByteBufAllocatorFuzzerBase {
 
     final void test(FuzzedDataProvider provider) {
         int compositeSelector = provider.consumeInt(0, 2);
+        int plainSelector = provider.consumeInt(0, 2);
+        int plainInitialCapacity = provider.consumeInt(0, MAX_INITIAL_PLAIN_CAPACITY);
         List<AllocatorOperation> operations = createOperations(provider);
-        TestState baseline = new TestState(BASELINE_ALLOCATOR, compositeSelector);
-        TestState candidate = new TestState(candidateAllocator, compositeSelector);
+        // Run on a FastThreadLocal-enabled thread so that the thread-local caches of the candidate allocator are
+        // used. They are freed again when runWithFastThreadLocal returns.
+        FastThreadLocalThread.runWithFastThreadLocal(() -> run(compositeSelector, plainSelector, plainInitialCapacity, operations));
+        LeakPresenceDetector.check();
+        FlagAppender.checkTriggered();
+    }
+
+    private void run(int compositeSelector, int plainSelector, int plainInitialCapacity, List<AllocatorOperation> operations) {
+        TestState baseline = new TestState(BASELINE_ALLOCATOR, compositeSelector, plainSelector, plainInitialCapacity);
         try {
-            compareState("initial", baseline, candidate);
-            for (int i = 0; i < operations.size(); i++) {
-                AllocatorOperation operation = operations.get(i);
-                OperationResult baselineResult = apply(operation, baseline);
-                OperationResult candidateResult = apply(operation, candidate);
-                if (!baselineResult.equals(candidateResult)) {
-                    throw new AssertionError("Operation " + i + " returned different results: baseline=" + baselineResult + ", candidate=" + candidateResult);
+            TestState candidate = new TestState(candidateAllocator, compositeSelector, plainSelector, plainInitialCapacity);
+            try {
+                compareState("initial", baseline, candidate);
+                for (int i = 0; i < operations.size(); i++) {
+                    AllocatorOperation operation = operations.get(i);
+                    OperationResult baselineResult = apply(operation, baseline);
+                    OperationResult candidateResult = apply(operation, candidate);
+                    if (!baselineResult.equals(candidateResult)) {
+                        throw new AssertionError("Operation " + i + " returned different results: baseline=" + baselineResult + ", candidate=" + candidateResult);
+                    }
+                    if (!baselineResult.hasException()) {
+                        compareState("operation " + i, baseline, candidate);
+                    }
                 }
-                if (!baselineResult.hasException()) {
-                    compareState("operation " + i, baseline, candidate);
-                }
+            } finally {
+                candidate.release();
             }
         } finally {
             baseline.release();
-            candidate.release();
-            if (candidateAllocator instanceof PooledByteBufAllocator pooledByteBufAllocator) {
-                pooledByteBufAllocator.trimCurrentThreadCache();
-            }
         }
     }
 
@@ -75,7 +90,7 @@ abstract class ByteBufAllocatorFuzzerBase {
     }
 
     private AllocatorOperation createOperation(FuzzedDataProvider provider) {
-        return switch (provider.consumeInt(0, 8)) {
+        return switch (provider.consumeInt(0, 13)) {
             case 0 -> new AddComponentOperation(readBufferOperation(provider));
             case 1 -> new AddFlattenedComponentOperation(readBufferOperation(provider));
             case 2 -> new ReadByteOperation();
@@ -85,6 +100,11 @@ abstract class ByteBufAllocatorFuzzerBase {
             case 6 -> new GetByteOperation(provider.consumeInt());
             case 7 -> new SetByteOperation(provider.consumeInt(), provider.consumeByte());
             case 8 -> new ShrinkCapacityOperation(provider.consumeInt());
+            case 9 -> new WritePlainOperation(provider.consumeBytes(provider.consumeInt(0, MAX_BUFFER_SIZE)));
+            case 10 -> new EnsureWritablePlainOperation(provider.consumeInt());
+            case 11 -> new SetPlainCapacityOperation(provider.consumeInt());
+            case 12 -> new SkipPlainBytesOperation(provider.consumeInt());
+            case 13 -> new DiscardPlainReadBytesOperation();
             default -> throw new AssertionError("Unexpected operation");
         };
     }
@@ -130,11 +150,30 @@ abstract class ByteBufAllocatorFuzzerBase {
         if (!Arrays.equals(baselineBytes, candidateBytes)) {
             throw new AssertionError(description + ": readable bytes differ");
         }
+        // The capacity of a plain buffer is not compared: after a write, it depends on the growth policy of the
+        // allocator.
+        ByteBuf baselinePlain = baseline.plain();
+        ByteBuf candidatePlain = candidate.plain();
+        if (baselinePlain.readerIndex() != candidatePlain.readerIndex()) {
+            throw new AssertionError(description + ": plain readerIndex differs: baseline=" + baselinePlain.readerIndex() + ", candidate=" + candidatePlain.readerIndex());
+        }
+        if (baselinePlain.writerIndex() != candidatePlain.writerIndex()) {
+            throw new AssertionError(description + ": plain writerIndex differs: baseline=" + baselinePlain.writerIndex() + ", candidate=" + candidatePlain.writerIndex());
+        }
+        if (baselinePlain.maxCapacity() != candidatePlain.maxCapacity()) {
+            throw new AssertionError(description + ": plain maxCapacity differs: baseline=" + baselinePlain.maxCapacity() + ", candidate=" + candidatePlain.maxCapacity());
+        }
+        if (candidatePlain.capacity() < candidatePlain.writerIndex() || candidatePlain.capacity() > candidatePlain.maxCapacity()) {
+            throw new AssertionError(description + ": plain capacity " + candidatePlain.capacity() + " out of bounds");
+        }
+        if (!Arrays.equals(readableBytes(baselinePlain), readableBytes(candidatePlain))) {
+            throw new AssertionError(description + ": plain readable bytes differ");
+        }
     }
 
-    private byte[] readableBytes(CompositeByteBuf composite) {
-        byte[] bytes = new byte[composite.readableBytes()];
-        composite.getBytes(composite.readerIndex(), bytes);
+    private byte[] readableBytes(ByteBuf buffer) {
+        byte[] bytes = new byte[buffer.readableBytes()];
+        buffer.getBytes(buffer.readerIndex(), bytes);
         return bytes;
     }
 
@@ -144,7 +183,8 @@ abstract class ByteBufAllocatorFuzzerBase {
 
     private sealed interface AllocatorOperation permits AddComponentOperation, AddFlattenedComponentOperation, ReadByteOperation,
         SkipBytesOperation, DiscardReadComponentsOperation, DiscardReadBytesOperation, GetByteOperation, SetByteOperation,
-        ShrinkCapacityOperation {
+        ShrinkCapacityOperation, WritePlainOperation, EnsureWritablePlainOperation, SetPlainCapacityOperation,
+        SkipPlainBytesOperation, DiscardPlainReadBytesOperation {
         OperationResult apply(TestState state);
     }
 
@@ -209,10 +249,11 @@ abstract class ByteBufAllocatorFuzzerBase {
                 bufferOperation.write(buffer);
                 if (!bufferOperation.insert() || buffer.readableBytes() < 2) {
                     state.composite().addFlattenedComponents(true, buffer);
+                    buffer = null;
                 } else {
+                    // This only adds retained slices, so the buffer itself is still released below.
                     addNestedFlattenedComponent(state, buffer);
                 }
-                buffer = null;
                 return OperationResult.noValue();
             } finally {
                 ReferenceCountUtil.release(buffer);
@@ -306,7 +347,55 @@ abstract class ByteBufAllocatorFuzzerBase {
         }
     }
 
-    private record OperationResult(Class<? extends RuntimeException> exceptionType, Byte value) {
+    private record WritePlainOperation(byte[] bytes) implements AllocatorOperation {
+        @Override
+        public OperationResult apply(TestState state) {
+            if (state.plain().writerIndex() + bytes.length <= MAX_PLAIN_CAPACITY) {
+                state.plain().writeBytes(bytes);
+            }
+            return OperationResult.noValue();
+        }
+    }
+
+    private record EnsureWritablePlainOperation(int selector) implements AllocatorOperation {
+        @Override
+        public OperationResult apply(TestState state) {
+            ByteBuf plain = state.plain();
+            int minWritableBytes = positiveModulo(selector, MAX_PLAIN_CAPACITY - plain.writerIndex() + 1);
+            plain.ensureWritable(minWritableBytes);
+            if (plain.writableBytes() < minWritableBytes) {
+                throw new AssertionError("ensureWritable(" + minWritableBytes + ") left only " + plain.writableBytes() + " writable bytes");
+            }
+            return OperationResult.noValue();
+        }
+    }
+
+    private record SetPlainCapacityOperation(int selector) implements AllocatorOperation {
+        @Override
+        public OperationResult apply(TestState state) {
+            int newCapacity = positiveModulo(selector, MAX_PLAIN_CAPACITY + 1);
+            state.plain().capacity(newCapacity);
+            return OperationResult.intValue(state.plain().capacity());
+        }
+    }
+
+    private record SkipPlainBytesOperation(int selector) implements AllocatorOperation {
+        @Override
+        public OperationResult apply(TestState state) {
+            state.plain().skipBytes(positiveModulo(selector, state.plain().readableBytes() + 1));
+            return OperationResult.noValue();
+        }
+    }
+
+    private record DiscardPlainReadBytesOperation() implements AllocatorOperation {
+        @Override
+        public OperationResult apply(TestState state) {
+            state.plain().discardReadBytes();
+            return OperationResult.noValue();
+        }
+    }
+
+    private record OperationResult(Class<? extends RuntimeException> exceptionType, Integer value) {
         boolean hasException() {
             return exceptionType != null;
         }
@@ -316,6 +405,10 @@ abstract class ByteBufAllocatorFuzzerBase {
         }
 
         static OperationResult byteValue(byte value) {
+            return new OperationResult(null, (int) value);
+        }
+
+        static OperationResult intValue(int value) {
             return new OperationResult(null, value);
         }
 
@@ -324,13 +417,23 @@ abstract class ByteBufAllocatorFuzzerBase {
         }
     }
 
-    private record TestState(ByteBufAllocator allocator, CompositeByteBuf composite) {
-        TestState(ByteBufAllocator allocator, int compositeSelector) {
-            this(allocator, newComposite(allocator, compositeSelector));
+    private record TestState(ByteBufAllocator allocator, CompositeByteBuf composite, ByteBuf plain) {
+        TestState(ByteBufAllocator allocator, int compositeSelector, int plainSelector, int plainInitialCapacity) {
+            this(allocator, newComposite(allocator, compositeSelector), newPlain(allocator, plainSelector, plainInitialCapacity));
         }
 
         void release() {
             ReferenceCountUtil.release(composite);
+            ReferenceCountUtil.release(plain);
+        }
+
+        private static ByteBuf newPlain(ByteBufAllocator allocator, int plainSelector, int initialCapacity) {
+            return switch (plainSelector) {
+                case 0 -> allocator.heapBuffer(initialCapacity, MAX_PLAIN_CAPACITY);
+                case 1 -> allocator.directBuffer(initialCapacity, MAX_PLAIN_CAPACITY);
+                case 2 -> allocator.buffer(initialCapacity, MAX_PLAIN_CAPACITY);
+                default -> throw new AssertionError("Unexpected plain buffer type");
+            };
         }
 
         private static CompositeByteBuf newComposite(ByteBufAllocator allocator, int compositeSelector) {

@@ -24,8 +24,12 @@ import io.micronaut.fuzzing.runner.LocalJazzerRunner;
  */
 @FuzzTarget
 public final class AdaptiveByteBufAllocatorFuzzer extends ByteBufAllocatorFuzzerBase {
+    // Shared by all inputs: every instance registers its own thread-local magazines and keeps its own chunks.
+    // Thread-local magazines are enabled for non-event-loop threads, so that the fuzzer exercises them.
+    private static final AdaptiveByteBufAllocator ALLOCATOR = new AdaptiveByteBufAllocator(false, true);
+
     private AdaptiveByteBufAllocatorFuzzer() {
-        super(new AdaptiveByteBufAllocator(false));
+        super(ALLOCATOR);
     }
 
     public static void fuzzerTestOneInput(FuzzedDataProvider provider) {

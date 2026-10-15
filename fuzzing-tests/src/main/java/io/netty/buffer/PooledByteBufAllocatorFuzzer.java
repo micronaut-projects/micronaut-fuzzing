@@ -24,8 +24,11 @@ import io.micronaut.fuzzing.runner.LocalJazzerRunner;
  */
 @FuzzTarget
 public final class PooledByteBufAllocatorFuzzer extends ByteBufAllocatorFuzzerBase {
+    // Shared by all inputs: every instance registers its own thread-local cache.
+    private static final PooledByteBufAllocator ALLOCATOR = new PooledByteBufAllocator(false);
+
     private PooledByteBufAllocatorFuzzer() {
-        super(new PooledByteBufAllocator(false));
+        super(ALLOCATOR);
     }
 
     public static void fuzzerTestOneInput(FuzzedDataProvider provider) {
