@@ -25,10 +25,53 @@ tasks.withType<JavaCompile> {
 
 tasks.withType<Test>() {
     jvmArgs("--enable-preview")
+    systemProperty("io.netty.customResourceLeakDetector", "io.netty.util.LeakPresenceDetector")
 }
 
 tasks.named<Test>("test") {
     exclude("io/micronaut/fuzzing/sanitizer/SanitizerTransformerTest.class")
+    exclude("io/netty/handler/codec/http/websocketx/WebSocket08FrameDecoderFuzzerTest.class")
+    exclude("io/netty/handler/codec/base64/Base64EncoderFuzzerTest.class")
+    exclude("io/netty/handler/codec/compression/BrotliEncoderFuzzerTest.class")
+    exclude("io/netty/handler/codec/compression/SnappyFrameEncoderFuzzerTest.class")
+    exclude("io/netty/handler/codec/compression/ZstdEncoderFuzzerTest.class")
+    exclude("io/netty/handler/codec/compression/Lz4FrameEncoderFuzzerTest.class")
+    exclude("io/netty/handler/codec/string/StringEncoderFuzzerTest.class")
+    exclude("io/netty/handler/codec/http/websocketx/WebSocketFrameAggregatorFuzzerTest.class")
+    exclude("io/netty/handler/codec/http2/CleartextHttp2ServerUpgradeHandlerFuzzerTest.class")
+    exclude("io/netty/handler/codec/http2/Http2ConnectionHandlerFuzzerTest.class")
+    exclude("io/netty/handler/codec/redis/RedisDecoderFuzzerTest.class")
+}
+
+val nettyFuzzerTest by tasks.registering(Test::class) {
+    description = "Runs Netty fuzzer smoke tests in isolated JVMs with leak detection."
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+
+    include("io/netty/handler/codec/http/websocketx/WebSocketFrameAggregatorFuzzerTest.class")
+    include("io/netty/handler/codec/http/websocketx/WebSocket08FrameDecoderFuzzerTest.class")
+    include("io/netty/handler/codec/http2/CleartextHttp2ServerUpgradeHandlerFuzzerTest.class")
+    include("io/netty/handler/codec/http2/Http2ConnectionHandlerFuzzerTest.class")
+    include("io/netty/handler/codec/base64/Base64EncoderFuzzerTest.class")
+    include("io/netty/handler/codec/compression/BrotliEncoderFuzzerTest.class")
+    include("io/netty/handler/codec/compression/SnappyFrameEncoderFuzzerTest.class")
+    include("io/netty/handler/codec/compression/ZstdEncoderFuzzerTest.class")
+    include("io/netty/handler/codec/compression/Lz4FrameEncoderFuzzerTest.class")
+    include("io/netty/handler/codec/string/StringEncoderFuzzerTest.class")
+    include("io/netty/handler/codec/redis/RedisDecoderFuzzerTest.class")
+
+    shouldRunAfter(tasks.named("test"))
+    forkEvery = 1
+    jvmArgs("-Dio.netty.customResourceLeakDetector=io.netty.util.LeakPresenceDetector")
+
+    extensions.configure<JacocoTaskExtension> {
+        isEnabled = false
+    }
+    doFirst {
+        jvmArgumentProviders.removeAll { it.javaClass.name.contains("Jacoco") }
+    }
 }
 
 val lz4FrameDecoderRegression by tasks.registering(JazzerRegressionTask::class) {
@@ -52,6 +95,13 @@ val lz4FrameDecoderRegression by tasks.registering(JazzerRegressionTask::class) 
         UFNFUENFUFNFUFNFUFNFUFNFUFNFUFNFUFNFUFNFUFNFUFNTRVBTRVBTRVBTU0VQU0VQU0VQU0VQ
         U0VTRVBTRVBTRVBTRVBQRVBFU1NTRVBTU0VQU0VQU0VQUHJhZ21TRVBTRVBTRVBTRVBTRVBTRVBT
         RVBTRSpFUFNFUFNTRVBTRVBTRVA=
+    """.trimIndent())
+    base64RegressionInputs.put("oss-fuzz-5957100319866880", """
+        TFo0QmxvY2suhAAAAABALAAAAGRWVlZUcn5uc2Zlci1FbmNvZGluZ1ZWVlZWVtZWXVZWVlZWVlZ+
+        bnNmZXItRW5jb2RpbmdWVlZWVlZWVl1WVlZWVlZWVoxWVkFjTDRaRkFjY2Vzcy1DcnRvb25sLUFs
+        U1BTRUVQU0VQU0WRgYGBgYGBgUxaNEJsb2NrLoQAAAAAQAAAAGRWVlZUcmFuc2Zlci1FbmNvZGlu
+        Z1ZWVlZWVlZWXVZWVlZWVlZWjFZWQWNMNFpGQWNjQ3Nyc2YtdG9QU0VQoIDzoK2p8gzzoIGAhL7z
+        oIGeKy3zoIGrdjDhhZ8xMzA0nQrzoICiMhE=
     """.trimIndent())
 }
 
@@ -84,6 +134,22 @@ val brotliDecoderRegression by tasks.registering(JazzerRegressionTask::class) {
     base64RegressionInputs.put("oss-fuzz-5310533434933248", "A37///8A")
 }
 
+val bzip2DecoderRegression by tasks.registering(JazzerRegressionTask::class) {
+    description = "Runs the Bzip2 decoder OSS-Fuzz regression input."
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+
+    targets.set(setOf("io.netty.handler.codec.compression.Bzip2DecoderFuzzer"))
+    jvmArgs.set(listOf(
+        "-Dio.netty.customResourceLeakDetector=io.netty.util.LeakPresenceDetector",
+        "-Dio.netty.leakDetection.targetRecords=0",
+        "--enable-preview"
+    ))
+    base64RegressionInputs.put("oss-fuzz-5399056135028736", """
+        QlpoNTFBWSZTWUkAAAAAAAAAICAgICAgIAAAQlgtUmVxdWVzdGVkLVdpdGhJTkQgICAAXWphdmEv
+        dXRpbC9BcnJheXMgICAgICAgICAgICAgJAkgb1QgICQgJTU0
+    """.trimIndent())
+}
+
 val jsonObjectDecoderRegression by tasks.registering(JazzerRegressionTask::class) {
     description = "Runs the JSON object decoder OSS-Fuzz regression input."
     group = LifecycleBasePlugin.VERIFICATION_GROUP
@@ -95,6 +161,26 @@ val jsonObjectDecoderRegression by tasks.registering(JazzerRegressionTask::class
         "--enable-preview"
     ))
     base64RegressionInputs.put("oss-fuzz-5825897350103040", "fgADpg==")
+}
+
+val sniHandlerRegression by tasks.registering(JazzerRegressionTask::class) {
+    description = "Runs the SNI handler OSS-Fuzz regression input."
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+
+    targets.set(setOf("io.netty.handler.ssl.SniHandlerFuzzer"))
+    jvmArgs.set(listOf(
+        "-Dio.netty.customResourceLeakDetector=io.netty.util.LeakPresenceDetector",
+        "-Dio.netty.leakDetection.targetRecords=0",
+        "--enable-preview"
+    ))
+    base64RegressionInputs.put("oss-fuzz-6335646063722496", """
+        FgNdAScBAADNKSn///////+AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIB/gICAYXJy
+        YXmAgICAgICAgIAIgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIACOICA
+        gICAgICAgICAgID//////////////////////////////////////zD///9TRVD/////////////
+        //8BqwAAAAAlhQ4AAq92AAAAAAAAAAANGZgUUFNTiYlhU0VQYWFhYWFhaWFhYQAAAAAAAAAAAAAA
+        AAAAAAAAAABh///////////9//////////8A/////////////////////y7/////////////////
+        /////1NFUP////8eHh4eHh4eHh5FUEVQU0VQU0UAU2FQ
+    """.trimIndent())
 }
 
 val sanitizerTest by tasks.registering(Test::class) {
@@ -117,17 +203,20 @@ val sanitizerTest by tasks.registering(Test::class) {
 
 tasks.named("check") {
     dependsOn(sanitizerTest)
+    dependsOn(nettyFuzzerTest)
     dependsOn(lz4FrameDecoderRegression)
     dependsOn(httpClientUpgradeHandlerRegression)
     dependsOn(brotliDecoderRegression)
+    dependsOn(bzip2DecoderRegression)
     dependsOn(jsonObjectDecoderRegression)
+    dependsOn(sniHandlerRegression)
 }
 
 group = "io.micronaut.fuzzing"
 
 dependencies {
-    ossFuzzJacoco("org.jacoco:org.jacoco.agent:0.8.14:runtime")
-    ossFuzzJacoco("org.jacoco:org.jacoco.cli:0.8.14:nodeps")
+    ossFuzzJacoco("org.jacoco:org.jacoco.agent:0.8.15:runtime")
+    ossFuzzJacoco("org.jacoco:org.jacoco.cli:0.8.15:nodeps")
 
     implementation(mn.micronaut.http.server.netty)
     implementation(mn.netty.contrib.multipart.core)
@@ -143,13 +232,15 @@ dependencies {
     implementation(mnTest.bytebuddy)
 
     runtimeOnly("com.aayushatharva.brotli4j:native-linux-x86_64:1.23.0")
-    runtimeOnly("com.aayushatharva.brotli4j:brotli4j:1.23.0")
+    runtimeOnly("com.aayushatharva.brotli4j:native-osx-aarch64:1.23.0")
+    implementation("com.aayushatharva.brotli4j:brotli4j:1.23.0")
     runtimeOnly("com.github.jponge:lzma-java:1.3")
-    runtimeOnly("com.github.luben:zstd-jni:1.5.7-6")
+    runtimeOnly("com.github.luben:zstd-jni:1.5.7-23")
     runtimeOnly("com.jcraft:jzlib:1.1.3")
-    runtimeOnly("com.ning:compress-lzf:1.1.3")
-    implementation("org.lz4:lz4-java:1.8.0")
-    runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.82")
+    runtimeOnly("com.ning:compress-lzf:1.2.1")
+    implementation("at.yawk.lz4:lz4-java:1.12.0")
+    runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.86")
+    implementation("io.netty:netty-codec-redis")
     implementation("io.netty:netty-codec-xml")
 
     annotationProcessor(mn.micronaut.inject.java)
@@ -215,13 +306,27 @@ tasks.named<JazzerTask>("jazzer") {
     targets.set(listOf(
         //"io.micronaut.fuzzing.toml.TomlTarget",
         //"io.micronaut.fuzzing.http.HttpTarget",
-        "io.micronaut.fuzzing.http.EmbeddedHttpTarget",
+        //"io.micronaut.fuzzing.http.EmbeddedHttpTarget",
+        //"io.netty.handler.codec.compression.SnappyFrameEncoderFuzzer",
+        //"io.netty.handler.codec.http.websocketx.WebSocket08FrameDecoderFuzzer",
+        //"io.netty.handler.codec.compression.ZstdEncoderFuzzer",
+        //"io.netty.handler.codec.compression.Lz4FrameEncoderFuzzer",
+        //"io.netty.handler.codec.redis.RedisDecoderFuzzer",
+        //"io.netty.handler.codec.base64.Base64EncoderFuzzer",
+        //"io.netty.handler.codec.compression.BrotliEncoderFuzzer",
+        //"io.netty.handler.codec.string.StringEncoderFuzzer",
         //"io.micronaut.fuzzing.http.MediaTypeTarget",
         //"io.netty.handler.HttpRequestDecoderFuzzer"
         //"io.micronaut.fuzzing.http.UriMatchTemplateTarget",
         //"io.micronaut.fuzzing.http.TypeConversionTarget",
         //"io.micronaut.fuzzing.http.ContentNegotiationTarget",
         //"io.micronaut.fuzzing.http.MultipartTarget",
+        //"io.netty.handler.codec.compression.JdkZlibDecompressorFuzzer",
+        //"io.netty.handler.codec.compression.Bzip2DecompressorFuzzer",
+        //"io.netty.handler.codec.compression.BrotliDecompressorFuzzer",
+        //"io.netty.handler.codec.compression.JdkZlibDecompressorComparisonFuzzer",
+        //"io.netty.handler.codec.compression.Bzip2DecompressorComparisonFuzzer",
+        //"io.netty.handler.codec.compression.BrotliDecompressorComparisonFuzzer",
     ))
     val jvmArgs = mutableListOf(
         "-Xmx512M",

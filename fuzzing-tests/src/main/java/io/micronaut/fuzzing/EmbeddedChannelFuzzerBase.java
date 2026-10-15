@@ -36,13 +36,15 @@ import jdk.jfr.StackTrace;
  */
 @Dict("SEP")
 public abstract class EmbeddedChannelFuzzerBase {
+    public static final String SEPARATOR = "SEP";
+
     private static final long CPU_TIME_FACTOR = 1024;
-    private static final String SEPARATOR = "SEP";
     private static final ByteSplitter SPLITTER = ByteSplitter.create(SEPARATOR);
 
     protected long baseCpuTime = 500000;
     protected long inputCpuTime = 20;
     protected long outputCpuTime = 0;
+    protected long exceptionCpuTime = 0;
     protected boolean hasOutput = false;
 
     static {
@@ -81,6 +83,13 @@ public abstract class EmbeddedChannelFuzzerBase {
         PlatformDependent.throwException(e);
     }
 
+    /**
+     * @return Whether to write split input chunks outbound instead of inbound.
+     */
+    protected boolean isOutbound() {
+        return false;
+    }
+
     private void test0(byte[] allBytes) {
         EmbeddedChannel channel = setUp();
         AttemptState state = new AttemptState();
@@ -110,7 +119,7 @@ public abstract class EmbeddedChannelFuzzerBase {
                     state.exceptionCaught = true;
                     if (cause instanceof Exception e) {
                         try {
-                            onException(e);
+                            handleException(state, e);
                         } catch (Exception f) {
                             ctx.fireExceptionCaught(f);
                         }
@@ -129,21 +138,28 @@ public abstract class EmbeddedChannelFuzzerBase {
             ByteBuf buffer = channel.alloc().buffer(itr.length());
             buffer.writeBytes(allBytes, itr.start(), itr.length());
             try {
-                channel.writeInbound(buffer);
+                if (isOutbound()) {
+                    channel.writeOutbound(buffer);
+                } else {
+                    channel.writeInbound(buffer);
+                }
             } catch (Exception e) {
-                onException(e);
+                handleException(state, e);
                 break; // cancel further input, but still release
             }
         }
         try {
             channel.finish();
         } catch (Exception e) {
-            onException(e);
+            handleException(state, e);
         }
         channel.releaseOutbound();
 
         long end = CpuTimer.currentThreadCpuTimeNanos();
         cpuTimeBudget += state.outputBytes * outputCpuTime;
+        if (state.handledException) {
+            cpuTimeBudget += exceptionCpuTime;
+        }
 
         LeakPresenceDetector.check();
         FlagAppender.checkTriggered();
@@ -155,8 +171,10 @@ public abstract class EmbeddedChannelFuzzerBase {
             sample.baseCpuTime = baseCpuTime;
             sample.inputCpuTime = inputCpuTime;
             sample.outputCpuTime = outputCpuTime;
+            sample.exceptionCpuTime = exceptionCpuTime;
             sample.inputSize = allBytes.length;
             sample.outputSize = state.outputBytes;
+            sample.handledException = state.handledException;
             sample.actualTime = actualTime;
             sample.commit();
         }
@@ -164,6 +182,11 @@ public abstract class EmbeddedChannelFuzzerBase {
         if (actualTime > CPU_TIME_FACTOR * cpuTimeBudget) {
             throw new CpuLimitException("CPU limit triggered. in=" + allBytes.length + " out=" + state.outputBytes + " actual=" + actualTime);
         }
+    }
+
+    private void handleException(AttemptState state, Exception e) {
+        onException(e);
+        state.handledException = true;
     }
 
     private static final class CpuLimitException extends RuntimeException {
@@ -175,6 +198,7 @@ public abstract class EmbeddedChannelFuzzerBase {
     private static final class AttemptState {
         long outputBytes;
         boolean exceptionCaught;
+        boolean handledException;
     }
 
     @Enabled(false)
@@ -184,8 +208,10 @@ public abstract class EmbeddedChannelFuzzerBase {
         long baseCpuTime;
         long inputCpuTime;
         long outputCpuTime;
+        long exceptionCpuTime;
         int inputSize;
         long outputSize;
+        boolean handledException;
         long actualTime;
     }
 }
