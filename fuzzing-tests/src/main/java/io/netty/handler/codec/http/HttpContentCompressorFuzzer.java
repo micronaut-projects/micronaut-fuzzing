@@ -21,6 +21,7 @@ import io.micronaut.fuzzing.EmbeddedChannelFuzzerBase;
 import io.micronaut.fuzzing.FlagAppender;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
+import io.micronaut.fuzzing.sanitizer.SanitizerTransformer;
 import io.micronaut.fuzzing.util.ByteSplitter;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
@@ -75,6 +76,12 @@ public final class HttpContentCompressorFuzzer {
         HttpMethod.HEAD,
         HttpMethod.CONNECT
     };
+
+    static {
+        // EmbeddedChannelFuzzerBase installs the sanitizer in its static initializer, which referencing its
+        // SEPARATOR constant does not run
+        SanitizerTransformer.installLocally();
+    }
 
     private final int contentSizeThreshold;
     private final HttpMethod method;
