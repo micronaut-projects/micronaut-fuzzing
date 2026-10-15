@@ -28,10 +28,12 @@ import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.DecoderResultProvider;
+import io.netty.handler.codec.EncoderException;
 import io.netty.util.AsciiString;
 import io.netty.util.LeakPresenceDetector;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.FastThreadLocalThread;
+import io.netty.util.internal.StringUtil;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
@@ -40,22 +42,38 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
 /**
- * Fuzzes {@link HttpRequestEncoder} with valid message sequences (several requests per channel, each either a
+ * Fuzzes {@link HttpRequestEncoder} with message sequences (several requests per channel, each either a
  * {@link FullHttpRequest} or an {@link HttpRequest} followed by content and a {@link LastHttpContent}), built from
- * raw method, URI, header and body input.
+ * raw method, URI, version, header and body input.
  * <p>
  * Oracles:
  * <ul>
- *     <li>Method, URI and header validation must accept exactly the values that can be encoded safely. A value that
- *     slips past validation can inject data into the encoded request.</li>
- *     <li>The output of each request that can round trip is fed to one long-lived {@link HttpRequestDecoder}, which
- *     must decode exactly the same method, URI, version, headers, body and trailers, and nothing else. Requests that
- *     cannot round trip (e.g. a header with CRLF when validation is off, or a URI with a tab) are still encoded, but
- *     their output is not decoded, so they don't affect the check of the following requests.</li>
+ *     <li>Method, URI, version and header validation must accept exactly the values that can be encoded safely. A
+ *     value that slips past validation can inject data into the encoded request.</li>
+ *     <li>Occasionally, a message that is not valid in the current encoder state is written (content before the
+ *     request, or a second request before the last content). The encoder must reject exactly that message with its
+ *     state error, release it, and keep working.</li>
+ *     <li>The output of each request that can round trip is compared byte by byte to the expected wire format, and
+ *     fed to one long-lived {@link HttpRequestDecoder}, which must decode the same method, URI, version, headers,
+ *     body and trailers, and nothing else.</li>
+ * </ul>
+ * Requests that cannot round trip are still encoded, but their output is not checked or decoded, so they don't affect
+ * the check of the following requests. These are:
+ * <ul>
+ *     <li>Requests with invalid headers or trailers. They are only possible with validation off, and may contain
+ *     CRLF.</li>
+ *     <li>Versions that are not of the form {@code HTTP/x.y}, which the decoder rejects.</li>
+ *     <li>Requests whose framing headers don't match the body, or that the decoder frames differently.</li>
+ *     <li>URIs with control characters or whitespace. This is a deliberate exclusion: request line validation only
+ *     rejects SP, CR and LF, but the decoder also splits the request line on HTAB, VT and FF and rejects other
+ *     control characters. Such requests are rejected by the decoder, but they cannot make it accept a different
+ *     request: the version token runs to the end of the line and then fails strict version parsing. This target
+ *     does not detect request line desynchronization through these characters.</li>
  * </ul>
  * <p>
  * Unlike {@code EmbeddedChannelFuzzerBase}, this target has no CPU budget: the number and size of all requests,
@@ -69,20 +87,19 @@ import java.util.Objects;
     "://", "http://", "https://", "http://example.com", "http://example.com?a=b", "?", "#", "/", "*",
     "content-length", "Content-Length", "transfer-encoding", "Transfer-Encoding", "chunked", "trailer", "te",
     "sec-websocket-key1", "sec-websocket-key2",
-    "\t", " ", "\r", "\n", "\r\n", ":", "ÿ", "Ā", "Ċ", "\ud800"
+    "\t", " ", "\r", "\n", "\r\n", ":", "ÿ", "Ā", "Ċ"
 })
 public final class HttpRequestEncoderFuzzer {
-    private static final int MAX_REQUESTS = 4;
-    private static final int MAX_HEADERS = 8;
-    private static final int MAX_TRAILERS = 4;
-    private static final int MAX_CHUNKS = 4;
+    static final int MAX_REQUESTS = 4;
+    static final int MAX_HEADERS = 8;
+    static final int MAX_TRAILERS = 4;
+    static final int MAX_CHUNKS = 4;
     private static final int MAX_VERSION_LENGTH = 16;
     private static final int MAX_METHOD_LENGTH = 32;
     private static final int MAX_URI_LENGTH = 256;
     private static final int MAX_HEADER_NAME_LENGTH = 64;
     private static final int MAX_HEADER_VALUE_LENGTH = 256;
     private static final int MAX_BODY_LENGTH = 512;
-    private static final int MAX_DECODER_LINE_LENGTH = 1 << 20;
 
     private static final int FRAMING_CONTENT_LENGTH = 0;
     private static final int FRAMING_CHUNKED = 1;
@@ -92,7 +109,23 @@ public final class HttpRequestEncoderFuzzer {
     private static final int CHUNK_BYTE_BUF = 1;
     private static final int CHUNK_EMPTY_BUFFER = 2;
 
+    private static final int MISPLACED_NONE = 0;
+    private static final int MISPLACED_CONTENT = 1;
+    private static final int MISPLACED_LAST_CONTENT = 2;
+    private static final int MISPLACED_EMPTY_LAST_CONTENT = 3;
+    private static final int MISPLACED_BYTE_BUF = 4;
+    private static final int MISPLACED_REQUEST = 5;
+    private static final int MISPLACED_FULL_REQUEST = 6;
+
+    /**
+     * See {@code HttpObjectEncoder.ST_INIT} and the following constants.
+     */
+    private static final int STATE_INIT = 0;
+    private static final int STATE_CONTENT_NON_CHUNK = 1;
+    private static final int STATE_CONTENT_CHUNK = 2;
+
     private static final String TCHAR_SYMBOLS = "!#$%&'*+-.^_`|~";
+    private static final byte[] CRLF = {'\r', '\n'};
 
     static {
         // not done by EmbeddedChannelFuzzerBase, since this target does not extend it
@@ -100,17 +133,13 @@ public final class HttpRequestEncoderFuzzer {
     }
 
     private final FuzzedDataProvider data;
-    private final EmbeddedChannel encoderChannel;
-    private final EmbeddedChannel decoderChannel;
-    private final ByteBufAllocator alloc;
+    private EmbeddedChannel encoderChannel;
+    private EmbeddedChannel decoderChannel;
+    private ByteBufAllocator alloc;
     private int roundTrips;
 
     private HttpRequestEncoderFuzzer(FuzzedDataProvider data) {
         this.data = data;
-        // encoders and decoders are not @Sharable and keep state, so create fresh ones for each input
-        this.encoderChannel = new EmbeddedChannel(new HttpRequestEncoder());
-        this.decoderChannel = new EmbeddedChannel(new CheckedDecoder());
-        this.alloc = encoderChannel.alloc();
     }
 
     public static void fuzzerTestOneInput(FuzzedDataProvider data) {
@@ -124,22 +153,26 @@ public final class HttpRequestEncoderFuzzer {
      * @return The number of requests that were checked by decoding them again
      */
     static int fuzz(FuzzedDataProvider data) {
-        int[] roundTrips = new int[1];
+        HttpRequestEncoderFuzzer fuzzer = new HttpRequestEncoderFuzzer(data);
         FastThreadLocalThread.runWithFastThreadLocal(() -> {
-            roundTrips[0] = new HttpRequestEncoderFuzzer(data).run();
+            fuzzer.run();
             LeakPresenceDetector.check();
             FlagAppender.checkTriggered();
         });
-        return roundTrips[0];
+        return fuzzer.roundTrips;
     }
 
-    private int run() {
+    private void run() {
+        // encoders and decoders are not @Sharable and keep state, so create fresh ones for each input. The default
+        // decoder limits (4096 for the initial line, 8192 for the headers) are well above what writeRequest generates
+        encoderChannel = new EmbeddedChannel(new HttpRequestEncoder());
+        decoderChannel = new EmbeddedChannel(new HttpRequestDecoder());
+        alloc = encoderChannel.alloc();
         try {
             int requestCount = data.consumeInt(1, MAX_REQUESTS);
             for (int i = 0; i < requestCount; i++) {
                 writeRequest();
             }
-            return roundTrips;
         } finally {
             encoderChannel.finishAndReleaseAll();
             decoderChannel.finishAndReleaseAll();
@@ -148,7 +181,9 @@ public final class HttpRequestEncoderFuzzer {
 
     private void writeRequest() {
         int noise = data.consumeInt(0, 2);
-        HttpVersion version = consumeVersion();
+        int misplaced = data.consumeInt(MISPLACED_NONE, MISPLACED_FULL_REQUEST);
+        int versionChoice = data.consumeInt(0, 2);
+        String versionText = versionChoice == 2 ? data.consumeString(MAX_VERSION_LENGTH) : null;
         String methodName = data.consumeString(MAX_METHOD_LENGTH);
         String uri = data.consumeString(MAX_URI_LENGTH);
         boolean validate = data.consumeBoolean();
@@ -159,16 +194,15 @@ public final class HttpRequestEncoderFuzzer {
         List<CharSequence[]> headers = consumeHeaders(headerCount);
 
         byte[] fullBody = null;
-        List<byte[]> chunks = new ArrayList<>();
-        int[] chunkKinds = null;
+        List<Chunk> chunks = new ArrayList<>();
         byte[] lastChunk = null;
         if (full) {
             fullBody = data.consumeBytes(MAX_BODY_LENGTH);
         } else {
-            chunkKinds = new int[data.consumeInt(0, MAX_CHUNKS)];
-            for (int i = 0; i < chunkKinds.length; i++) {
-                chunkKinds[i] = data.consumeInt(CHUNK_HTTP_CONTENT, CHUNK_EMPTY_BUFFER);
-                chunks.add(chunkKinds[i] == CHUNK_EMPTY_BUFFER ? new byte[0] : data.consumeBytes(MAX_BODY_LENGTH));
+            int chunkCount = data.consumeInt(0, MAX_CHUNKS);
+            for (int i = 0; i < chunkCount; i++) {
+                int kind = data.consumeInt(CHUNK_HTTP_CONTENT, CHUNK_EMPTY_BUFFER);
+                chunks.add(new Chunk(kind, kind == CHUNK_EMPTY_BUFFER ? new byte[0] : data.consumeBytes(MAX_BODY_LENGTH)));
             }
             if (data.consumeBoolean()) {
                 lastChunk = data.consumeBytes(MAX_BODY_LENGTH);
@@ -178,6 +212,7 @@ public final class HttpRequestEncoderFuzzer {
             ? consumeHeaders(data.consumeInt(0, MAX_TRAILERS))
             : List.of();
 
+        HttpVersion version = parseVersion(versionChoice, versionText);
         if (version == null) {
             return;
         }
@@ -196,7 +231,7 @@ public final class HttpRequestEncoderFuzzer {
         if (full) {
             body.writeBytes(fullBody);
         } else {
-            chunks.forEach(body::writeBytes);
+            chunks.forEach(chunk -> body.writeBytes(chunk.bytes()));
             if (lastChunk != null) {
                 body.writeBytes(lastChunk);
             }
@@ -257,8 +292,9 @@ public final class HttpRequestEncoderFuzzer {
             addHeader(trailingHeaders, trailer[0], trailer[1], validate, true);
         }
 
-        // compute this before writing, the encoder releases the messages
-        ExpectedRequest expected = expectedRequest(request, version, uri, body.toByteArray(), trailingHeaders);
+        // compute these before writing, the encoder releases the messages
+        ExpectedRequest expected = expectedRequest(request, body.toByteArray(), trailingHeaders);
+        int contentState = HttpUtil.isTransferEncodingChunked(request) ? STATE_CONTENT_CHUNK : STATE_CONTENT_NON_CHUNK;
 
         switch (noise) {
             case 1 -> encoderChannel.writeOutbound(Unpooled.EMPTY_BUFFER);
@@ -266,14 +302,31 @@ public final class HttpRequestEncoderFuzzer {
             default -> {
             }
         }
+        switch (misplaced) {
+            case MISPLACED_CONTENT -> writeMisplaced(new DefaultHttpContent(alloc.buffer(1).writeByte('x')), STATE_INIT);
+            case MISPLACED_LAST_CONTENT ->
+                writeMisplaced(new DefaultLastHttpContent(alloc.buffer(1).writeByte('x')), STATE_INIT);
+            case MISPLACED_EMPTY_LAST_CONTENT -> writeMisplaced(LastHttpContent.EMPTY_LAST_CONTENT, STATE_INIT);
+            case MISPLACED_BYTE_BUF -> writeMisplaced(alloc.buffer(1).writeByte('x'), STATE_INIT);
+            default -> {
+            }
+        }
         encoderChannel.writeOutbound(request);
         if (!full) {
-            for (int i = 0; i < chunks.size(); i++) {
-                byte[] chunk = chunks.get(i);
-                switch (chunkKinds[i]) {
+            switch (misplaced) {
+                case MISPLACED_REQUEST ->
+                    writeMisplaced(new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"), contentState);
+                case MISPLACED_FULL_REQUEST -> writeMisplaced(new DefaultFullHttpRequest(
+                    HttpVersion.HTTP_1_1, HttpMethod.GET, "/", alloc.buffer(1).writeByte('x')), contentState);
+                default -> {
+                }
+            }
+            for (Chunk chunk : chunks) {
+                byte[] bytes = chunk.bytes();
+                switch (chunk.kind()) {
                     case CHUNK_HTTP_CONTENT ->
-                        encoderChannel.writeOutbound(new DefaultHttpContent(alloc.buffer(chunk.length).writeBytes(chunk)));
-                    case CHUNK_BYTE_BUF -> encoderChannel.writeOutbound(alloc.buffer(chunk.length).writeBytes(chunk));
+                        encoderChannel.writeOutbound(new DefaultHttpContent(alloc.buffer(bytes.length).writeBytes(bytes)));
+                    case CHUNK_BYTE_BUF -> encoderChannel.writeOutbound(alloc.buffer(bytes.length).writeBytes(bytes));
                     default -> encoderChannel.writeOutbound(Unpooled.EMPTY_BUFFER);
                 }
             }
@@ -289,22 +342,56 @@ public final class HttpRequestEncoderFuzzer {
         }
     }
 
-    private HttpVersion consumeVersion() {
-        return switch (data.consumeInt(0, 2)) {
-            case 0 -> HttpVersion.HTTP_1_0;
-            case 1 -> HttpVersion.HTTP_1_1;
-            default -> {
-                String text = data.consumeString(MAX_VERSION_LENGTH);
-                try {
-                    yield HttpVersion.valueOf(text);
-                } catch (IllegalArgumentException e) {
-                    if (e.getClass() != IllegalArgumentException.class) {
-                        throw e;
-                    }
-                    yield null;
-                }
+    /**
+     * Write a message that is not valid in the current encoder state, and check that the encoder rejects it with its
+     * state error. The encoder releases the message and does not change its state.
+     */
+    private void writeMisplaced(Object message, int state) {
+        String expectedMessage = "unexpected message type: " + StringUtil.simpleClassName(message) + ", state: " + state;
+        try {
+            encoderChannel.writeOutbound(message);
+        } catch (EncoderException e) {
+            Throwable cause = e.getCause();
+            if (e.getClass() == EncoderException.class && cause != null
+                && cause.getClass() == IllegalStateException.class && expectedMessage.equals(cause.getMessage())) {
+                return;
             }
-        };
+            throw e;
+        }
+        throw new AssertionError("Encoder accepted a misplaced message, expected: " + expectedMessage);
+    }
+
+    /**
+     * Parse a version, and check that it is rejected exactly when it is invalid.
+     *
+     * @param choice 0 for HTTP/1.0, 1 for HTTP/1.1, 2 to parse the text
+     * @param text The version text
+     * @return The version, or {@code null} if it was rejected
+     */
+    private static HttpVersion parseVersion(int choice, String text) {
+        if (choice == 0) {
+            return HttpVersion.HTTP_1_0;
+        } else if (choice == 1) {
+            return HttpVersion.HTTP_1_1;
+        }
+        HttpVersion version;
+        try {
+            version = HttpVersion.valueOf(text);
+        } catch (IllegalArgumentException e) {
+            expectRejected(e, isLenientVersion(text), "version", text);
+            return null;
+        }
+        if (!isLenientVersion(text)) {
+            throw new AssertionError("Invalid version accepted: " + escape(text));
+        }
+        String encoded = version.text();
+        for (int i = 0; i < encoded.length(); i++) {
+            char c = encoded.charAt(i);
+            if (Character.isISOControl(c) || Character.isWhitespace(c)) {
+                throw new AssertionError("Version contains whitespace or control chars: " + escape(encoded));
+            }
+        }
+        return version;
     }
 
     private List<CharSequence[]> consumeHeaders(int count) {
@@ -329,17 +416,16 @@ public final class HttpRequestEncoderFuzzer {
     private static void addHeader(HttpHeaders headers, CharSequence name, CharSequence value, boolean validate,
                                   boolean trailer) {
         boolean valid = isValidHeader(name, value) && !(trailer && isProhibitedTrailer(name));
+        String what = trailer ? "trailer" : "header";
         try {
             headers.add(name, value);
         } catch (IllegalArgumentException e) {
-            if (e.getClass() != IllegalArgumentException.class || !validate || valid) {
-                throw e;
-            }
+            // without validation, nothing may be rejected
+            expectRejected(e, valid || !validate, what, name + ": " + value);
             return;
         }
         if (validate && !valid) {
-            throw new AssertionError("Invalid " + (trailer ? "trailer" : "header") + " accepted: "
-                + escape(name) + ": " + escape(value));
+            throw new AssertionError("Invalid " + what + " accepted: " + escape(name) + ": " + escape(value));
         }
     }
 
@@ -353,42 +439,62 @@ public final class HttpRequestEncoderFuzzer {
     }
 
     /**
-     * Determine what the decoder should see for this request.
+     * Determine what the encoder should write and the decoder should see for this request.
      *
-     * @return The expected decoded request, or {@code null} if this request can't round trip
+     * @return The expected request, or {@code null} if this request can't round trip
      */
-    private static ExpectedRequest expectedRequest(HttpRequest request, HttpVersion version, String uri, byte[] body,
-                                                   HttpHeaders trailingHeaders) {
+    private static ExpectedRequest expectedRequest(HttpRequest request, byte[] body, HttpHeaders trailingHeaders) {
+        String version = request.protocolVersion().text();
         // the decoder only accepts this version format
-        if (!isStrictVersion(version.text())
-            // the decoder splits the request line on whitespace other than SP, and rejects other control chars
-            // between the tokens
-            || !hasNoControlOrSpace(uri.getBytes(StandardCharsets.UTF_8))
+        if (!isStrictVersion(version)
+            // see the class javadoc
+            || !hasNoControlOrSpace(request.uri().getBytes(StandardCharsets.UTF_8))
             // with validation off, the header may be anything, including CRLF
             || !allValid(request.headers())) {
             return null;
         }
         Boolean chunked = chunked(request, body.length);
-        if (chunked == null) {
+        if (chunked == null || chunked && !allValid(trailingHeaders)) {
             return null;
         }
-        List<Map.Entry<String, String>> trailers = List.of();
+
+        ByteArrayOutputStream head = new ByteArrayOutputStream();
+        byte[] uriBytes = expectedUri(request.uri()).getBytes(StandardCharsets.UTF_8);
+        String uri = new String(uriBytes, StandardCharsets.ISO_8859_1);
+        head.writeBytes((request.method().name() + ' ' + uri + ' ' + version).getBytes(StandardCharsets.ISO_8859_1));
+        head.writeBytes(CRLF);
+        writeHeaderLines(head, request.headers());
+        ByteArrayOutputStream trailerSection = new ByteArrayOutputStream();
         if (chunked) {
-            if (!allValid(trailingHeaders)) {
-                return null;
-            }
-            // the decoder drops prohibited trailers. They are only possible when validation is off
-            trailers = expectedHeaders(trailingHeaders, true);
+            writeHeaderLines(trailerSection, trailingHeaders);
         }
+
         return new ExpectedRequest(
+            head.toByteArray(),
+            chunked,
+            trailerSection.toByteArray(),
             request.method().name(),
-            new String(expectedUri(uri).getBytes(StandardCharsets.UTF_8), StandardCharsets.ISO_8859_1),
-            version.text(),
+            uri,
+            version,
             expectedHeaders(request.headers(), false),
             body,
-            // trailers only exist in chunked encoding, the encoder drops them otherwise
-            trailers
+            // trailers only exist in chunked encoding, the encoder drops them otherwise. The decoder drops prohibited
+            // trailers, which are only possible when validation is off
+            chunked ? expectedHeaders(trailingHeaders, true) : List.of()
         );
+    }
+
+    /**
+     * Write the header lines the way HttpHeadersEncoder does, followed by the empty line.
+     */
+    private static void writeHeaderLines(ByteArrayOutputStream out, HttpHeaders headers) {
+        for (Iterator<Map.Entry<CharSequence, CharSequence>> it = headers.iteratorCharSequence(); it.hasNext(); ) {
+            Map.Entry<CharSequence, CharSequence> entry = it.next();
+            String line = asLatin1(entry.getKey()) + ": " + asLatin1(entry.getValue());
+            out.writeBytes(line.getBytes(StandardCharsets.ISO_8859_1));
+            out.writeBytes(CRLF);
+        }
+        out.writeBytes(CRLF);
     }
 
     /**
@@ -421,10 +527,13 @@ public final class HttpRequestEncoderFuzzer {
     }
 
     private void verifyRoundTrip(ExpectedRequest exp) {
+        ByteArrayOutputStream wire = new ByteArrayOutputStream();
         for (Object encoded; (encoded = encoderChannel.readOutbound()) != null; ) {
+            wire.writeBytes(ByteBufUtil.getBytes((ByteBuf) encoded));
             decoderChannel.writeInbound(encoded);
         }
-        decoderChannel.checkException();
+        // the decoder skips whitespace between requests, so check the exact bytes too
+        checkWireFormat(exp, wire.toByteArray());
 
         Object first = decoderChannel.readInbound();
         try {
@@ -456,18 +565,77 @@ public final class HttpRequestEncoderFuzzer {
                 ReferenceCountUtil.release(next);
             }
         }
-        if (!Arrays.equals(exp.body(), body.toByteArray())) {
-            throw new AssertionError("Body mismatch: expected " + Arrays.toString(exp.body())
-                + ", decoded " + Arrays.toString(body.toByteArray()));
-        }
+        checkBody(exp.body(), body.toByteArray());
         Object extra = decoderChannel.readInbound();
         if (extra != null) {
             ReferenceCountUtil.release(extra);
             throw new AssertionError("Unexpected extra decoded message: " + extra);
         }
-        int leftover = decoderChannel.pipeline().get(CheckedDecoder.class).leftover();
-        if (leftover != 0) {
-            throw new AssertionError("Encoder wrote " + leftover + " bytes after the end of the request");
+    }
+
+    /**
+     * Check that the encoder output is exactly the expected head, followed by the body in the expected framing.
+     */
+    private static void checkWireFormat(ExpectedRequest exp, byte[] wire) {
+        byte[] head = exp.head();
+        if (!startsWith(wire, 0, head)) {
+            throw new AssertionError("Head mismatch: expected " + escapeLatin1(head, 0, head.length)
+                + ", encoded " + escapeLatin1(wire, 0, wire.length));
+        }
+        int pos = head.length;
+        if (!exp.chunked()) {
+            checkBody(exp.body(), Arrays.copyOfRange(wire, pos, wire.length));
+            return;
+        }
+        ByteArrayOutputStream body = new ByteArrayOutputStream();
+        while (true) {
+            int lineEnd = indexOfCrlf(wire, pos);
+            String size = lineEnd == -1 ? "" : new String(wire, pos, lineEnd - pos, StandardCharsets.ISO_8859_1);
+            // the encoder writes the size in minimal lower case hex, without extensions
+            if (!size.matches("0|[1-9a-f][0-9a-f]{0,6}")) {
+                throw new AssertionError("Bad chunk size line at " + pos + ": " + escapeLatin1(wire, 0, wire.length));
+            }
+            int chunkSize = Integer.parseInt(size, 16);
+            pos = lineEnd + CRLF.length;
+            if (chunkSize == 0) {
+                break;
+            }
+            if (wire.length - pos < chunkSize + CRLF.length || !startsWith(wire, pos + chunkSize, CRLF)) {
+                throw new AssertionError("Bad chunk at " + pos + ": " + escapeLatin1(wire, 0, wire.length));
+            }
+            body.write(wire, pos, chunkSize);
+            pos += chunkSize + CRLF.length;
+        }
+        byte[] trailers = exp.trailerSection();
+        if (wire.length - pos != trailers.length || !startsWith(wire, pos, trailers)) {
+            throw new AssertionError("Trailer section mismatch: expected "
+                + escapeLatin1(trailers, 0, trailers.length) + ", encoded " + escapeLatin1(wire, pos, wire.length));
+        }
+        checkBody(exp.body(), body.toByteArray());
+    }
+
+    private static boolean startsWith(byte[] array, int offset, byte[] prefix) {
+        return array.length - offset >= prefix.length
+            && Arrays.equals(array, offset, offset + prefix.length, prefix, 0, prefix.length);
+    }
+
+    private static int indexOfCrlf(byte[] array, int from) {
+        for (int i = from; i < array.length - 1; i++) {
+            if (array[i] == '\r' && array[i + 1] == '\n') {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static String escapeLatin1(byte[] array, int from, int to) {
+        return escape(new String(array, from, to - from, StandardCharsets.ISO_8859_1));
+    }
+
+    private static void checkBody(byte[] expected, byte[] actual) {
+        if (!Arrays.equals(expected, actual)) {
+            throw new AssertionError("Body mismatch: expected " + Arrays.toString(expected)
+                + ", got " + Arrays.toString(actual));
         }
     }
 
@@ -539,7 +707,8 @@ public final class HttpRequestEncoderFuzzer {
     }
 
     /**
-     * Header values are written one byte per char, with '?' for chars that don't fit (see AsciiString.c2b).
+     * Header names and values are written one byte per char, with '?' for chars that don't fit (see
+     * AsciiString.c2b).
      */
     private static String asLatin1(CharSequence s) {
         StringBuilder builder = new StringBuilder(s.length());
@@ -608,6 +777,35 @@ public final class HttpRequestEncoderFuzzer {
         return uri.indexOf(' ') == -1 && uri.indexOf('\r') == -1 && uri.indexOf('\n') == -1;
     }
 
+    /**
+     * The lenient version format that {@link HttpVersion#valueOf(String)} accepts: {@code protocol/major.minor}, case
+     * insensitive, with a protocol name without whitespace or control chars, and decimal version numbers.
+     */
+    private static boolean isLenientVersion(String text) {
+        String upper = text.toUpperCase(Locale.US);
+        int slash = upper.indexOf('/');
+        int dot = upper.indexOf('.', slash + 1);
+        if (slash <= 0 || dot <= slash + 1 || dot >= upper.length() - 1) {
+            return false;
+        }
+        for (int i = 0; i < slash; i++) {
+            char c = upper.charAt(i);
+            if (Character.isISOControl(c) || Character.isWhitespace(c)) {
+                return false;
+            }
+        }
+        for (int i = slash + 1; i < upper.length(); i++) {
+            char c = upper.charAt(i);
+            if (i != dot && (c < '0' || c > '9')) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * The version format that the decoder accepts.
+     */
     private static boolean isStrictVersion(String text) {
         return text.length() == 8 && text.startsWith("HTTP/") && Character.isDigit(text.charAt(5))
             && text.charAt(6) == '.' && Character.isDigit(text.charAt(7));
@@ -639,22 +837,24 @@ public final class HttpRequestEncoderFuzzer {
         LocalJazzerRunner.create(HttpRequestEncoderFuzzer.class).fuzz();
     }
 
-    /**
-     * Decoder that exposes the number of buffered bytes it has not decoded yet.
-     */
-    private static final class CheckedDecoder extends HttpRequestDecoder {
-        CheckedDecoder() {
-            super(new HttpDecoderConfig()
-                .setMaxInitialLineLength(MAX_DECODER_LINE_LENGTH)
-                .setMaxHeaderSize(MAX_DECODER_LINE_LENGTH));
-        }
-
-        int leftover() {
-            return actualReadableBytes();
-        }
+    private record Chunk(int kind, byte[] bytes) {
     }
 
+    /**
+     * @param head The expected request line and header section, including the empty line
+     * @param chunked Whether the body is chunked
+     * @param trailerSection The expected trailer lines after the last chunk, including the empty line
+     * @param method The expected decoded method
+     * @param uri The expected decoded URI
+     * @param version The expected decoded version
+     * @param headers The expected decoded headers
+     * @param body The expected body
+     * @param trailers The expected decoded trailers
+     */
     private record ExpectedRequest(
+        byte[] head,
+        boolean chunked,
+        byte[] trailerSection,
         String method,
         String uri,
         String version,

@@ -23,6 +23,7 @@ import java.util.List;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HttpRequestEncoderFuzzerTest {
     private static final int HTTP_1_0 = 0;
@@ -77,43 +78,62 @@ class HttpRequestEncoderFuzzerTest {
     @Test
     void unusualMethodsAndUris() {
         run(
-            6,
+            4,
             new Request(HTTP_1_1, "PROPFIND", "http://example.com?a=b").full(""),
             new Request(HTTP_1_1, "M-SEARCH", "http://example.com").full(""),
             new Request(HTTP_1_1, "OPTIONS", "*").full(""),
-            new Request(HTTP_1_1, "GET", "").full(""),
+            new Request(HTTP_1_1, "GET", "").full("")
+        );
+        run(
+            2,
             new Request(HTTP_1_1, "GET", "/ä€😀?q=Ā").full("x"),
             new Request(CUSTOM_VERSION, "GET", "/custom").version("http/1.1").full(""),
             // the decoder only accepts HTTP/x.y
-            new Request(CUSTOM_VERSION, "GET", "/custom").version("ICAP/1.0").full(""),
-            // all of these are rejected at construction time
-            new Request(CUSTOM_VERSION, "GET", "/").version("HTTP/x").full(""),
-            new Request(HTTP_1_1, "GE T", "/").full(""),
-            new Request(HTTP_1_1, "", "/").full(""),
-            new Request(HTTP_1_1, "GET", "/a b").full("body"),
-            new Request(HTTP_1_1, "GET", "/a\r\nHost: x").chunk(HTTP_CONTENT, "body").emptyLast(),
+            new Request(CUSTOM_VERSION, "GET", "/custom").version("ICAP/01.0").full(""),
             // whitespace other than SP passes validation but can't round trip
             new Request(HTTP_1_1, "GET", "/a\tb").full("")
         );
     }
 
     @Test
+    void rejectedRequestLines() {
+        run(
+            0,
+            new Request(CUSTOM_VERSION, "GET", "/").version("HTTP/x").full(""),
+            new Request(CUSTOM_VERSION, "GET", "/").version("HT TP/1.1").full(""),
+            new Request(HTTP_1_1, "GE T", "/").full(""),
+            new Request(HTTP_1_1, "", "/").full("")
+        );
+        run(
+            0,
+            new Request(HTTP_1_1, "GET", "/a b").full("body"),
+            new Request(HTTP_1_1, "GET", "/a\r\nHost: x").chunk(HTTP_CONTENT, "body").emptyLast()
+        );
+    }
+
+    @Test
     void validatedHeaderBytes() {
-        run(1, new Request(HTTP_1_1, "POST", "/").framing(CHUNKED, 2)
-            .header("x-trailing", "value \t")
-            .header("x-latin1", "äÿ")
-            .header("x-wide", "ĀĊ")
-            .asciiHeader("x-ascii", "vä")
-            .header("x-empty", "")
-            // rejected and skipped
-            .header("x bad", "v")
-            .header("x-bad", "v\r\nInjected: 1")
-            .header("x-bad", " leading")
-            .header("", "v")
-            .chunk(HTTP_CONTENT, "data")
-            .last("")
-            .trailer("content-length", "1")
-            .trailer("x-ok", "1"));
+        run(
+            2,
+            new Request(HTTP_1_1, "POST", "/").framing(CHUNKED, 2)
+                .header("x-trailing", "value \t")
+                .header("x-latin1", "äÿ")
+                .header("x-wide", "ĀĊ")
+                .asciiHeader("x-ascii", "vä")
+                .header("x-empty", "")
+                .chunk(HTTP_CONTENT, "data")
+                .last("")
+                // rejected and skipped
+                .trailer("content-length", "1")
+                .trailer("x-ok", "1"),
+            // all rejected and skipped
+            new Request(HTTP_1_1, "POST", "/")
+                .header("x bad", "v")
+                .header("x-bad", "v\r\nInjected: 1")
+                .header("x-bad", " leading")
+                .header("", "v")
+                .full("abc")
+        );
     }
 
     @Test
@@ -140,13 +160,36 @@ class HttpRequestEncoderFuzzerTest {
             new Request(HTTP_1_1, "POST", "/").framing(NO_FRAMING, 0).header("Transfer-Encoding", "Chunked")
                 .chunk(HTTP_CONTENT, "abc").emptyLast(),
             // no framing and no body
-            new Request(HTTP_1_1, "GET", "/").framing(NO_FRAMING, 0).full(""),
+            new Request(HTTP_1_1, "GET", "/").framing(NO_FRAMING, 0).full("")
+        );
+        run(
+            0,
             // conflicting or wrong framing can't round trip
             new Request(HTTP_1_1, "POST", "/").header("transfer-encoding", "chunked").full("abc"),
             new Request(HTTP_1_1, "POST", "/").framing(NO_FRAMING, 0).header("Content-Length", "4").full("abc"),
             new Request(HTTP_1_0, "POST", "/").framing(CHUNKED, 0).full("abc"),
             new Request(HTTP_1_1, "GET", "/").framing(NO_FRAMING, 0).header("Sec-WebSocket-Key1", "1")
                 .header("Sec-WebSocket-Key2", "2").full("")
+        );
+    }
+
+    @Test
+    void misplacedMessages() {
+        // content, last content, empty last content and a byte buffer before the request
+        run(
+            4,
+            new Request(HTTP_1_1, "GET", "/").misplaced(1).full(""),
+            new Request(HTTP_1_1, "GET", "/").misplaced(2).full(""),
+            new Request(HTTP_1_1, "GET", "/").misplaced(3).full(""),
+            new Request(HTTP_1_1, "GET", "/").misplaced(4).full("")
+        );
+        // a request or full request before the last content
+        run(
+            3,
+            new Request(HTTP_1_1, "POST", "/").misplaced(5).chunk(HTTP_CONTENT, "abc").emptyLast(),
+            new Request(HTTP_1_1, "POST", "/").misplaced(6).framing(CHUNKED, 0).chunk(BYTE_BUF, "abc").last("d"),
+            // ignored for full requests
+            new Request(HTTP_1_1, "POST", "/").misplaced(6).full("abc")
         );
     }
 
@@ -157,6 +200,8 @@ class HttpRequestEncoderFuzzerTest {
      * @param requests The requests
      */
     private static void run(int expectedRoundTrips, Request... requests) {
+        // CannedFuzzedDataProvider does not check ranges, so check that the input is one the fuzzer can generate
+        assertTrue(requests.length <= HttpRequestEncoderFuzzer.MAX_REQUESTS);
         List<Object> values = new ArrayList<>();
         values.add(requests.length);
         for (Request request : requests) {
@@ -171,6 +216,7 @@ class HttpRequestEncoderFuzzerTest {
         private final String uri;
         private String versionText;
         private int noise;
+        private int misplaced;
         private boolean validate = true;
         private int framing = CONTENT_LENGTH;
         private int framingPosition;
@@ -179,6 +225,7 @@ class HttpRequestEncoderFuzzerTest {
         private final List<Object> trailers = new ArrayList<>();
         private int trailerCount;
         private final List<Object> body = new ArrayList<>();
+        private int chunkCount;
         private boolean full;
         private boolean hasTrailers;
 
@@ -198,6 +245,11 @@ class HttpRequestEncoderFuzzerTest {
             return this;
         }
 
+        Request misplaced(int misplaced) {
+            this.misplaced = misplaced;
+            return this;
+        }
+
         Request unvalidated() {
             validate = false;
             return this;
@@ -210,20 +262,24 @@ class HttpRequestEncoderFuzzerTest {
         }
 
         Request header(String name, String value) {
-            headers.addAll(List.of(name, false, value, false));
-            headerCount++;
-            return this;
+            return addHeader(name, value, false);
         }
 
         Request asciiHeader(String name, String value) {
-            headers.addAll(List.of(name, true, value, true));
+            return addHeader(name, value, true);
+        }
+
+        private Request addHeader(String name, String value, boolean ascii) {
+            headers.addAll(List.of(name, ascii, value, ascii));
             headerCount++;
+            assertTrue(headerCount <= HttpRequestEncoderFuzzer.MAX_HEADERS);
             return this;
         }
 
         Request trailer(String name, String value) {
             trailers.addAll(List.of(name, false, value, false));
             trailerCount++;
+            assertTrue(trailerCount <= HttpRequestEncoderFuzzer.MAX_TRAILERS);
             return this;
         }
 
@@ -239,6 +295,8 @@ class HttpRequestEncoderFuzzerTest {
             if (kind != EMPTY_BUFFER) {
                 body.add(content.getBytes(UTF_8));
             }
+            chunkCount++;
+            assertTrue(chunkCount <= HttpRequestEncoderFuzzer.MAX_CHUNKS);
             return this;
         }
 
@@ -256,6 +314,7 @@ class HttpRequestEncoderFuzzerTest {
 
         void appendTo(List<Object> values) {
             values.add(noise);
+            values.add(misplaced);
             values.add(versionChoice);
             if (versionChoice == CUSTOM_VERSION) {
                 values.add(versionText);
@@ -269,8 +328,7 @@ class HttpRequestEncoderFuzzerTest {
             values.add(Math.min(framingPosition, headerCount));
             values.addAll(headers);
             if (!full) {
-                long chunks = body.stream().filter(Integer.class::isInstance).count();
-                values.add((int) chunks);
+                values.add(chunkCount);
             }
             values.addAll(body);
             if (hasTrailers) {
