@@ -6,6 +6,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.HttpRequestDecoder;
+import net.jpountz.xxhash.StreamingXXHash64;
 import net.jpountz.xxhash.XXHashFactory;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -14,11 +15,14 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.FilterOutputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Arrays;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.util.zip.CRC32;
 import java.util.zip.Checksum;
 import java.util.zip.Deflater;
@@ -317,6 +321,92 @@ public class SanitizerTransformerTest {
         });
     }
 
+    @Test
+    public void platformModuleUsesBackingArray() throws Exception {
+        withGuardedHello((buffer, array, offset) -> {
+            // javax.crypto is in the java.base module, but not in a "java." package
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(HELLO, "HmacSHA256"));
+            mac.update(array, offset, HELLO.length);
+            byte[] actual = mac.doFinal();
+            Assertions.assertArrayEquals(mac.doFinal(HELLO), actual);
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> mac.update(array, offset - 1, 1));
+        });
+    }
+
+    @Test
+    public void superCallUsesBackingArray() throws Exception {
+        withGuardedHello((buffer, array, offset) -> {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            SuperCallingOutputStream stream = new SuperCallingOutputStream(baos);
+            stream.write(array, offset, HELLO.length);
+            Assertions.assertSame(array, stream.received);
+            Assertions.assertArrayEquals(HELLO, baos.toByteArray());
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> stream.write(array, offset - 1, 2));
+        });
+    }
+
+    @Test
+    public void interfaceDispatchToInstrumentedImplementation() throws Exception {
+        withGuardedHello((buffer, array, offset) -> {
+            RecordingChecksum recording = new RecordingChecksum();
+            Checksum checksum = recording;
+            checksum.update(array, offset, HELLO.length);
+            Assertions.assertSame(array, recording.received);
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> sink = recording.received[offset - 1]);
+
+            Checksum crc = new CRC32();
+            crc.update(array, offset, HELLO.length);
+            CRC32 expected = new CRC32();
+            expected.update(HELLO);
+            assertEquals(expected.getValue(), crc.getValue());
+        });
+    }
+
+    @Test
+    public void nestedAndBranchingConstructorCalls() throws Exception {
+        withGuardedHello((buffer, array, offset) -> {
+            boolean guarded = buffer.capacity() > 0;
+            // branches between NEW and the constructor call
+            String s = new String(guarded ? array : HELLO, guarded ? offset : 0, HELLO.length, guarded ? StandardCharsets.UTF_8 : StandardCharsets.US_ASCII);
+            assertEquals("hello world", s);
+            // NEW in the argument of another constructor
+            ByteArrayInputStream in = new ByteArrayInputStream(new String(array, offset, HELLO.length, StandardCharsets.UTF_8).getBytes(StandardCharsets.UTF_8));
+            Assertions.assertArrayEquals(HELLO, in.readAllBytes());
+            // NEW in the argument of this(...)
+            assertEquals("hello world", new StringHolder(array, offset).value);
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> new StringHolder(array, offset + 30));
+        });
+    }
+
+    @Test
+    public void staticCallWithLongParameters() throws Exception {
+        withGuardedHello((buffer, array, offset) -> {
+            XXHashFactory fastest = XXHashFactory.fastestInstance();
+            XXHashFactory safe = XXHashFactory.safeInstance();
+            // XXH64(byte[], int, int, long)
+            assertEquals(safe.hash64().hash(HELLO, 0, HELLO.length, 42L), fastest.hash64().hash(array, offset, HELLO.length, 42L), fastest.toString());
+            // XXH64_update(long, byte[], int, int)
+            StreamingXXHash64 streaming = fastest.newStreamingHash64(42L);
+            streaming.update(array, offset, HELLO.length);
+            assertEquals(safe.hash64().hash(HELLO, 0, HELLO.length, 42L), streaming.getValue());
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> streaming.update(array, offset + 30, 3));
+            streaming.close();
+        });
+    }
+
+    @Test
+    public void byteBufferWrapWholeArray() throws Exception {
+        withGuardedHello((buffer, array, offset) -> {
+            ByteBuffer nio = ByteBuffer.wrap(array);
+            nio.position(offset).limit(offset + HELLO.length);
+            assertEquals("hello world", StandardCharsets.UTF_8.decode(nio).toString());
+            byte[] fromNio = nio.array();
+            Assertions.assertSame(array, fromNio);
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> sink = fromNio[offset + 32]);
+        });
+    }
+
     @FunctionalInterface
     private interface GuardedTest {
         void run(ByteBuf buffer, byte[] array, int offset) throws Exception;
@@ -325,6 +415,55 @@ public class SanitizerTransformerTest {
     private static final class InheritingOutputStream extends FilterOutputStream {
         InheritingOutputStream(OutputStream out) {
             super(out);
+        }
+    }
+
+    private static final class SuperCallingOutputStream extends FilterOutputStream {
+        byte[] received;
+
+        SuperCallingOutputStream(OutputStream out) {
+            super(out);
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+            received = b;
+            super.write(b, off, len);
+        }
+    }
+
+    private static final class RecordingChecksum implements Checksum {
+        byte[] received;
+
+        @Override
+        public void update(int b) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void update(byte[] b, int off, int len) {
+            received = b;
+        }
+
+        @Override
+        public long getValue() {
+            return 0;
+        }
+
+        @Override
+        public void reset() {
+        }
+    }
+
+    private static final class StringHolder {
+        final String value;
+
+        StringHolder(byte[] array, int offset) {
+            this(new String(array, offset, HELLO.length, StandardCharsets.UTF_8));
+        }
+
+        StringHolder(String value) {
+            this.value = value;
         }
     }
 

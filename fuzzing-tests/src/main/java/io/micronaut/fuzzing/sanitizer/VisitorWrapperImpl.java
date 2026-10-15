@@ -101,8 +101,8 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
     }
 
     /**
-     * Check whether a method call passes a byte array to uninstrumented code: a method of an excluded class, or a
-     * native method.
+     * Check whether a method call passes a byte array to uninstrumented code: a method of a class in an excluded
+     * package or a JDK module, or a native method.
      *
      * @param typePool The type pool to resolve the owner with
      * @param owner    The internal name of the owner
@@ -125,7 +125,7 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
         if (!byteArrayParameter) {
             return false;
         }
-        if (ByteBufArraySanitizer.isExcluded(Type.getObjectType(owner).getClassName())) {
+        if (ByteBufArraySanitizer.isUninstrumented(Type.getObjectType(owner).getClassName())) {
             return !Type.getObjectType(owner).getClassName().startsWith(ByteBufArraySanitizer.class.getName());
         }
         if (name.equals("<init>") || typePool == null) {
@@ -143,7 +143,7 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
                 MethodList<MethodDescription.InDefinedShape> methods = erasure.getDeclaredMethods()
                     .filter(ElementMatchers.hasMethodName(name).and(ElementMatchers.hasDescriptor(desc)));
                 if (!methods.isEmpty()) {
-                    return methods.getOnly().isNative() || ByteBufArraySanitizer.isExcluded(erasure.getName());
+                    return methods.getOnly().isNative() || ByteBufArraySanitizer.isUninstrumented(erasure.getName());
                 }
                 type = erasure.getSuperClass();
             }
