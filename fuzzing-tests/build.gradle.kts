@@ -42,6 +42,7 @@ tasks.named<Test>("test") {
     exclude("io/netty/handler/codec/http2/Http2ConnectionHandlerFuzzerTest.class")
     exclude("io/netty/handler/codec/redis/RedisDecoderFuzzerTest.class")
     exclude("io/netty/handler/codec/haproxy/HAProxyMessageDecoderFuzzerTest.class")
+    exclude("io/netty/handler/codec/redis/RedisArrayAggregatorFuzzerTest.class")
 }
 
 val nettyFuzzerTest by tasks.registering(Test::class) {
@@ -63,6 +64,7 @@ val nettyFuzzerTest by tasks.registering(Test::class) {
     include("io/netty/handler/codec/string/StringEncoderFuzzerTest.class")
     include("io/netty/handler/codec/redis/RedisDecoderFuzzerTest.class")
     include("io/netty/handler/codec/haproxy/HAProxyMessageDecoderFuzzerTest.class")
+    include("io/netty/handler/codec/redis/RedisArrayAggregatorFuzzerTest.class")
 
     shouldRunAfter(tasks.named("test"))
     forkEvery = 1
@@ -316,6 +318,7 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.netty.handler.codec.compression.Lz4FrameEncoderFuzzer",
         //"io.netty.handler.codec.redis.RedisDecoderFuzzer",
         //"io.netty.handler.codec.haproxy.HAProxyMessageDecoderFuzzer",
+        //"io.netty.handler.codec.redis.RedisArrayAggregatorFuzzer",
         //"io.netty.handler.codec.base64.Base64EncoderFuzzer",
         //"io.netty.handler.codec.compression.BrotliEncoderFuzzer",
         //"io.netty.handler.codec.string.StringEncoderFuzzer",
@@ -331,6 +334,10 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.netty.handler.codec.compression.JdkZlibDecompressorComparisonFuzzer",
         //"io.netty.handler.codec.compression.Bzip2DecompressorComparisonFuzzer",
         //"io.netty.handler.codec.compression.BrotliDecompressorComparisonFuzzer",
+        //"io.micronaut.fuzzing.lz4.Lz4BlockDecompressorTarget",
+        //"io.micronaut.fuzzing.lz4.Lz4RoundTripTarget",
+        //"io.micronaut.fuzzing.lz4.XxHashTarget",
+        //"io.micronaut.fuzzing.lz4.Lz4StreamTarget",
     ))
     val jvmArgs = mutableListOf(
         "-Xmx512M",
