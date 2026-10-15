@@ -26,6 +26,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.HandlerFuzzerBase;
+import io.netty.handler.codec.ByteToMessageDecoder;
 import io.netty.handler.codec.DecoderException;
 
 import java.util.ArrayList;
@@ -34,8 +35,9 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Fuzzes {@link HAProxyMessageDecoder} with PROXY protocol v1 and v2 input. Every decoded message is encoded with
- * {@link HAProxyMessageEncoder} and decoded again, and the result must be equal to the original message.
+ * Fuzzes {@link HAProxyMessageDecoder} with PROXY protocol v1 and v2 input. The decoder must produce at most one
+ * message, and none after an exception. Every decoded message is encoded with {@link HAProxyMessageEncoder} and
+ * decoded again, and the result must be equal to the original message.
  */
 @FuzzTarget
 @DictResource("dictionaries/haproxy.dict")
@@ -92,19 +94,31 @@ public class HAProxyMessageDecoderFuzzer extends HandlerFuzzerBase {
         if (cause instanceof HAProxyProtocolException) {
             return isExpected(cause);
         }
-        if (cause.getClass() != IllegalArgumentException.class) {
+        return cause.getClass() == IllegalArgumentException.class && isThrownByValidation(cause.getStackTrace());
+    }
+
+    /**
+     * Whether the exception was thrown by one of the validation methods, or by {@link Enum#valueOf} called from the
+     * {@code valueOf(String)} method of an enum of this package.
+     */
+    private static boolean isThrownByValidation(StackTraceElement[] stackTrace) {
+        if (stackTrace.length == 0) {
             return false;
         }
-        StackTraceElement thrower = firstHAProxyFrame(cause);
-        return thrower != null && VALIDATION_METHODS.contains(thrower.getMethodName());
+        StackTraceElement thrower = stackTrace[0];
+        if (thrower.getClassName().equals(Enum.class.getName()) && thrower.getMethodName().equals("valueOf")) {
+            return stackTrace.length > 1 && isNettyFrame(stackTrace[1]) && stackTrace[1].getMethodName().equals("valueOf");
+        }
+        return isNettyFrame(thrower) && VALIDATION_METHODS.contains(thrower.getMethodName());
     }
 
     /**
      * Known Netty bug: for v2 headers, {@code HAProxyMessageDecoder.findEndOfHeader} returns the header length
-     * relative to the reader index, but {@code HeaderExtractor.extract} treats it as an absolute index. After a
-     * failure (e.g. a header that exceeds the maximum length), the decoder keeps decoding the remaining bytes when
-     * the channel is closed, with a non-zero reader index, and {@code readSlice} throws an
-     * {@link IllegalArgumentException} for the negative length.
+     * relative to the reader index, but {@code HeaderExtractor.extract} treats it as an absolute index. With a
+     * non-zero reader index, e.g. when the decoder decodes the remaining bytes after a failure (see
+     * {@link #isKnownDecodeAfterFinishedBug()}), {@code readSlice} throws an {@link IllegalArgumentException} for the
+     * negative length.
+     * <p>
      * TODO: link the upstream fix and remove this once it is released.
      */
     static boolean isKnownRelativeHeaderEndBug(Throwable t) {
@@ -117,11 +131,47 @@ public class HAProxyMessageDecoderFuzzer extends HandlerFuzzerBase {
      * {@code PP2_TYPE_SSL} against the remaining header, so {@code readRetainedSlice} throws an
      * {@link IndexOutOfBoundsException} instead of a {@link HAProxyProtocolException}, and the decoder does not close
      * the channel.
+     * <p>
      * TODO: link the upstream fix and remove this once it is released.
      */
     static boolean isKnownTlvLengthBug(Throwable t) {
         return isWrappedFrom(t, IndexOutOfBoundsException.class, "readRetainedSlice",
             HAProxyMessage.class.getName(), "readNextTLV");
+    }
+
+    /**
+     * Known Netty bug: {@code HAProxyMessageDecoder.decode} does not check whether the decoder already decoded a
+     * header or failed. When the channel is closed, {@code ByteToMessageDecoder.channelInputClosed} decodes the
+     * remaining bytes, which can produce another message after the first one or after a failure.
+     * <p>
+     * TODO: link the upstream fix and remove this once it is released.
+     */
+    static boolean isKnownDecodeAfterFinishedBug() {
+        return StackWalker.getInstance().walk(frames -> frames.anyMatch(frame ->
+            frame.getClassName().equals(ByteToMessageDecoder.class.getName())
+                && frame.getMethodName().equals("channelInputClosed")));
+    }
+
+    /**
+     * Known Netty bug: {@code HAProxyMessageEncoder.encodeV1} writes the addresses of a "PROXY UNKNOWN" message,
+     * which are null, and throws a {@link NullPointerException}. The JIT omits the stack trace of this implicit
+     * exception once it is thrown often, so also accept an exception without one.
+     * <p>
+     * TODO: link the upstream fix and remove this once it is released.
+     */
+    static boolean isKnownV1UnknownEncoderBug(HAProxyMessage message, Throwable t) {
+        if (message.protocolVersion() != HAProxyProtocolVersion.V1
+            || message.proxiedProtocol() != HAProxyProxiedProtocol.UNKNOWN
+            || t.getClass() != NullPointerException.class) {
+            return false;
+        }
+        if (t.getStackTrace().length == 0) {
+            return true;
+        }
+        StackTraceElement thrower = firstNettyFrame(t);
+        return thrower != null
+            && thrower.getClassName().equals(HAProxyMessageEncoder.class.getName())
+            && thrower.getMethodName().equals("encodeV1");
     }
 
     /**
@@ -134,7 +184,7 @@ public class HAProxyMessageDecoderFuzzer extends HandlerFuzzerBase {
         }
         StackTraceElement[] stackTrace = t.getCause().getStackTrace();
         for (int i = 1; i < stackTrace.length; i++) {
-            if (isHAProxyFrame(stackTrace[i])) {
+            if (isNettyFrame(stackTrace[i])) {
                 return stackTrace[i].getClassName().equals(className)
                     && stackTrace[i].getMethodName().equals(methodName)
                     && stackTrace[i - 1].getMethodName().equals(bufferMethod);
@@ -143,17 +193,22 @@ public class HAProxyMessageDecoderFuzzer extends HandlerFuzzerBase {
         return false;
     }
 
-    private static StackTraceElement firstHAProxyFrame(Throwable t) {
+    private static StackTraceElement firstNettyFrame(Throwable t) {
         for (StackTraceElement element : t.getStackTrace()) {
-            if (isHAProxyFrame(element)) {
+            if (isNettyFrame(element)) {
                 return element;
             }
         }
         return null;
     }
 
-    private static boolean isHAProxyFrame(StackTraceElement element) {
-        return element.getClassName().startsWith(HAProxyMessage.class.getPackageName() + ".");
+    /**
+     * Whether the frame is in a Netty class of this package, i.e. not in this fuzzer or its test.
+     */
+    private static boolean isNettyFrame(StackTraceElement element) {
+        String className = element.getClassName();
+        return className.startsWith(HAProxyMessage.class.getPackageName() + ".")
+            && !className.startsWith(HAProxyMessageDecoderFuzzer.class.getName());
     }
 
     /**
@@ -161,41 +216,69 @@ public class HAProxyMessageDecoderFuzzer extends HandlerFuzzerBase {
      * bytes, and nothing else.
      */
     static void checkRoundTrip(HAProxyMessage message) throws Exception {
-        if (message.protocolVersion() == HAProxyProtocolVersion.V1 && message.proxiedProtocol() == HAProxyProxiedProtocol.UNKNOWN) {
-            // HAProxyMessageEncoder cannot encode "PROXY UNKNOWN": it writes the null addresses and throws an NPE.
-            return;
-        }
         ByteBuf encoded = ByteBufAllocator.DEFAULT.buffer();
         try {
             HAProxyMessageEncoder.INSTANCE.encode(null, message, encoded);
         } catch (Exception e) {
             encoded.release();
+            if (isKnownV1UnknownEncoderBug(message, e)) {
+                return;
+            }
             throw new AssertionError("Failed to encode " + message, e);
         }
         EmbeddedChannel channel = new EmbeddedChannel(new HAProxyMessageDecoder());
+        Throwable failure = null;
         try {
-            String hex = ByteBufUtil.hexDump(encoded);
+            checkDecodesTo(channel, encoded, message);
+        } catch (Throwable t) {
+            failure = t;
+            throw t;
+        } finally {
             try {
-                channel.writeInbound(encoded);
-            } catch (Exception e) {
-                throw new AssertionError("Failed to decode re-encoded " + message + ": " + hex, e);
-            }
-            HAProxyMessage decoded = channel.readInbound();
-            if (decoded == null) {
-                throw new AssertionError("No message decoded from re-encoded " + message + ": " + hex);
-            }
-            try {
-                if (!channel.inboundMessages().isEmpty()) {
-                    throw new AssertionError("Re-encoded " + message + " decoded to more than one message: " + hex);
+                channel.finishAndReleaseAll();
+            } catch (Throwable t) {
+                if (failure == null) {
+                    throw t;
                 }
-                if (!messagesEqual(message, decoded)) {
-                    throw new AssertionError("Round trip mismatch: " + message + " was re-decoded as " + decoded + " from " + hex);
-                }
-            } finally {
-                decoded.release();
+                failure.addSuppressed(t);
+            }
+        }
+    }
+
+    private static void checkDecodesTo(EmbeddedChannel channel, ByteBuf encoded, HAProxyMessage original) {
+        try {
+            channel.writeInbound(encoded);
+        } catch (Exception e) {
+            throw new AssertionError("Failed to decode re-encoded " + describe(original), e);
+        }
+        HAProxyMessage decoded = channel.readInbound();
+        if (decoded == null) {
+            throw new AssertionError("No message decoded from re-encoded " + describe(original));
+        }
+        try {
+            if (!channel.inboundMessages().isEmpty()) {
+                throw new AssertionError("Re-encoded " + describe(original) + " decoded to more than one message");
+            }
+            if (!messagesEqual(original, decoded)) {
+                throw new AssertionError("Round trip mismatch: " + describe(original) + " was re-decoded as " + decoded);
             }
         } finally {
-            channel.finishAndReleaseAll();
+            decoded.release();
+        }
+    }
+
+    /**
+     * Describes a message and its encoding, for failures only.
+     */
+    private static String describe(HAProxyMessage message) {
+        ByteBuf encoded = ByteBufAllocator.DEFAULT.buffer();
+        try {
+            HAProxyMessageEncoder.INSTANCE.encode(null, message, encoded);
+            return message + " (encoded as " + ByteBufUtil.hexDump(encoded) + ")";
+        } catch (Exception e) {
+            return message.toString();
+        } finally {
+            encoded.release();
         }
     }
 
@@ -203,18 +286,11 @@ public class HAProxyMessageDecoderFuzzer extends HandlerFuzzerBase {
         return original.protocolVersion() == decoded.protocolVersion()
             && original.command() == decoded.command()
             && original.proxiedProtocol() == decoded.proxiedProtocol()
-            && Objects.equals(normalizeAddress(original.sourceAddress()), decoded.sourceAddress())
-            && Objects.equals(normalizeAddress(original.destinationAddress()), decoded.destinationAddress())
+            && Objects.equals(original.sourceAddress(), decoded.sourceAddress())
+            && Objects.equals(original.destinationAddress(), decoded.destinationAddress())
             && original.sourcePort() == decoded.sourcePort()
             && original.destinationPort() == decoded.destinationPort()
             && tlvsEqual(topLevelTlvs(original), topLevelTlvs(decoded));
-    }
-
-    /**
-     * The decoder replaces non-ASCII bytes of a v2 AF_UNIX address with U+FFFD, which the encoder writes as '?'.
-     */
-    private static String normalizeAddress(String address) {
-        return address == null ? null : address.replace('\uFFFD', '?');
     }
 
     /**
@@ -231,14 +307,11 @@ public class HAProxyMessageDecoderFuzzer extends HandlerFuzzerBase {
     }
 
     private static boolean tlvsEqual(List<HAProxyTLV> original, List<HAProxyTLV> decoded) {
-        int expectedSize = original.size();
-        if (expectedSize > 0 && isKnownEmptyLastTlvBug(original.get(expectedSize - 1))) {
-            expectedSize--;
-        }
-        if (decoded.size() != expectedSize) {
+        boolean lastLost = decoded.size() == original.size() - 1 && isKnownEmptyLastTlvBug(original.get(original.size() - 1));
+        if (decoded.size() != original.size() && !lastLost) {
             return false;
         }
-        for (int i = 0; i < expectedSize; i++) {
+        for (int i = 0; i < decoded.size(); i++) {
             if (!tlvEqual(original.get(i), decoded.get(i))) {
                 return false;
             }
@@ -249,8 +322,9 @@ public class HAProxyMessageDecoderFuzzer extends HandlerFuzzerBase {
     /**
      * Known Netty bug: {@code HAProxyMessage.readNextTLV} needs 4 readable bytes for a TLV, but the TLV header is
      * only 3 bytes long, so it ignores a TLV with an empty value at the end of the header or of an SSL TLV. The
-     * decoder only reads such a TLV when other bytes follow it, which the encoder does not write, so the TLV is lost
-     * in the round trip.
+     * decoder only reads such a TLV when other bytes follow it, which the encoder does not write, so the TLV may be
+     * lost in the round trip.
+     * <p>
      * TODO: link the upstream fix and remove this once it is released.
      */
     private static boolean isKnownEmptyLastTlvBug(HAProxyTLV tlv) {
@@ -280,11 +354,22 @@ public class HAProxyMessageDecoderFuzzer extends HandlerFuzzerBase {
         LocalJazzerRunner.create(HAProxyMessageDecoderFuzzer.class).fuzz();
     }
 
-    private static final class RoundTripChecker extends ChannelInboundHandlerAdapter {
+    /**
+     * Checks every decoded message with {@link #checkRoundTrip}, and that the decoder produces at most one message,
+     * and none after an exception.
+     */
+    static final class RoundTripChecker extends ChannelInboundHandlerAdapter {
+        private boolean decoded;
+        private boolean failed;
+
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
             if (msg instanceof HAProxyMessage message) {
                 try {
+                    if ((decoded || failed) && !isKnownDecodeAfterFinishedBug()) {
+                        throw new AssertionError("Decoded " + message + (failed ? " after an exception" : " after another message"));
+                    }
+                    decoded = true;
                     checkRoundTrip(message);
                 } catch (Throwable t) {
                     message.release();
@@ -292,6 +377,12 @@ public class HAProxyMessageDecoderFuzzer extends HandlerFuzzerBase {
                 }
             }
             ctx.fireChannelRead(msg);
+        }
+
+        @Override
+        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+            failed = true;
+            ctx.fireExceptionCaught(cause);
         }
     }
 }
