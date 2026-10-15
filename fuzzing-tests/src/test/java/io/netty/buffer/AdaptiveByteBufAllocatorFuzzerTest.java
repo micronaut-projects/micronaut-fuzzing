@@ -16,10 +16,19 @@
 package io.netty.buffer;
 
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class AdaptiveByteBufAllocatorFuzzerTest extends AbstractAllocatorFuzzerTest {
     @Override
     void fuzz(FuzzedDataProvider provider) {
         AdaptiveByteBufAllocatorFuzzer.fuzzerTestOneInput(provider);
+    }
+
+    @Test
+    void magazinesAreNotDisabledForLowMemory() {
+        // nettyFuzzerTest runs with the same max heap as OSS-Fuzz, which Netty considers low memory by default
+        assertFalse(AdaptiveByteBufAllocatorFuzzer.isLowMemory());
     }
 }

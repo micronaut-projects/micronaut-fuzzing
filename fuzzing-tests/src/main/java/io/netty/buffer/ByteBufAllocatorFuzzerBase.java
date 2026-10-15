@@ -22,11 +22,13 @@ import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.FastThreadLocalThread;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Differential fuzzer for single-threaded {@link ByteBufAllocator} operation sequences.
+ * <p>
+ * All operation arguments are clamped to valid values, so no operation may throw. Any exception is a finding.
  */
 abstract class ByteBufAllocatorFuzzerBase {
     private static final ByteBufAllocator BASELINE_ALLOCATOR = new UnpooledByteBufAllocator(false);
@@ -57,28 +59,59 @@ abstract class ByteBufAllocatorFuzzerBase {
     }
 
     private void run(int compositeSelector, int plainSelector, int plainInitialCapacity, List<AllocatorOperation> operations) {
-        TestState baseline = new TestState(BASELINE_ALLOCATOR, compositeSelector, plainSelector, plainInitialCapacity);
+        TestState baseline = TestState.create(BASELINE_ALLOCATOR, compositeSelector, plainSelector, plainInitialCapacity);
+        TestState candidate = null;
+        Throwable failure = null;
         try {
-            TestState candidate = new TestState(candidateAllocator, compositeSelector, plainSelector, plainInitialCapacity);
-            try {
-                compareState("initial", baseline, candidate);
-                for (int i = 0; i < operations.size(); i++) {
-                    AllocatorOperation operation = operations.get(i);
-                    OperationResult baselineResult = apply(operation, baseline);
-                    OperationResult candidateResult = apply(operation, candidate);
-                    if (!baselineResult.equals(candidateResult)) {
-                        throw new AssertionError("Operation " + i + " returned different results: baseline=" + baselineResult + ", candidate=" + candidateResult);
-                    }
-                    if (!baselineResult.hasException()) {
-                        compareState("operation " + i, baseline, candidate);
-                    }
+            candidate = TestState.create(candidateAllocator, compositeSelector, plainSelector, plainInitialCapacity);
+            compareState("initial", baseline, candidate);
+            for (int i = 0; i < operations.size(); i++) {
+                AllocatorOperation operation = operations.get(i);
+                Integer baselineResult = operation.apply(baseline);
+                Integer candidateResult = operation.apply(candidate);
+                if (!Objects.equals(baselineResult, candidateResult)) {
+                    throw new AssertionError("Operation " + i + " returned different results: baseline=" + baselineResult + ", candidate=" + candidateResult);
                 }
-            } finally {
-                candidate.release();
+                compareState("operation " + i, baseline, candidate);
             }
-        } finally {
-            baseline.release();
+        } catch (Throwable t) {
+            failure = t;
         }
+        if (candidate != null) {
+            failure = release(candidate, failure);
+        }
+        failure = release(baseline, failure);
+        rethrow(failure);
+    }
+
+    /**
+     * Release the given state. If that fails, the exception is added to the primary failure, if there is one.
+     *
+     * @return The primary failure
+     */
+    private static Throwable release(TestState state, Throwable failure) {
+        try {
+            state.release();
+        } catch (Throwable t) {
+            if (failure == null) {
+                return t;
+            }
+            failure.addSuppressed(t);
+        }
+        return failure;
+    }
+
+    private static void rethrow(Throwable failure) {
+        if (failure == null) {
+            return;
+        }
+        if (failure instanceof RuntimeException e) {
+            throw e;
+        }
+        if (failure instanceof Error e) {
+            throw e;
+        }
+        throw new AssertionError(failure);
     }
 
     private List<AllocatorOperation> createOperations(FuzzedDataProvider provider) {
@@ -115,22 +148,12 @@ abstract class ByteBufAllocatorFuzzerBase {
         int length = provider.consumeInt(0, MAX_BUFFER_SIZE);
         int extraCapacity = provider.consumeInt(0, 1024);
         int bufferSelector = provider.consumeInt(0, 2);
-        boolean firstFlag = provider.consumeBoolean();
+        boolean variant = provider.consumeBoolean();
         byte[] bytes = provider.consumeBytes(length);
-        return new BufferOperation(selector, prefixLength, extraCapacity, bufferSelector, firstFlag, bytes);
+        return new BufferOperation(selector, prefixLength, extraCapacity, bufferSelector, variant, bytes);
     }
 
-    private OperationResult apply(AllocatorOperation operation, TestState state) {
-        try {
-            return operation.apply(state);
-        } catch (IndexOutOfBoundsException e) {
-            return OperationResult.exception(IndexOutOfBoundsException.class);
-        } catch (IllegalArgumentException e) {
-            return OperationResult.exception(IllegalArgumentException.class);
-        }
-    }
-
-    private void compareState(String description, TestState baseline, TestState candidate) {
+    private static void compareState(String description, TestState baseline, TestState candidate) {
         CompositeByteBuf baselineComposite = baseline.composite();
         CompositeByteBuf candidateComposite = candidate.composite();
         if (baselineComposite.readerIndex() != candidateComposite.readerIndex()) {
@@ -145,11 +168,7 @@ abstract class ByteBufAllocatorFuzzerBase {
         if (baselineComposite.numComponents() != candidateComposite.numComponents()) {
             throw new AssertionError(description + ": component count differs: baseline=" + baselineComposite.numComponents() + ", candidate=" + candidateComposite.numComponents());
         }
-        byte[] baselineBytes = readableBytes(baselineComposite);
-        byte[] candidateBytes = readableBytes(candidateComposite);
-        if (!Arrays.equals(baselineBytes, candidateBytes)) {
-            throw new AssertionError(description + ": readable bytes differ");
-        }
+        compareReadableBytes(description + ": composite", baselineComposite, candidateComposite);
         // The capacity of a plain buffer is not compared: after a write, it depends on the growth policy of the
         // allocator.
         ByteBuf baselinePlain = baseline.plain();
@@ -166,265 +185,262 @@ abstract class ByteBufAllocatorFuzzerBase {
         if (candidatePlain.capacity() < candidatePlain.writerIndex() || candidatePlain.capacity() > candidatePlain.maxCapacity()) {
             throw new AssertionError(description + ": plain capacity " + candidatePlain.capacity() + " out of bounds");
         }
-        if (!Arrays.equals(readableBytes(baselinePlain), readableBytes(candidatePlain))) {
-            throw new AssertionError(description + ": plain readable bytes differ");
+        compareReadableBytes(description + ": plain", baselinePlain, candidatePlain);
+    }
+
+    private static void compareReadableBytes(String description, ByteBuf baseline, ByteBuf candidate) {
+        if (ByteBufUtil.equals(baseline, candidate)) {
+            return;
         }
-    }
-
-    private byte[] readableBytes(ByteBuf buffer) {
-        byte[] bytes = new byte[buffer.readableBytes()];
-        buffer.getBytes(buffer.readerIndex(), bytes);
-        return bytes;
-    }
-
-    private static int positiveModulo(int value, int divisor) {
-        return Math.floorMod(value, divisor);
+        int length = Math.min(baseline.readableBytes(), candidate.readableBytes());
+        for (int i = 0; i < length; i++) {
+            byte expected = baseline.getByte(baseline.readerIndex() + i);
+            byte actual = candidate.getByte(candidate.readerIndex() + i);
+            if (expected != actual) {
+                throw new AssertionError(description + " readable bytes differ at offset " + i + ": baseline=" + expected + ", candidate=" + actual);
+            }
+        }
+        throw new AssertionError(description + " readable byte count differs: baseline=" + baseline.readableBytes() + ", candidate=" + candidate.readableBytes());
     }
 
     private sealed interface AllocatorOperation permits AddComponentOperation, AddFlattenedComponentOperation, ReadByteOperation,
         SkipBytesOperation, DiscardReadComponentsOperation, DiscardReadBytesOperation, GetByteOperation, SetByteOperation,
         ShrinkCapacityOperation, WritePlainOperation, EnsureWritablePlainOperation, SetPlainCapacityOperation,
         SkipPlainBytesOperation, DiscardPlainReadBytesOperation {
-        OperationResult apply(TestState state);
+        /**
+         * Apply this operation.
+         *
+         * @param state The state to apply the operation to
+         * @return An observable result that must be the same for both allocators, or {@code null}
+         */
+        Integer apply(TestState state);
     }
 
+    /**
+     * A new buffer to add to the composite.
+     *
+     * @param selector       Selects the component index or the split point
+     * @param prefixLength   Number of bytes before the reader index of the new buffer
+     * @param extraCapacity  Number of writable bytes after the content
+     * @param bufferSelector Selects heap, direct or default buffer
+     * @param variant        {@link AddComponentOperation}: insert at the index given by {@code selector} instead of
+     *                       appending. {@link AddFlattenedComponentOperation}: wrap the buffer in a nested composite
+     *                       buffer of two slices before flattening.
+     * @param bytes          The readable content
+     */
     private record BufferOperation(
         int selector,
         int prefixLength,
         int extraCapacity,
         int bufferSelector,
-        boolean insert,
+        boolean variant,
         byte[] bytes
     ) {
         ByteBuf newBuffer(ByteBufAllocator allocator) {
             int capacity = prefixLength + bytes.length + extraCapacity;
-            return switch (bufferSelector) {
+            ByteBuf buffer = switch (bufferSelector) {
                 case 0 -> allocator.heapBuffer(capacity, capacity);
                 case 1 -> allocator.directBuffer(capacity, capacity);
                 case 2 -> allocator.buffer(capacity, capacity);
                 default -> throw new AssertionError("Unexpected buffer type");
             };
-        }
-
-        void write(ByteBuf buffer) {
-            for (int i = 0; i < prefixLength; i++) {
-                buffer.writeByte(selector + i);
-            }
-            buffer.skipBytes(prefixLength);
+            // The prefix is not readable, so its content does not matter
+            buffer.setIndex(prefixLength, prefixLength);
             buffer.writeBytes(bytes);
+            return buffer;
         }
     }
 
     private record AddComponentOperation(BufferOperation bufferOperation) implements AllocatorOperation {
         @Override
-        public OperationResult apply(TestState state) {
-            if (state.composite().numComponents() >= MAX_COMPONENTS) {
-                return OperationResult.noValue();
+        public Integer apply(TestState state) {
+            CompositeByteBuf composite = state.composite();
+            if (composite.numComponents() >= MAX_COMPONENTS) {
+                return null;
             }
             ByteBuf buffer = bufferOperation.newBuffer(state.allocator());
-            try {
-                bufferOperation.write(buffer);
-                if (bufferOperation.insert() && state.composite().numComponents() > 0) {
-                    int componentIndex = positiveModulo(bufferOperation.selector(), state.composite().numComponents() + 1);
-                    state.composite().addComponent(true, componentIndex, buffer);
-                } else {
-                    state.composite().addComponent(true, buffer);
-                }
-                buffer = null;
-                return OperationResult.noValue();
-            } finally {
-                ReferenceCountUtil.release(buffer);
+            // addComponent takes ownership of the buffer, even if it fails
+            if (bufferOperation.variant() && composite.numComponents() > 0) {
+                int componentIndex = Math.floorMod(bufferOperation.selector(), composite.numComponents() + 1);
+                composite.addComponent(true, componentIndex, buffer);
+            } else {
+                composite.addComponent(true, buffer);
             }
+            return null;
         }
     }
 
     private record AddFlattenedComponentOperation(BufferOperation bufferOperation) implements AllocatorOperation {
         @Override
-        public OperationResult apply(TestState state) {
+        public Integer apply(TestState state) {
             if (state.composite().numComponents() >= MAX_COMPONENTS) {
-                return OperationResult.noValue();
+                return null;
             }
             ByteBuf buffer = bufferOperation.newBuffer(state.allocator());
-            try {
-                bufferOperation.write(buffer);
-                if (!bufferOperation.insert() || buffer.readableBytes() < 2) {
-                    state.composite().addFlattenedComponents(true, buffer);
-                    buffer = null;
-                } else {
-                    // This only adds retained slices, so the buffer itself is still released below.
+            if (!bufferOperation.variant() || buffer.readableBytes() < 2) {
+                // addFlattenedComponents takes ownership of the buffer, even if it fails
+                state.composite().addFlattenedComponents(true, buffer);
+            } else {
+                try {
                     addNestedFlattenedComponent(state, buffer);
+                } finally {
+                    // only retained slices were added
+                    buffer.release();
                 }
-                return OperationResult.noValue();
-            } finally {
-                ReferenceCountUtil.release(buffer);
             }
+            return null;
         }
 
         private void addNestedFlattenedComponent(TestState state, ByteBuf buffer) {
             CompositeByteBuf nested = state.allocator().compositeBuffer(2);
             try {
-                int firstLength = positiveModulo(bufferOperation.selector(), buffer.readableBytes() - 1) + 1;
+                int firstLength = Math.floorMod(bufferOperation.selector(), buffer.readableBytes() - 1) + 1;
                 nested.addComponent(true, buffer.readRetainedSlice(firstLength));
                 nested.addComponent(true, buffer.readRetainedSlice(buffer.readableBytes()));
-                state.composite().addFlattenedComponents(true, nested);
-                nested = null;
-            } finally {
-                ReferenceCountUtil.release(nested);
+            } catch (Throwable t) {
+                nested.release();
+                throw t;
             }
+            // addFlattenedComponents takes ownership of the nested buffer, even if it fails
+            state.composite().addFlattenedComponents(true, nested);
         }
     }
 
     private record ReadByteOperation() implements AllocatorOperation {
         @Override
-        public OperationResult apply(TestState state) {
+        public Integer apply(TestState state) {
             if (!state.composite().isReadable()) {
-                return OperationResult.noValue();
+                return null;
             }
-            return OperationResult.byteValue(state.composite().readByte());
+            return (int) state.composite().readByte();
         }
     }
 
     private record SkipBytesOperation(int selector) implements AllocatorOperation {
         @Override
-        public OperationResult apply(TestState state) {
-            int readableBytes = state.composite().readableBytes();
-            if (readableBytes != 0) {
-                state.composite().skipBytes(positiveModulo(selector, readableBytes + 1));
-            }
-            return OperationResult.noValue();
+        public Integer apply(TestState state) {
+            state.composite().skipBytes(Math.floorMod(selector, state.composite().readableBytes() + 1));
+            return null;
         }
     }
 
     private record DiscardReadComponentsOperation() implements AllocatorOperation {
         @Override
-        public OperationResult apply(TestState state) {
+        public Integer apply(TestState state) {
             state.composite().discardReadComponents();
-            return OperationResult.noValue();
+            return null;
         }
     }
 
     private record DiscardReadBytesOperation() implements AllocatorOperation {
         @Override
-        public OperationResult apply(TestState state) {
+        public Integer apply(TestState state) {
             state.composite().discardReadBytes();
-            return OperationResult.noValue();
+            return null;
         }
     }
 
     private record GetByteOperation(int selector) implements AllocatorOperation {
         @Override
-        public OperationResult apply(TestState state) {
+        public Integer apply(TestState state) {
             int readableBytes = state.composite().readableBytes();
             if (readableBytes == 0) {
-                return OperationResult.noValue();
+                return null;
             }
-            int relativeIndex = positiveModulo(selector, readableBytes);
-            return OperationResult.byteValue(state.composite().getByte(state.composite().readerIndex() + relativeIndex));
+            int relativeIndex = Math.floorMod(selector, readableBytes);
+            return (int) state.composite().getByte(state.composite().readerIndex() + relativeIndex);
         }
     }
 
     private record SetByteOperation(int selector, byte value) implements AllocatorOperation {
         @Override
-        public OperationResult apply(TestState state) {
+        public Integer apply(TestState state) {
             int readableBytes = state.composite().readableBytes();
             if (readableBytes != 0) {
-                int relativeIndex = positiveModulo(selector, readableBytes);
+                int relativeIndex = Math.floorMod(selector, readableBytes);
                 state.composite().setByte(state.composite().readerIndex() + relativeIndex, value);
             }
-            return OperationResult.noValue();
+            return null;
         }
     }
 
     private record ShrinkCapacityOperation(int selector) implements AllocatorOperation {
         @Override
-        public OperationResult apply(TestState state) {
+        public Integer apply(TestState state) {
             int readableBytes = state.composite().readableBytes();
             if (readableBytes != 0) {
-                int newReadableBytes = positiveModulo(selector, readableBytes + 1);
+                int newReadableBytes = Math.floorMod(selector, readableBytes + 1);
                 state.composite().capacity(state.composite().readerIndex() + newReadableBytes);
             }
-            return OperationResult.noValue();
+            return null;
         }
     }
 
     private record WritePlainOperation(byte[] bytes) implements AllocatorOperation {
         @Override
-        public OperationResult apply(TestState state) {
+        public Integer apply(TestState state) {
             if (state.plain().writerIndex() + bytes.length <= MAX_PLAIN_CAPACITY) {
                 state.plain().writeBytes(bytes);
             }
-            return OperationResult.noValue();
+            return null;
         }
     }
 
     private record EnsureWritablePlainOperation(int selector) implements AllocatorOperation {
         @Override
-        public OperationResult apply(TestState state) {
+        public Integer apply(TestState state) {
             ByteBuf plain = state.plain();
-            int minWritableBytes = positiveModulo(selector, MAX_PLAIN_CAPACITY - plain.writerIndex() + 1);
+            int minWritableBytes = Math.floorMod(selector, MAX_PLAIN_CAPACITY - plain.writerIndex() + 1);
             plain.ensureWritable(minWritableBytes);
             if (plain.writableBytes() < minWritableBytes) {
                 throw new AssertionError("ensureWritable(" + minWritableBytes + ") left only " + plain.writableBytes() + " writable bytes");
             }
-            return OperationResult.noValue();
+            return null;
         }
     }
 
     private record SetPlainCapacityOperation(int selector) implements AllocatorOperation {
         @Override
-        public OperationResult apply(TestState state) {
-            int newCapacity = positiveModulo(selector, MAX_PLAIN_CAPACITY + 1);
+        public Integer apply(TestState state) {
+            int newCapacity = Math.floorMod(selector, MAX_PLAIN_CAPACITY + 1);
             state.plain().capacity(newCapacity);
-            return OperationResult.intValue(state.plain().capacity());
+            return state.plain().capacity();
         }
     }
 
     private record SkipPlainBytesOperation(int selector) implements AllocatorOperation {
         @Override
-        public OperationResult apply(TestState state) {
-            state.plain().skipBytes(positiveModulo(selector, state.plain().readableBytes() + 1));
-            return OperationResult.noValue();
+        public Integer apply(TestState state) {
+            state.plain().skipBytes(Math.floorMod(selector, state.plain().readableBytes() + 1));
+            return null;
         }
     }
 
     private record DiscardPlainReadBytesOperation() implements AllocatorOperation {
         @Override
-        public OperationResult apply(TestState state) {
+        public Integer apply(TestState state) {
             state.plain().discardReadBytes();
-            return OperationResult.noValue();
-        }
-    }
-
-    private record OperationResult(Class<? extends RuntimeException> exceptionType, Integer value) {
-        boolean hasException() {
-            return exceptionType != null;
-        }
-
-        static OperationResult noValue() {
-            return new OperationResult(null, null);
-        }
-
-        static OperationResult byteValue(byte value) {
-            return new OperationResult(null, (int) value);
-        }
-
-        static OperationResult intValue(int value) {
-            return new OperationResult(null, value);
-        }
-
-        static OperationResult exception(Class<? extends RuntimeException> exceptionType) {
-            return new OperationResult(exceptionType, null);
+            return null;
         }
     }
 
     private record TestState(ByteBufAllocator allocator, CompositeByteBuf composite, ByteBuf plain) {
-        TestState(ByteBufAllocator allocator, int compositeSelector, int plainSelector, int plainInitialCapacity) {
-            this(allocator, newComposite(allocator, compositeSelector), newPlain(allocator, plainSelector, plainInitialCapacity));
+        static TestState create(ByteBufAllocator allocator, int compositeSelector, int plainSelector, int plainInitialCapacity) {
+            CompositeByteBuf composite = newComposite(allocator, compositeSelector);
+            try {
+                return new TestState(allocator, composite, newPlain(allocator, plainSelector, plainInitialCapacity));
+            } catch (Throwable t) {
+                composite.release();
+                throw t;
+            }
         }
 
         void release() {
-            ReferenceCountUtil.release(composite);
-            ReferenceCountUtil.release(plain);
+            try {
+                ReferenceCountUtil.release(composite);
+            } finally {
+                ReferenceCountUtil.release(plain);
+            }
         }
 
         private static ByteBuf newPlain(ByteBufAllocator allocator, int plainSelector, int initialCapacity) {

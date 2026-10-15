@@ -25,7 +25,8 @@ import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 @FuzzTarget
 public final class PooledByteBufAllocatorFuzzer extends ByteBufAllocatorFuzzerBase {
     // Shared by all inputs: every instance registers its own thread-local cache.
-    private static final PooledByteBufAllocator ALLOCATOR = new PooledByteBufAllocator(false);
+    // preferDirect, so that buffer() differs from heapBuffer() (where direct buffers can be freed reliably).
+    private static final PooledByteBufAllocator ALLOCATOR = new PooledByteBufAllocator(true);
 
     private PooledByteBufAllocatorFuzzer() {
         super(ALLOCATOR);

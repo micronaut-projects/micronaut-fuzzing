@@ -68,6 +68,8 @@ val nettyFuzzerTest by tasks.registering(Test::class) {
 
     shouldRunAfter(tasks.named("test"))
     forkEvery = 1
+    // same max heap as the jazzer and OSS-Fuzz runs
+    maxHeapSize = "512m"
     jvmArgs("-Dio.netty.customResourceLeakDetector=io.netty.util.LeakPresenceDetector")
 
     extensions.configure<JacocoTaskExtension> {
