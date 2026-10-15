@@ -16,15 +16,16 @@
 package io.netty.handler.codec.http;
 
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
+import io.micronaut.fuzzing.CpuTimer;
 import io.micronaut.fuzzing.Dict;
 import io.micronaut.fuzzing.EmbeddedChannelFuzzerBase;
 import io.micronaut.fuzzing.FlagAppender;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
+import io.micronaut.fuzzing.sanitizer.SanitizerTransformer;
 import io.micronaut.fuzzing.util.ByteSplitter;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.util.AsciiString;
 import io.netty.util.LeakPresenceDetector;
@@ -32,6 +33,8 @@ import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.FastThreadLocalThread;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -43,6 +46,8 @@ import java.util.Map;
  * Fuzzes {@link HttpResponseEncoder} with valid sequences of response messages whose status line, headers, body
  * and trailers come from the input. If the input is unambiguous HTTP, the encoder output is decoded with
  * {@link HttpResponseDecoder} and compared with the original responses.
+ * <p>
+ * Like {@link EmbeddedChannelFuzzerBase}, each input gets a CPU time budget that grows linearly with the input size.
  */
 @FuzzTarget
 @HttpDict
@@ -64,8 +69,14 @@ public final class HttpResponseEncoderFuzzer {
     private static final int MAX_HEADERS = 8;
     private static final int MAX_CHUNKS = 4;
     private static final int MAX_TRAILERS = 3;
-    private static final int MIN_STATUS = 100;
-    private static final int MAX_STATUS = 999;
+    // also covers status codes with fewer or more than three digits
+    private static final int MAX_STATUS = 1099;
+    private static final int MAX_VERSION_DIGIT = 9;
+
+    // same budget as EmbeddedChannelFuzzerBase: about 0.5s plus 20us per input byte
+    private static final long CPU_TIME_FACTOR = 1024;
+    private static final long BASE_CPU_TIME = 500000;
+    private static final long INPUT_CPU_TIME = 20;
 
     private static final DefaultHttpHeadersFactory VALIDATING_HEADERS = DefaultHttpHeadersFactory.headersFactory();
     private static final DefaultHttpHeadersFactory VALIDATING_TRAILERS = DefaultHttpHeadersFactory.trailersFactory();
@@ -84,7 +95,12 @@ public final class HttpResponseEncoderFuzzer {
         HttpHeaderNames.TRANSFER_ENCODING
     );
 
+    static {
+        SanitizerTransformer.installLocally();
+    }
+
     private final boolean validateHeaders;
+    private final int inputLength;
     private final List<Response> responses;
     private final boolean checkRoundTrip;
 
@@ -95,7 +111,9 @@ public final class HttpResponseEncoderFuzzer {
         for (int i = 0; i < responseCount; i++) {
             shapes.add(ResponseShape.consume(data));
         }
-        Iterator<byte[]> segments = SPLITTER.splitIterator(data.consumeRemainingAsBytes());
+        byte[] remaining = data.consumeRemainingAsBytes();
+        inputLength = remaining.length;
+        Iterator<byte[]> segments = SPLITTER.splitIterator(remaining);
         responses = new ArrayList<>(responseCount);
         for (ResponseShape shape : shapes) {
             responses.add(shape.fill(segments, validateHeaders));
@@ -104,20 +122,44 @@ public final class HttpResponseEncoderFuzzer {
     }
 
     public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
+        testOneInput(fuzzedDataProvider);
+    }
+
+    /**
+     * Run one input.
+     *
+     * @param fuzzedDataProvider The input
+     * @return The number of responses whose round trip through {@link HttpResponseDecoder} was checked
+     */
+    static int testOneInput(FuzzedDataProvider fuzzedDataProvider) {
         HttpResponseEncoderFuzzer fuzzer = new HttpResponseEncoderFuzzer(fuzzedDataProvider);
-        FastThreadLocalThread.runWithFastThreadLocal(fuzzer::test);
+        FastThreadLocalThread.runWithFastThreadLocal(fuzzer::testWithCpuLimit);
+        return fuzzer.checkRoundTrip ? fuzzer.responses.size() : 0;
+    }
+
+    private void testWithCpuLimit() {
+        long budget = CPU_TIME_FACTOR * (BASE_CPU_TIME + inputLength * INPUT_CPU_TIME);
+        long actual = test();
+        if (actual > budget) {
+            // A fresh JVM can charge one-time class loading to the first input. Retry once with new channels and
+            // only fail if the input is still slow.
+            actual = test();
+            if (actual > budget) {
+                throw new AssertionError("CPU limit triggered. in=" + inputLength + " actual=" + actual);
+            }
+        }
     }
 
     /**
      * Whether {@link HttpResponseDecoder} must restore the responses exactly from the encoder output.
      */
     private boolean isRoundTripWellDefined() {
-        if (!validateHeaders) {
-            // header names and values may contain CR, LF, ':' etc., the output is not unambiguous
-            return false;
-        }
         for (int i = 0; i < responses.size(); i++) {
             Response response = responses.get(i);
+            if (!allValid(VALIDATING_HEADERS, response.headers) || !allValid(VALIDATING_TRAILERS, response.trailers)) {
+                // without validation, header names and values may contain CR, LF, ':' etc.
+                return false;
+            }
             if (response.status.code() == HttpResponseStatus.SWITCHING_PROTOCOLS.code()) {
                 // the decoder stops parsing HTTP after a protocol switch, and the encoder and decoder disagree on
                 // whether a 101 response has a body
@@ -126,13 +168,16 @@ public final class HttpResponseEncoderFuzzer {
             if (!isUnambiguousReasonPhrase(response.status.reasonPhrase())) {
                 return false;
             }
-            if (response.shape.framing() == Framing.CLOSE_DELIMITED && i != responses.size() - 1) {
-                // the decoder reads all following responses as the body of this one
-                return false;
-            }
-            if (response.shape.framing() == Framing.CHUNKED && !response.shape.version().equals(HttpVersion.HTTP_1_1)) {
-                // the decoder rejects Transfer-Encoding for HTTP/1.0
-                return false;
+            // for responses without a body, neither the encoder nor the decoder looks at the framing
+            if (!response.hasNoBody()) {
+                if (response.shape.framing() == Framing.CLOSE_DELIMITED && i != responses.size() - 1) {
+                    // the decoder reads all following responses as the body of this one
+                    return false;
+                }
+                if (response.shape.framing() == Framing.CHUNKED && !response.shape.version().equals(HttpVersion.HTTP_1_1)) {
+                    // the decoder rejects Transfer-Encoding for other versions than HTTP/1.1
+                    return false;
+                }
             }
             if (hasFramingHeader(response.headers)) {
                 return false;
@@ -156,6 +201,15 @@ public final class HttpResponseEncoderFuzzer {
         return true;
     }
 
+    private static boolean allValid(DefaultHttpHeadersFactory factory, List<Map.Entry<String, String>> headers) {
+        for (Map.Entry<String, String> header : headers) {
+            if (!isValid(factory, header.getKey(), header.getValue())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static boolean hasFramingHeader(List<Map.Entry<String, String>> headers) {
         for (Map.Entry<String, String> header : headers) {
             if (isFramingHeader(header.getKey())) {
@@ -165,16 +219,21 @@ public final class HttpResponseEncoderFuzzer {
         return false;
     }
 
-    private void test() {
+    /**
+     * Run the input once.
+     *
+     * @return The CPU time used, in nanoseconds
+     */
+    private long test() {
+        long start = CpuTimer.currentThreadCpuTimeNanos();
         EmbeddedChannel encoder = new EmbeddedChannel(new HttpResponseEncoder());
         EmbeddedChannel decoder = new EmbeddedChannel(new HttpResponseDecoder(new HttpDecoderConfig()
             .setMaxInitialLineLength(Integer.MAX_VALUE)
             .setMaxHeaderSize(Integer.MAX_VALUE)));
         try {
             for (Response response : responses) {
-                response.write(encoder);
+                response.write(encoder, validateHeaders);
             }
-            encoder.checkException();
             Object msg;
             while ((msg = encoder.readOutbound()) != null) {
                 if (checkRoundTrip) {
@@ -194,8 +253,10 @@ public final class HttpResponseEncoderFuzzer {
         }
         encoder.finishAndReleaseAll();
         decoder.finishAndReleaseAll();
+        long end = CpuTimer.currentThreadCpuTimeNanos();
         LeakPresenceDetector.check();
         FlagAppender.checkTriggered();
+        return end - start;
     }
 
     private void checkDecoded(EmbeddedChannel decoder) {
@@ -220,7 +281,12 @@ public final class HttpResponseEncoderFuzzer {
                     if (current == null) {
                         throw new AssertionError("Unexpected content " + content);
                     }
-                    body.writeBytes(ByteBufUtil.getBytes(content.content()));
+                    ByteBuf data = content.content();
+                    try {
+                        data.getBytes(data.readerIndex(), body, data.readableBytes());
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
                 }
                 if (msg instanceof LastHttpContent last) {
                     current.checkBody(body.toByteArray(), last.trailingHeaders());
@@ -360,8 +426,13 @@ public final class HttpResponseEncoderFuzzer {
         int trailerCount
     ) {
         static ResponseShape consume(FuzzedDataProvider data) {
-            HttpVersion version = data.consumeBoolean() ? HttpVersion.HTTP_1_1 : HttpVersion.HTTP_1_0;
-            int code = data.consumeInt(MIN_STATUS, MAX_STATUS);
+            HttpVersion version = switch (data.consumeInt(0, 2)) {
+                case 0 -> HttpVersion.HTTP_1_0;
+                case 1 -> HttpVersion.HTTP_1_1;
+                default -> new HttpVersion("HTTP", data.consumeInt(0, MAX_VERSION_DIGIT),
+                    data.consumeInt(0, MAX_VERSION_DIGIT), data.consumeBoolean());
+            };
+            int code = data.consumeInt(0, MAX_STATUS);
             boolean customReasonPhrase = data.consumeBoolean();
             Framing framing = Framing.values()[data.consumeInt(0, Framing.values().length - 1)];
             int headerCount = data.consumeInt(0, MAX_HEADERS);
@@ -380,8 +451,10 @@ public final class HttpResponseEncoderFuzzer {
             HttpResponseStatus status = HttpResponseStatus.valueOf(code);
             if (customReasonPhrase) {
                 String reasonPhrase = string(next(segments));
-                // the constructor rejects CR and LF
-                if (reasonPhrase.indexOf('\r') == -1 && reasonPhrase.indexOf('\n') == -1) {
+                // the constructor rejects CR and LF. With validation, also keep the status line unambiguous.
+                boolean valid = validate ? isUnambiguousReasonPhrase(reasonPhrase)
+                    : reasonPhrase.indexOf('\r') == -1 && reasonPhrase.indexOf('\n') == -1;
+                if (valid) {
                     status = new HttpResponseStatus(code, reasonPhrase);
                 }
             }
@@ -394,7 +467,7 @@ public final class HttpResponseEncoderFuzzer {
             }
             List<Map.Entry<String, String>> trailers = headers(segments, trailerCount,
                 validate ? VALIDATING_TRAILERS : NON_VALIDATING_TRAILERS);
-            return new Response(this, status, headers, chunks, trailers, validate);
+            return new Response(this, status, headers, chunks, trailers);
         }
     }
 
@@ -403,10 +476,9 @@ public final class HttpResponseEncoderFuzzer {
         HttpResponseStatus status,
         List<Map.Entry<String, String>> headers,
         List<byte[]> chunks,
-        List<Map.Entry<String, String>> trailers,
-        boolean validate
+        List<Map.Entry<String, String>> trailers
     ) {
-        void write(EmbeddedChannel channel) {
+        void write(EmbeddedChannel channel, boolean validate) {
             HttpHeadersFactory headersFactory = validate ? VALIDATING_HEADERS : NON_VALIDATING_HEADERS;
             HttpHeadersFactory trailersFactory = validate ? VALIDATING_TRAILERS : NON_VALIDATING_TRAILERS;
             HttpVersion version = shape.version();
@@ -457,7 +529,7 @@ public final class HttpResponseEncoderFuzzer {
          * {@link HttpResponseEncoder#isContentAlwaysEmpty(HttpResponse)}, except for 101, which is excluded from
          * the round trip check.
          */
-        private boolean hasNoBody() {
+        boolean hasNoBody() {
             int code = status.code();
             return status.codeClass() == HttpStatusClass.INFORMATIONAL || code == 204 || code == 205 || code == 304;
         }
