@@ -17,48 +17,53 @@ package io.netty.handler.codec.http;
 
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.Dict;
+import io.micronaut.fuzzing.EmbeddedChannelFuzzerBase;
 import io.micronaut.fuzzing.FlagAppender;
 import io.micronaut.fuzzing.FuzzTarget;
-import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 import io.micronaut.fuzzing.util.ByteSplitter;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.embedded.EmbeddedChannel;
+import io.netty.handler.codec.compression.CompressionOptions;
 import io.netty.util.LeakPresenceDetector;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.FastThreadLocalThread;
 
-final class HttpContentCompressorFuzzerConstants {
-    static final String SEPARATOR = "SEP";
-
-    private HttpContentCompressorFuzzerConstants() {
-    }
-}
+import java.io.ByteArrayOutputStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
- * Fuzzing support type.
+ * Fuzzes {@link HttpContentCompressor} and checks that {@link HttpContentDecompressor} restores the original
+ * response body from its output.
  */
 @FuzzTarget
-@HttpDict
 @Dict({
     "gzip",
+    "x-gzip",
     "deflate",
+    "x-deflate",
     "br",
     "zstd",
     "snappy",
+    "compress",
     "identity",
     "*",
     ";q=",
+    ";q=0",
+    ";q=1.0",
     ", ",
-    HttpContentCompressorFuzzerConstants.SEPARATOR,
-    "gzip, deflate, br",
-    "br;q=1.0, gzip;q=0.8, *;q=0.1",
-    "zstd;q=0.9, snappy;q=0.5, identity;q=0"
+    EmbeddedChannelFuzzerBase.SEPARATOR
 })
 public final class HttpContentCompressorFuzzer {
-    private static final ByteSplitter SPLITTER = ByteSplitter.create(HttpContentCompressorFuzzerConstants.SEPARATOR);
-    private static final int MAX_ACCEPT_ENCODING_LENGTH = 128;
-    private static final int MAX_BODY_LENGTH = 4096;
+    private static final ByteSplitter SPLITTER = ByteSplitter.create(EmbeddedChannelFuzzerBase.SEPARATOR);
+    private static final int MAX_HEADER_VALUE_LENGTH = 128;
+    private static final int MAX_ACCEPT_ENCODING_HEADERS = 2;
+    private static final int MAX_CONTENT_SIZE_THRESHOLD = 64;
+    private static final int MIN_STATUS = 100;
+    private static final int MAX_STATUS = 599;
 
     private static final HttpMethod[] METHODS = {
         HttpMethod.GET,
@@ -67,110 +72,177 @@ public final class HttpContentCompressorFuzzer {
         HttpMethod.CONNECT
     };
 
-    private static final int[] RESPONSE_CODES = {
-        100,
-        101,
-        200,
-        201,
-        204,
-        206,
-        304,
-        400,
-        500
-    };
+    private final int contentSizeThreshold;
+    private final HttpMethod method;
+    private final String[] acceptEncodings;
+    private final HttpVersion responseVersion;
+    private final int status;
+    private final boolean fullResponse;
+    private final boolean setContentLength;
+    private final String contentEncoding;
+    private final List<byte[]> chunks;
+    private final byte[] body;
+
+    private HttpContentCompressorFuzzer(FuzzedDataProvider data) {
+        contentSizeThreshold = data.consumeInt(0, MAX_CONTENT_SIZE_THRESHOLD);
+        method = data.pickValue(METHODS);
+        acceptEncodings = new String[data.consumeInt(0, MAX_ACCEPT_ENCODING_HEADERS)];
+        for (int i = 0; i < acceptEncodings.length; i++) {
+            acceptEncodings[i] = headerValue(data.consumeString(MAX_HEADER_VALUE_LENGTH));
+        }
+        responseVersion = data.consumeBoolean() ? HttpVersion.HTTP_1_0 : HttpVersion.HTTP_1_1;
+        status = data.consumeInt(MIN_STATUS, MAX_STATUS);
+        fullResponse = data.consumeBoolean();
+        setContentLength = data.consumeBoolean();
+        contentEncoding = data.consumeBoolean() ? headerValue(data.consumeString(MAX_HEADER_VALUE_LENGTH)) : null;
+        byte[] remaining = data.consumeRemainingAsBytes();
+        chunks = new ArrayList<>();
+        if (fullResponse) {
+            chunks.add(remaining);
+        } else {
+            SPLITTER.splitIterator(remaining).forEachRemaining(chunks::add);
+        }
+        ByteArrayOutputStream joined = new ByteArrayOutputStream(remaining.length);
+        chunks.forEach(joined::writeBytes);
+        body = joined.toByteArray();
+    }
 
     public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
-        byte[] body = fuzzedDataProvider.consumeBytes(fuzzedDataProvider.consumeInt(0, MAX_BODY_LENGTH));
-        FastThreadLocalThread.runWithFastThreadLocal(() -> test(fuzzedDataProvider, body));
+        HttpContentCompressorFuzzer fuzzer = new HttpContentCompressorFuzzer(fuzzedDataProvider);
+        FastThreadLocalThread.runWithFastThreadLocal(fuzzer::test);
     }
 
-    private static void test(FuzzedDataProvider data, byte[] body) {
-        EmbeddedChannel channel = new EmbeddedChannel(new HttpContentCompressor());
+    private void test() {
+        EmbeddedChannel compressor = new EmbeddedChannel(new HttpContentCompressor(contentSizeThreshold, new CompressionOptions[0]));
+        EmbeddedChannel decompressor = new EmbeddedChannel(new HttpContentDecompressor());
         try {
-            writeRequest(data, channel);
-            channel.releaseInbound();
+            compressor.writeInbound(request());
+            compressor.releaseInbound();
 
-            writeResponse(data, channel, body.length);
-            writeContent(channel, body);
-        } finally {
-            channel.finishAndReleaseAll();
-            LeakPresenceDetector.check();
-            FlagAppender.checkTriggered();
+            writeResponse(compressor);
+            compressor.checkException();
+            // If Content-Encoding was set by the application, the compressor passes the body through unchanged
+            // and HttpContentDecompressor would try to decode it, so the round trip only holds without it.
+            boolean roundTrip = contentEncoding == null;
+            forwardAndCheckContentLength(compressor, roundTrip ? decompressor : null);
+            if (roundTrip) {
+                decompressor.finish();
+                if (!Arrays.equals(body, readContent(decompressor))) {
+                    throw new AssertionError("Decompressed content does not match the original body");
+                }
+            }
+        } catch (Throwable t) {
+            closeQuietly(compressor, t);
+            closeQuietly(decompressor, t);
+            throw t;
         }
+        compressor.finishAndReleaseAll();
+        decompressor.finishAndReleaseAll();
+        LeakPresenceDetector.check();
+        FlagAppender.checkTriggered();
     }
 
-    private static void writeRequest(FuzzedDataProvider data, EmbeddedChannel channel) {
-        HttpMethod method = data.pickValue(METHODS);
+    private HttpRequest request() {
         DefaultHttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_1, method, "/");
-        request.headers().add(HttpHeaderNames.ACCEPT_ENCODING, acceptEncoding(data));
-        if (data.consumeBoolean()) {
-            request.headers().add(HttpHeaderNames.ACCEPT_ENCODING, acceptEncoding(data));
+        for (String acceptEncoding : acceptEncodings) {
+            request.headers().add(HttpHeaderNames.ACCEPT_ENCODING, acceptEncoding);
         }
-        channel.writeInbound(request);
+        return request;
     }
 
-    private static String acceptEncoding(FuzzedDataProvider data) {
-        return sanitizeHeaderValue(data.consumeString(MAX_ACCEPT_ENCODING_LENGTH));
-    }
-
-    private static String sanitizeHeaderValue(String value) {
+    /**
+     * Turn a fuzzed string into a header value that passes Netty's default header validation, like a value that
+     * {@link HttpObjectDecoder} produces: no control characters except HTAB, and no leading or trailing whitespace.
+     */
+    private static String headerValue(String value) {
         StringBuilder builder = new StringBuilder(value.length());
-        for (int i = 0; i < value.length() && builder.length() < MAX_ACCEPT_ENCODING_LENGTH; i++) {
+        for (int i = 0; i < value.length(); i++) {
             char c = value.charAt(i);
-            if (c >= 0x20 && c <= 0x7e) {
+            if (c == '\t' || c >= 0x20 && c <= 0xff && c != 0x7f) {
                 builder.append(c);
             }
         }
-        String headerValue = builder.toString().trim();
-        if (headerValue.isEmpty()) {
-            return "gzip";
-        }
-        return headerValue;
+        return builder.toString().strip();
     }
 
-    private static void writeResponse(FuzzedDataProvider data, EmbeddedChannel channel, int bodyLength) {
-        HttpResponseStatus status = HttpResponseStatus.valueOf(data.pickValue(RESPONSE_CODES));
-        DefaultHttpResponse response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, status);
-        if (data.consumeBoolean()) {
-            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, bodyLength);
+    private void writeResponse(EmbeddedChannel channel) {
+        HttpResponseStatus responseStatus = HttpResponseStatus.valueOf(status);
+        HttpResponse response;
+        if (fullResponse) {
+            response = new DefaultFullHttpResponse(responseVersion, responseStatus, buffer(channel, body));
+        } else {
+            response = new DefaultHttpResponse(responseVersion, responseStatus);
         }
-        if (data.consumeBoolean()) {
-            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/octet-stream");
+        if (setContentLength) {
+            HttpUtil.setContentLength(response, body.length);
         }
-        if (data.consumeBoolean()) {
-            response.headers().set(HttpHeaderNames.CONTENT_ENCODING, sanitizeHeaderValue(data.consumeString(MAX_ACCEPT_ENCODING_LENGTH)));
+        if (contentEncoding != null) {
+            response.headers().set(HttpHeaderNames.CONTENT_ENCODING, contentEncoding);
         }
         channel.writeOutbound(response);
-    }
-
-    private static void writeContent(EmbeddedChannel channel, byte[] body) {
-        ByteSplitter.ChunkIterator chunks = SPLITTER.splitIterator(body);
-        while (chunks.hasNext()) {
-            chunks.proceed();
-            ByteBuf content = buffer(channel, body, chunks.start(), chunks.length());
-            if (chunks.hasNext()) {
-                writeOutbound(channel, new DefaultHttpContent(content));
-            } else {
-                writeOutbound(channel, new DefaultLastHttpContent(content));
+        if (!fullResponse) {
+            for (int i = 0; i < chunks.size(); i++) {
+                ByteBuf content = buffer(channel, chunks.get(i));
+                channel.writeOutbound(i == chunks.size() - 1 ? new DefaultLastHttpContent(content) : new DefaultHttpContent(content));
             }
         }
     }
 
-    private static ByteBuf buffer(EmbeddedChannel channel, byte[] body, int offset, int length) {
-        ByteBuf buffer = channel.alloc().buffer(length);
-        buffer.writeBytes(body, offset, length);
+    private static ByteBuf buffer(EmbeddedChannel channel, byte[] bytes) {
+        ByteBuf buffer = channel.alloc().buffer(bytes.length);
+        buffer.writeBytes(bytes);
         return buffer;
     }
 
-    private static void writeOutbound(EmbeddedChannel channel, HttpObject message) {
-        boolean written = false;
-        try {
-            channel.writeOutbound(message);
-            written = true;
-        } finally {
-            if (!written) {
-                ReferenceCountUtil.release(message);
+    /**
+     * Pass the compressor output to the decompressor, and check that a Content-Length header in the compressor
+     * output matches the length of the content that follows it.
+     *
+     * @param decompressor The decompressor, or {@code null} to only release the compressor output
+     */
+    private static void forwardAndCheckContentLength(EmbeddedChannel compressor, EmbeddedChannel decompressor) {
+        long expectedLength = -1;
+        long actualLength = 0;
+        Object msg;
+        while ((msg = compressor.readOutbound()) != null) {
+            if (msg instanceof HttpResponse response) {
+                expectedLength = HttpUtil.getContentLength(response, -1L);
             }
+            if (msg instanceof HttpContent content) {
+                actualLength += content.content().readableBytes();
+            }
+            boolean last = msg instanceof LastHttpContent;
+            if (decompressor != null) {
+                decompressor.writeInbound(msg);
+            } else {
+                ReferenceCountUtil.release(msg);
+            }
+            if (last && expectedLength != -1 && expectedLength != actualLength) {
+                throw new AssertionError("Content-Length " + expectedLength + " does not match content length " + actualLength);
+            }
+        }
+    }
+
+    private static byte[] readContent(EmbeddedChannel decompressor) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        Object msg;
+        while ((msg = decompressor.readInbound()) != null) {
+            try {
+                if (msg instanceof HttpContent content) {
+                    out.writeBytes(ByteBufUtil.getBytes(content.content()));
+                }
+            } finally {
+                ReferenceCountUtil.release(msg);
+            }
+        }
+        return out.toByteArray();
+    }
+
+    private static void closeQuietly(EmbeddedChannel channel, Throwable original) {
+        try {
+            channel.finishAndReleaseAll();
+        } catch (Throwable t) {
+            original.addSuppressed(t);
         }
     }
 
