@@ -51,13 +51,15 @@ public final class JdkZlibDecompressorComparisonFuzzer extends AbstractDecompres
 
     @Override
     protected boolean isExpectedException(RuntimeException exception) {
-        // Netty bug, not fixed yet: an unexpected preset dictionary ID is not reported as DecompressionException
+        // Netty bug: an unexpected preset dictionary ID is not reported as DecompressionException.
+        // Fixed by https://github.com/netty/netty/pull/17838; remove this once it is released.
         return JdkZlibFuzzConfig.isDictionaryMismatch(exception, JdkZlibDecompressor.class);
     }
 
     @Override
     protected boolean isExpectedLegacyException(Exception exception) {
-        // Netty bug, not fixed yet: an unexpected preset dictionary ID is not reported as DecompressionException
+        // Netty bug: an unexpected preset dictionary ID is not reported as DecompressionException.
+        // Fixed by https://github.com/netty/netty/pull/17838; remove this once it is released.
         return super.isExpectedLegacyException(exception) || (exception instanceof DecoderException
             && JdkZlibFuzzConfig.isDictionaryMismatch(exception.getCause(), JdkZlibDecoder.class));
     }
