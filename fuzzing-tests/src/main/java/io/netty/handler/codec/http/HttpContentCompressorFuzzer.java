@@ -38,6 +38,10 @@ import java.util.List;
 /**
  * Fuzzes {@link HttpContentCompressor} and checks that {@link HttpContentDecompressor} restores the original
  * response body from its output.
+ * <p>
+ * Unlike most Netty targets, this does not extend {@link EmbeddedChannelFuzzerBase}: the input is turned into
+ * HTTP message objects rather than fed as bytes, and the round trip needs a second channel. As a consequence there
+ * is no per-input CPU budget; compression time is linear in the body size, so Jazzer's timeout is sufficient.
  */
 @FuzzTarget
 @Dict({
