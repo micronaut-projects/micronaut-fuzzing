@@ -119,7 +119,7 @@ public class HAProxyMessageDecoderFuzzer extends HandlerFuzzerBase {
      * {@link #isKnownDecodeAfterFinishedBug()}), {@code readSlice} throws an {@link IllegalArgumentException} for the
      * negative length.
      * <p>
-     * TODO: link the upstream fix and remove this once it is released.
+     * Fixed by https://github.com/netty/netty/pull/17832, remove this once it is released.
      */
     static boolean isKnownRelativeHeaderEndBug(Throwable t) {
         return isWrappedFrom(t, IllegalArgumentException.class, "readSlice",
@@ -132,7 +132,7 @@ public class HAProxyMessageDecoderFuzzer extends HandlerFuzzerBase {
      * {@link IndexOutOfBoundsException} instead of a {@link HAProxyProtocolException}, and the decoder does not close
      * the channel.
      * <p>
-     * TODO: link the upstream fix and remove this once it is released.
+     * Fixed by https://github.com/netty/netty/pull/17834, remove this once it is released.
      */
     static boolean isKnownTlvLengthBug(Throwable t) {
         return isWrappedFrom(t, IndexOutOfBoundsException.class, "readRetainedSlice",
@@ -144,7 +144,7 @@ public class HAProxyMessageDecoderFuzzer extends HandlerFuzzerBase {
      * header or failed. When the channel is closed, {@code ByteToMessageDecoder.channelInputClosed} decodes the
      * remaining bytes, which can produce another message after the first one or after a failure.
      * <p>
-     * TODO: link the upstream fix and remove this once it is released.
+     * Fixed by https://github.com/netty/netty/pull/17832, remove this once it is released.
      */
     static boolean isKnownDecodeAfterFinishedBug() {
         return StackWalker.getInstance().walk(frames -> frames.anyMatch(frame ->
@@ -157,7 +157,7 @@ public class HAProxyMessageDecoderFuzzer extends HandlerFuzzerBase {
      * which are null, and throws a {@link NullPointerException}. The JIT omits the stack trace of this implicit
      * exception once it is thrown often, so also accept an exception without one.
      * <p>
-     * TODO: link the upstream fix and remove this once it is released.
+     * Fixed by https://github.com/netty/netty/pull/17837, remove this once it is released.
      */
     static boolean isKnownV1UnknownEncoderBug(HAProxyMessage message, Throwable t) {
         if (message.protocolVersion() != HAProxyProtocolVersion.V1
@@ -325,7 +325,7 @@ public class HAProxyMessageDecoderFuzzer extends HandlerFuzzerBase {
      * decoder only reads such a TLV when other bytes follow it, which the encoder does not write, so the TLV may be
      * lost in the round trip.
      * <p>
-     * TODO: link the upstream fix and remove this once it is released.
+     * Fixed by https://github.com/netty/netty/pull/17835, remove this once it is released.
      */
     private static boolean isKnownEmptyLastTlvBug(HAProxyTLV tlv) {
         return !(tlv instanceof HAProxySSLTLV) && !tlv.content().isReadable();
