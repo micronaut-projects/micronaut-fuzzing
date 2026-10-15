@@ -120,6 +120,15 @@ class HAProxyMessageDecoderFuzzerTest {
     }
 
     @Test
+    void ignoresKnownEmptyLastTlvBug() {
+        byte[] addresses = {127, 0, 0, 1, 127, 0, 0, 1, 0x04, (byte) 0xD2, 0, 80};
+        // an empty NOOP TLV followed by one byte, which the decoder ignores
+        run(0, 0, false, v2(0x21, 0x11, concat(addresses, new byte[] {0x04, 0x00, 0x00, 0x00})));
+        // the same inside an SSL TLV
+        run(0, 0, false, v2(0x21, 0x11, concat(addresses, new byte[] {0x20, 0x00, 0x09, 0x01, 0, 0, 0, 0, 0x21, 0x00, 0x00, 0x00})));
+    }
+
+    @Test
     void retriesWithFreshDecoder() {
         CannedFuzzedDataProvider provider = CannedFuzzedDataProvider.create(List.of(
             0, true, 0, false,
