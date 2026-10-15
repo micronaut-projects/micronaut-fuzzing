@@ -1,14 +1,23 @@
 package io.micronaut.fuzzing.sanitizer;
 
 import com.code_intelligence.jazzer.api.FuzzerSecurityIssueCritical;
+import com.github.luben.zstd.Zstd;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
+import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.HttpRequestDecoder;
+import net.jpountz.xxhash.XXHashFactory;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.FilterOutputStream;
+import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.zip.CRC32;
 import java.util.zip.Checksum;
@@ -176,5 +185,160 @@ public class SanitizerTransformerTest {
     @Test
     public void httpObjectDecoderInitializes() {
         new HttpRequestDecoder();
+    }
+
+    private static final byte[] HELLO = "hello world".getBytes(StandardCharsets.UTF_8);
+
+    /**
+     * Run a test with a pooled heap buffer that contains {@link #HELLO} and has a guard array.
+     */
+    private static void withGuardedHello(GuardedTest test) throws Exception {
+        ByteBuf parent = ByteBufAllocator.DEFAULT.heapBuffer(64);
+        ByteBuf buffer = parent.retainedSlice(8, 32); // ensure non-zero arrayOffset -> guard path
+        try {
+            buffer.clear().writeBytes(HELLO);
+            test.run(buffer, buffer.array(), buffer.arrayOffset());
+        } finally {
+            buffer.release();
+            parent.release();
+        }
+    }
+
+    @Test
+    public void byteBufMethodsUseBackingArray() throws Exception {
+        withGuardedHello((buffer, array, offset) -> {
+            ByteBuf target = ByteBufAllocator.DEFAULT.heapBuffer(64);
+            try {
+                // like PieceAccumulator
+                target.writeBytes(array, offset, HELLO.length);
+                assertEquals("hello world", target.toString(StandardCharsets.UTF_8));
+
+                // writes reach the backing array
+                target.getBytes(0, array, offset + 6, 5);
+                target.setBytes(0, "HELLO".getBytes(StandardCharsets.UTF_8));
+                target.getBytes(0, array, offset, 5);
+                assertEquals("HELLO hello", buffer.toString(StandardCharsets.UTF_8));
+
+                Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> target.writeBytes(array, offset - 1, 2));
+                Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> target.getBytes(0, array, offset + 31, 2));
+                // whole array
+                Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> target.setBytes(0, array));
+            } finally {
+                target.release();
+            }
+        });
+    }
+
+    @Test
+    public void unpooledWrappedBufferKeepsBounds() throws Exception {
+        withGuardedHello((buffer, array, offset) -> {
+            // like Base64.encode
+            ByteBuf wrapped = Unpooled.wrappedBuffer(array, offset, buffer.capacity());
+            assertEquals("hello world", wrapped.toString(0, HELLO.length, StandardCharsets.UTF_8));
+            wrapped.setByte(0, 'j');
+            assertEquals("jello world", buffer.toString(StandardCharsets.UTF_8));
+            // the wrapped buffer has a guard array with the same bounds
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> sink = wrapped.array()[wrapped.arrayOffset() + buffer.capacity()]);
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> Unpooled.wrappedBuffer(array, offset, buffer.capacity() + 1));
+        });
+    }
+
+    @Test
+    public void jdkMethodsUseBackingArray() throws Exception {
+        withGuardedHello((buffer, array, offset) -> {
+            assertEquals("hello world", new String(array, offset, HELLO.length, StandardCharsets.UTF_8));
+            //noinspection deprecation
+            assertEquals("hello world", new String(array, 0, offset, HELLO.length));
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> new String(array, offset - 1, 1, StandardCharsets.UTF_8));
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> new String(array, StandardCharsets.UTF_8));
+
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update(array, offset, HELLO.length);
+            Assertions.assertArrayEquals(MessageDigest.getInstance("SHA-256").digest(HELLO), digest.digest());
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            baos.write(array, offset, HELLO.length);
+            Assertions.assertArrayEquals(HELLO, baos.toByteArray());
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> baos.write(array, offset + 30, 3));
+
+            // inherited from FilterOutputStream
+            baos.reset();
+            OutputStream filter = new InheritingOutputStream(baos);
+            filter.write(array, offset, HELLO.length);
+            Assertions.assertArrayEquals(HELLO, baos.toByteArray());
+
+            new ByteArrayInputStream(HELLO).read(array, offset + 20, 5);
+            assertEquals("hello", buffer.toString(20, 5, StandardCharsets.UTF_8));
+
+            Assertions.assertTrue(Arrays.equals(array, offset, offset + HELLO.length, HELLO, 0, HELLO.length));
+            Arrays.fill(array, offset, offset + 5, (byte) 'x');
+            assertEquals("xxxxx world", buffer.toString(0, HELLO.length, StandardCharsets.UTF_8));
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> Arrays.fill(array, offset + 30, offset + 33, (byte) 'x'));
+        });
+    }
+
+    @Test
+    public void instrumentedOverrideSeesGuardArray() throws Exception {
+        withGuardedHello((buffer, array, offset) -> {
+            InstrumentedOutputStream stream = new InstrumentedOutputStream();
+            OutputStream asStream = stream;
+            asStream.write(array, offset, HELLO.length);
+            Assertions.assertSame(array, stream.received);
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> sink = stream.received[offset - 1]);
+        });
+    }
+
+    @Test
+    public void byteBufferWrap() throws Exception {
+        withGuardedHello((buffer, array, offset) -> {
+            ByteBuffer nio = ByteBuffer.wrap(array, offset, HELLO.length);
+            assertEquals("hello world", StandardCharsets.UTF_8.decode(nio).toString());
+            // like JacksonDatabindMapper
+            byte[] fromNio = nio.array();
+            Assertions.assertSame(array, fromNio);
+            assertEquals('h', fromNio[offset]);
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> sink = fromNio[offset - 1]);
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> ByteBuffer.wrap(array, offset + 30, 3));
+        });
+    }
+
+    @Test
+    public void nativeMethodsUseBackingArray() throws Exception {
+        withGuardedHello((buffer, array, offset) -> {
+            XXHashFactory fastest = XXHashFactory.fastestInstance();
+            int expected = XXHashFactory.safeInstance().hash32().hash(HELLO, 0, HELLO.length, 0x9747b28c);
+            assertEquals(expected, fastest.hash32().hash(array, offset, HELLO.length, 0x9747b28c), fastest.toString());
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () -> fastest.hash32().hash(array, offset - 1, HELLO.length, 0));
+
+            // zstd-jni uses JNI before Java 22, and MemorySegment.ofArray after
+            byte[] frame = Zstd.compress(HELLO);
+            buffer.clear().writeBytes(frame);
+            assertEquals(HELLO.length, Zstd.getFrameContentSize(array, offset, frame.length));
+        });
+    }
+
+    @FunctionalInterface
+    private interface GuardedTest {
+        void run(ByteBuf buffer, byte[] array, int offset) throws Exception;
+    }
+
+    private static final class InheritingOutputStream extends FilterOutputStream {
+        InheritingOutputStream(OutputStream out) {
+            super(out);
+        }
+    }
+
+    private static final class InstrumentedOutputStream extends OutputStream {
+        byte[] received;
+
+        @Override
+        public void write(int b) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) {
+            received = b;
+        }
     }
 }
