@@ -1,7 +1,6 @@
 package io.micronaut.fuzzing.processor
 
-import com.fasterxml.jackson.core.type.TypeReference
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.ObjectMapper
 import io.micronaut.annotation.processing.test.AbstractTypeElementSpec
 
 class FuzzTargetVisitorSpec extends AbstractTypeElementSpec {
@@ -21,8 +20,9 @@ class Example {
     }
 }
 """)
-        def value = mapper.readValue(cl.getResources("META-INF/" + DefinedFuzzTarget.DIRECTORY).nextElement(), new TypeReference<List<DefinedFuzzTarget>>() {
-        })
+        def value = cl.getResources("META-INF/" + DefinedFuzzTarget.DIRECTORY).nextElement().openStream().withCloseable { stream ->
+            mapper.readValue(stream, DefinedFuzzTarget[])
+        }
         then:
         value.size() == 1
         value[0].targetClass() == "com.example.Example"
@@ -46,12 +46,13 @@ class Example {
     }
 }
 """)
-        def value = mapper.readValue(cl.getResources("META-INF/" + DefinedFuzzTarget.DIRECTORY).nextElement(), new TypeReference<List<DefinedFuzzTarget>>() {
-        })
+        def value = cl.getResources("META-INF/" + DefinedFuzzTarget.DIRECTORY).nextElement().openStream().withCloseable { stream ->
+            mapper.readValue(stream, DefinedFuzzTarget[])
+        }
         then:
         value.size() == 1
         when:
-        def single = value.get(0)
+        def single = value[0]
         then:
         single.dictionary().contains("foo")
     }

@@ -11,7 +11,7 @@ pluginManagement {
 
 plugins {
     // note: also update jazzer-plugin/settings.gradle.kts!
-    id("io.micronaut.build.shared.settings") version "8.0.0-M9"
+    id("io.micronaut.build.shared.settings") version "8.1.4"
 }
 
 rootProject.name = "fuzzing-parent"
@@ -31,6 +31,6 @@ micronautBuild {
     if (providers.environmentVariable("OSSFUZZ_MICRONAUT_BRANCH").isPresent) {
         requiresDevelopmentVersion("micronaut-core", providers.environmentVariable("OSSFUZZ_MICRONAUT_BRANCH").get())
     } else {
-        requiresDevelopmentVersion("micronaut-core", "5.0.x")
+        requiresDevelopmentVersion("micronaut-core", "5.3.x")
     }
 }

@@ -21,10 +21,10 @@ import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.HandlerFuzzerBase;
 import io.netty.handler.codec.PrematureChannelClosureException;
 
-import javax.net.ssl.SSLException;
 import java.nio.channels.ClosedChannelException;
 
 /**
@@ -33,9 +33,17 @@ import java.nio.channels.ClosedChannelException;
 @FuzzTarget
 @HttpDict
 public class HttpObjectAggregatorFuzzer extends HandlerFuzzerBase {
-    public HttpObjectAggregatorFuzzer(FuzzedDataProvider fuzzedDataProvider) {
+    private final boolean clientCodec;
+
+    HttpObjectAggregatorFuzzer(boolean clientCodec) {
+        this.clientCodec = clientCodec;
+    }
+
+    @Override
+    protected EmbeddedChannel setUp() {
+        EmbeddedChannel channel = new EmbeddedChannel();
         channel.pipeline()
-            .addLast(fuzzedDataProvider.consumeBoolean() ? new HttpClientCodec() : new HttpServerCodec())
+            .addLast(clientCodec ? new HttpClientCodec() : new HttpServerCodec())
             .addLast(new HttpObjectAggregator(1024))
             .addLast(new ChannelInboundHandlerAdapter() {
                 @Override
@@ -47,11 +55,12 @@ public class HttpObjectAggregatorFuzzer extends HandlerFuzzerBase {
                     super.exceptionCaught(ctx, cause);
                 }
             });
+        return channel;
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
-        var fuzzer = new HttpObjectAggregatorFuzzer(fuzzedDataProvider);
-        fuzzer.test(fuzzedDataProvider);
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
+        boolean clientCodec = fuzzedDataProvider.consumeBoolean();
+        new HttpObjectAggregatorFuzzer(clientCodec).test(fuzzedDataProvider);
     }
 
     public static void main(String[] args) {

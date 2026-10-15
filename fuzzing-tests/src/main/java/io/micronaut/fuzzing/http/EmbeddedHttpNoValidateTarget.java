@@ -15,9 +15,9 @@
  */
 package io.micronaut.fuzzing.http;
 
+import io.netty.channel.embedded.EmbeddedChannel;
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.context.ApplicationContext;
-import io.micronaut.fuzzing.Dict;
 import io.micronaut.fuzzing.EmbeddedChannelFuzzerBase;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
@@ -35,28 +35,27 @@ import java.util.Map;
  */
 @FuzzTarget
 @HttpDict
-@Dict({
+@SimpleControllerDict
+public class EmbeddedHttpNoValidateTarget extends EmbeddedChannelFuzzerBase {
+    private static final ContextHolder HTTP1 = new ContextHolder(Map.of("micronaut.server.validate-url", false));
 
-    SimpleController.ECHO_AUTHORS,
-    "application/x-www-form-urlencoded",
-    "authors[0].name=", "authors[1].name=", "authors[3].name=", "authors[5].name=",
-    "authors[0].age=",  "authors[99].name=",
-    "&",
-})
-public class EmbeddedHttpBindingTarget extends EmbeddedChannelFuzzerBase {
-    private static final ContextHolder HTTP1 = new ContextHolder(Map.of("fuzzing.buggy-binder", "true"));
+    private final ContextHolder contextHolder;
 
-    EmbeddedHttpBindingTarget(ContextHolder contextHolder) {
-        super(contextHolder.nettyHttpServer.buildEmbeddedChannel(false));
-        baseCpuTime = 5_000_000;
+    EmbeddedHttpNoValidateTarget(ContextHolder contextHolder) {
+        this.contextHolder = contextHolder;
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider input) {
-        new EmbeddedHttpBindingTarget(HTTP1).test(input);
+    @Override
+    protected EmbeddedChannel setUp() {
+        return contextHolder.nettyHttpServer.buildEmbeddedChannel(false);
+    }
+
+    public static void fuzzerTestOneInput(FuzzedDataProvider input) throws Exception {
+        new EmbeddedHttpNoValidateTarget(HTTP1).test(input);
     }
 
     static void main(String[] args) {
-        LocalJazzerRunner.create(EmbeddedHttpBindingTarget.class).reproduce("GET / HTTP/1.1\r\nContent-Length: 0\r\nHost: localhost\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+        LocalJazzerRunner.create(EmbeddedHttpNoValidateTarget.class).reproduce("GET / HTTP/1.1\r\nContent-Length: 0\r\nHost: localhost\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.UTF_8));
     }
 
     static final class ContextHolder {
@@ -65,7 +64,7 @@ public class EmbeddedHttpBindingTarget extends EmbeddedChannelFuzzerBase {
         ContextHolder(Map<String, Object> cfg) {
             String vmName = ManagementFactory.getRuntimeMXBean().getName();
             System.setProperty("VM_NAME", vmName);
-            LoggerFactory.getLogger(EmbeddedHttpBindingTarget.class).info("Starting embedded HTTP target. VM name is: {}", vmName);
+            LoggerFactory.getLogger(EmbeddedHttpNoValidateTarget.class).info("Starting embedded HTTP target. VM name is: {}", vmName);
 
             ApplicationContext ctx = ApplicationContext.run(cfg);
 

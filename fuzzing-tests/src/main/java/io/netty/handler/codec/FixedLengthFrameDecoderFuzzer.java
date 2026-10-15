@@ -21,9 +21,9 @@ import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.HandlerFuzzerBase;
 
-import javax.net.ssl.SSLException;
 
 /**
  * Fuzzing support type.
@@ -31,7 +31,9 @@ import javax.net.ssl.SSLException;
 @FuzzTarget
 @HttpDict
 public class FixedLengthFrameDecoderFuzzer extends HandlerFuzzerBase {
-    public FixedLengthFrameDecoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
+    @Override
+    protected EmbeddedChannel setUp() {
+        EmbeddedChannel channel = new EmbeddedChannel();
         channel.pipeline()
             .addLast(new FixedLengthFrameDecoder(16))
             .addLast(new ChannelInboundHandlerAdapter() {
@@ -43,11 +45,11 @@ public class FixedLengthFrameDecoderFuzzer extends HandlerFuzzerBase {
                     super.exceptionCaught(ctx, cause);
                 }
             });
+        return channel;
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
-        var fuzzer = new FixedLengthFrameDecoderFuzzer(fuzzedDataProvider);
-        fuzzer.test(fuzzedDataProvider);
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws Exception {
+        new FixedLengthFrameDecoderFuzzer().test(fuzzedDataProvider);
     }
 
     public static void main(String[] args) {

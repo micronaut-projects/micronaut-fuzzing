@@ -15,6 +15,7 @@
  */
 package io.netty.handler.codec.json;
 
+import io.netty.channel.embedded.EmbeddedChannel;
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
@@ -23,7 +24,6 @@ import io.netty.handler.HandlerFuzzerBase;
 import io.netty.handler.codec.CorruptedFrameException;
 import io.netty.handler.codec.TooLongFrameException;
 
-import javax.net.ssl.SSLException;
 
 /**
  * Fuzzing support type.
@@ -31,22 +31,34 @@ import javax.net.ssl.SSLException;
 @FuzzTarget
 @HttpDict
 public class JsonObjectDecoderFuzzer extends HandlerFuzzerBase {
-    public JsonObjectDecoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
-        channel.pipeline()
-            .addLast(new JsonObjectDecoder(fuzzedDataProvider.consumeInt(10, 1024), fuzzedDataProvider.consumeBoolean()));
+    private final int maxObjectLength;
+    private final boolean streamArrayElements;
+
+    JsonObjectDecoderFuzzer(int maxObjectLength, boolean streamArrayElements) {
+        this.maxObjectLength = maxObjectLength;
+        this.streamArrayElements = streamArrayElements;
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
-        var fuzzer = new JsonObjectDecoderFuzzer(fuzzedDataProvider);
-        fuzzer.test(fuzzedDataProvider);
+    @Override
+    protected EmbeddedChannel setUp() {
+        EmbeddedChannel channel = new EmbeddedChannel();
+        channel.pipeline()
+            .addLast(new JsonObjectDecoder(maxObjectLength, streamArrayElements));
+        return channel;
     }
 
     @Override
     protected void onException(Exception e) {
-        if (e instanceof TooLongFrameException || e instanceof CorruptedFrameException) {
+        if (e instanceof CorruptedFrameException || e instanceof TooLongFrameException) {
             return;
         }
         super.onException(e);
+    }
+
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
+        int maxObjectLength = fuzzedDataProvider.consumeInt(10, 1024);
+        boolean streamArrayElements = fuzzedDataProvider.consumeBoolean();
+        new JsonObjectDecoderFuzzer(maxObjectLength, streamArrayElements).test(fuzzedDataProvider);
     }
 
     public static void main(String[] args) {

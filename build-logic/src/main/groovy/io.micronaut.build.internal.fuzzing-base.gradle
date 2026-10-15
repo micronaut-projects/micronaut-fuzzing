@@ -1,4 +1,8 @@
 plugins.withId("java") {
+    micronautBuild {
+        javaVersion.set(25)
+    }
+
     dependencies {
         add("testRuntimeOnly", mnTest.junit.platform.launcher)
     }

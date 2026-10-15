@@ -15,6 +15,7 @@
  */
 package io.netty.handler.codec.http;
 
+import io.netty.channel.embedded.EmbeddedChannel;
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
@@ -26,7 +27,6 @@ import io.netty.handler.codec.http2.Http2FrameCodecBuilder;
 import io.netty.handler.codec.http2.Http2ServerUpgradeCodec;
 import io.netty.util.AsciiString;
 
-import javax.net.ssl.SSLException;
 import java.nio.channels.ClosedChannelException;
 
 /**
@@ -35,7 +35,9 @@ import java.nio.channels.ClosedChannelException;
 @FuzzTarget
 @HttpDict
 public class HttpServerUpgradeHandlerFuzzer extends HandlerFuzzerBase {
-    public HttpServerUpgradeHandlerFuzzer(FuzzedDataProvider fuzzedDataProvider) {
+    @Override
+    protected EmbeddedChannel setUp() {
+        EmbeddedChannel channel = new EmbeddedChannel();
         HttpServerCodec serverCodec = new HttpServerCodec();
         channel.pipeline()
             .addLast(serverCodec)
@@ -46,6 +48,7 @@ public class HttpServerUpgradeHandlerFuzzer extends HandlerFuzzerBase {
                     return null;
                 }
             }, 1024));
+        return channel;
     }
 
     @Override
@@ -56,9 +59,8 @@ public class HttpServerUpgradeHandlerFuzzer extends HandlerFuzzerBase {
         super.onException(e);
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
-        var fuzzer = new HttpServerUpgradeHandlerFuzzer(fuzzedDataProvider);
-        fuzzer.test(fuzzedDataProvider);
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws Exception {
+        new HttpServerUpgradeHandlerFuzzer().test(fuzzedDataProvider);
     }
 
     public static void main(String[] args) {

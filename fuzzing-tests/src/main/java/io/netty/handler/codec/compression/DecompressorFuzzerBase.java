@@ -20,6 +20,7 @@ import io.netty.handler.HandlerFuzzerBase;
 abstract class DecompressorFuzzerBase extends HandlerFuzzerBase {
     DecompressorFuzzerBase() {
         outputCpuTime = inputCpuTime;
+        exceptionCpuTime = 400_000;
     }
 
     @Override

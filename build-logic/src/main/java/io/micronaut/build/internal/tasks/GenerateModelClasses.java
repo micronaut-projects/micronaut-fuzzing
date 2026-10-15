@@ -49,14 +49,13 @@ public abstract class GenerateModelClasses extends DefaultTask {
 import java.io.OutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 import io.micronaut.core.annotation.Internal;
 
 @Internal
 public record DefinedFuzzTarget(
     String targetClass,
-    List<String> dictionary,
-    List<String> dictionaryResources,
+    String[] dictionary,
+    String[] dictionaryResources,
     boolean enableImplicitly
 ) {
     public static final String DIRECTORY = "io.micronaut.fuzzing.fuzz-targets";

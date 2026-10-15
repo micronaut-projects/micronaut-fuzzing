@@ -15,12 +15,12 @@
  */
 package io.netty.handler.codec.compression;
 
+import io.netty.channel.embedded.EmbeddedChannel;
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 
-import javax.net.ssl.SSLException;
 
 /**
  * Fuzzing support type.
@@ -28,14 +28,23 @@ import javax.net.ssl.SSLException;
 @FuzzTarget
 @HttpDict
 public class JZlibDecoderFuzzer extends DecompressorFuzzerBase {
-    public JZlibDecoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
-        channel.pipeline()
-            .addLast(new JZlibDecoder(fuzzedDataProvider.consumeInt(0, 1024)));
+    private final int maxAllocation;
+
+    public JZlibDecoderFuzzer(int maxAllocation) {
+        this.maxAllocation = maxAllocation;
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
-        var fuzzer = new JZlibDecoderFuzzer(fuzzedDataProvider);
-        fuzzer.test(fuzzedDataProvider);
+    @Override
+    protected EmbeddedChannel setUp() {
+        EmbeddedChannel channel = new EmbeddedChannel();
+        channel.pipeline()
+            .addLast(new JZlibDecoder(maxAllocation));
+        return channel;
+    }
+
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
+        int maxAllocation = fuzzedDataProvider.consumeInt(0, 1024);
+        new JZlibDecoderFuzzer(maxAllocation).test(fuzzedDataProvider);
     }
 
     public static void main(String[] args) {

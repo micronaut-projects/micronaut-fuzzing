@@ -15,13 +15,12 @@
  */
 package io.netty.handler.codec.compression;
 
+import io.netty.channel.embedded.EmbeddedChannel;
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
-import io.netty.handler.codec.DecoderException;
 
-import javax.net.ssl.SSLException;
 
 /**
  * Fuzzing support type.
@@ -29,22 +28,23 @@ import javax.net.ssl.SSLException;
 @FuzzTarget
 @HttpDict
 public class FastLzFrameDecoderFuzzer extends DecompressorFuzzerBase {
-    public FastLzFrameDecoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
-        channel.pipeline()
-            .addLast(new FastLzFrameDecoder(fuzzedDataProvider.consumeBoolean()));
+    private final boolean validateChecksums;
+
+    public FastLzFrameDecoderFuzzer(boolean validateChecksums) {
+        this.validateChecksums = validateChecksums;
     }
 
     @Override
-    protected void onException(Exception e) {
-        if (e instanceof DecoderException) {
-            return;
-        }
-        super.onException(e);
+    protected EmbeddedChannel setUp() {
+        EmbeddedChannel channel = new EmbeddedChannel();
+        channel.pipeline()
+            .addLast(new FastLzFrameDecoder(validateChecksums));
+        return channel;
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
-        var fuzzer = new FastLzFrameDecoderFuzzer(fuzzedDataProvider);
-        fuzzer.test(fuzzedDataProvider);
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
+        boolean validateChecksums = fuzzedDataProvider.consumeBoolean();
+        new FastLzFrameDecoderFuzzer(validateChecksums).test(fuzzedDataProvider);
     }
 
     public static void main(String[] args) {

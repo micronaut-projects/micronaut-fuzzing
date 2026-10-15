@@ -21,9 +21,9 @@ import io.micronaut.fuzzing.HttpDict;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.HandlerFuzzerBase;
 
-import javax.net.ssl.SSLException;
 
 /**
  * Fuzzing support type.
@@ -31,9 +31,21 @@ import javax.net.ssl.SSLException;
 @FuzzTarget
 @HttpDict
 public class LengthFieldBasedFrameDecoderFuzzer extends HandlerFuzzerBase {
-    public LengthFieldBasedFrameDecoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
+    private final int maxFrameLength;
+    private final int lengthFieldOffset;
+    private final int lengthFieldLength;
+
+    public LengthFieldBasedFrameDecoderFuzzer(int maxFrameLength, int lengthFieldOffset, int lengthFieldLength) {
+        this.maxFrameLength = maxFrameLength;
+        this.lengthFieldOffset = lengthFieldOffset;
+        this.lengthFieldLength = lengthFieldLength;
+    }
+
+    @Override
+    protected EmbeddedChannel setUp() {
+        EmbeddedChannel channel = new EmbeddedChannel();
         channel.pipeline()
-            .addLast(new LengthFieldBasedFrameDecoder(fuzzedDataProvider.consumeInt(16, 1024), fuzzedDataProvider.consumeInt(0, 5), fuzzedDataProvider.pickValue(new int[] { 1, 2, 4, 8 })))
+            .addLast(new LengthFieldBasedFrameDecoder(maxFrameLength, lengthFieldOffset, lengthFieldLength))
             .addLast(new ChannelInboundHandlerAdapter() {
                 @Override
                 public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
@@ -43,11 +55,14 @@ public class LengthFieldBasedFrameDecoderFuzzer extends HandlerFuzzerBase {
                     super.exceptionCaught(ctx, cause);
                 }
             });
+        return channel;
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws SSLException {
-        var fuzzer = new LengthFieldBasedFrameDecoderFuzzer(fuzzedDataProvider);
-        fuzzer.test(fuzzedDataProvider);
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
+        int maxFrameLength = fuzzedDataProvider.consumeInt(16, 1024);
+        int lengthFieldOffset = fuzzedDataProvider.consumeInt(0, 5);
+        int lengthFieldLength = fuzzedDataProvider.pickValue(new int[] { 1, 2, 4, 8 });
+        new LengthFieldBasedFrameDecoderFuzzer(maxFrameLength, lengthFieldOffset, lengthFieldLength).test(fuzzedDataProvider);
     }
 
     public static void main(String[] args) {

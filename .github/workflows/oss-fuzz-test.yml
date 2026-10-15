@@ -1,8 +1,21 @@
 name: OSS-Fuzz integration test
-on: [push]
+# Builds the fuzzers the way OSS-Fuzz does and fuzzes briefly. This runs on the runners
+# the Micronaut organization shares, not on Google infrastructure, and takes 30 to 60
+# minutes, so it runs nightly rather than on every push. The build uses micronaut-core
+# master, so it checks this repository against the current core more than it checks any
+# single commit here.
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+# At most one build at a time; a manual run started meanwhile waits for it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   Run-OSS-Fuzz:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     permissions:
       security-events: write
     steps:
@@ -21,7 +34,7 @@ jobs:
           language: 'jvm'
       - name: Upload SARIF
         if: always() && steps.build.outcome == 'success'
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: cifuzz-sarif/results.sarif
           checkout_path: cifuzz-sarif
