@@ -39,14 +39,15 @@ class RedisArrayAggregatorFuzzerTest {
     void aggregatesNestedArraysAndFragmentedBulkStrings() {
         RedisArrayAggregatorFuzzer fuzzer = run(100, 10, false,
             "*3\r\n*2\r\n$5\r\nhelSEPlo\r\n:-42\r\n*-1\r\n$-1\r\nSEP*2\r\n*0\r\n$0\r\n\r\n+OK\r\n-ERR x\r\n");
-        // the nested array, the ok and the error message
+        // the two top-level arrays, the ok and the error message
         assertEquals(4, fuzzer.roundTrips);
+        assertEquals(List.of(), fuzzer.ignoredExceptions);
     }
 
     @Test
     void aggregatesInlineCommands() {
-        RedisArrayAggregatorFuzzer fuzzer = run(100, 10, true, "*1\r\n+a\r\nPING\r\n");
-        assertEquals(2, fuzzer.roundTrips);
+        RedisArrayAggregatorFuzzer fuzzer = run(100, 10, true, "*1\r\n+a\r\nPING\r\n\r\n\r\n");
+        assertEquals(4, fuzzer.roundTrips);
     }
 
     @Test
@@ -57,41 +58,56 @@ class RedisArrayAggregatorFuzzerTest {
 
     @Test
     void ignoresTooManyElements() {
-        run(2, 10, false, "*3\r\n:1\r\n:2\r\n:3\r\n");
+        RedisArrayAggregatorFuzzer fuzzer = run(2, 10, false, "*3\r\n:1\r\n:2\r\n:3\r\n");
+        assertEquals(List.of("aggregator"), fuzzer.ignoredExceptions);
+        // the elements of the rejected array arrive on their own
+        assertEquals(3, fuzzer.roundTrips);
     }
 
     @Test
     void ignoresTooManyOutstandingElements() {
-        run(3, 10, false, "*2\r\n*2\r\n:1\r\n:2\r\n:3\r\n");
+        RedisArrayAggregatorFuzzer fuzzer = run(3, 10, false, "*2\r\n*2\r\n:1\r\n:2\r\n:3\r\n");
+        assertEquals(List.of("aggregator"), fuzzer.ignoredExceptions);
+        assertEquals(3, fuzzer.roundTrips);
     }
 
     @Test
     void ignoresTooDeepNesting() {
-        run(100, 1, false, "*1\r\n*1\r\n:1\r\n");
+        RedisArrayAggregatorFuzzer fuzzer = run(100, 1, false, "*1\r\n*1\r\n:1\r\n");
+        assertEquals(List.of("aggregator"), fuzzer.ignoredExceptions);
+        assertEquals(1, fuzzer.roundTrips);
     }
 
     @Test
     void ignoresIncompleteAggregateAtClose() {
-        run(100, 10, false, "*2\r\n*2\r\n:1\r\n$5\r\nhe");
+        RedisArrayAggregatorFuzzer fuzzer = run(100, 10, false, "*2\r\n*2\r\n:1\r\n$5\r\nhe");
+        // from both aggregators
+        assertEquals(List.of("premature closure", "premature closure"), fuzzer.ignoredExceptions);
+        assertEquals(0, fuzzer.roundTrips);
     }
 
     @Test
     void ignoresDecoderErrorInsideAggregate() {
-        run(100, 10, false, "*2\r\n$3\r\nabc\r\nPING\r\n");
+        RedisArrayAggregatorFuzzer fuzzer = run(100, 10, false, "*2\r\n$3\r\nabc\r\nPING\r\n");
+        assertEquals(List.of("decoder", "premature closure"), fuzzer.ignoredExceptions);
+        assertEquals(0, fuzzer.roundTrips);
     }
 
     @Test
     void ignoresKnownLineFeedWithoutCarriageReturnBug() {
-        run(100, 10, false, "*2\r\n+\nab");
+        RedisArrayAggregatorFuzzer fuzzer = run(100, 10, false, "*2\r\n+\nab");
+        assertEquals(List.of("decoder", "premature closure"), fuzzer.ignoredExceptions);
     }
 
     @Test
     void canRetryWithFreshHandlers() {
         RedisArrayAggregatorFuzzer fuzzer = new RedisArrayAggregatorFuzzer(CannedFuzzedDataProvider.create(List.of(
             1024, false, 100, 10)));
-        byte[] input = "*2\r\n:1\r\n".getBytes(US_ASCII);
+        byte[] input = "*2\r\n:1\r\n:2\r\n".getBytes(US_ASCII);
         fuzzer.test(CannedFuzzedDataProvider.create(List.of(input)));
+        assertEquals(1, fuzzer.roundTrips);
         fuzzer.test(CannedFuzzedDataProvider.create(List.of(input)));
+        assertEquals(1, fuzzer.roundTrips);
     }
 
     @Test

@@ -52,21 +52,28 @@ public class RedisDecoderFuzzer extends HandlerFuzzerBase {
 
     @Override
     protected void onException(Exception e) {
-        // RedisCodecException is not a DecoderException, so ByteToMessageDecoder wraps it in one. RedisDecoder
-        // also wraps any unexpected exception (NPE, IOOBE, ...) in a RedisCodecException with that cause, so
-        // only ignore the validation failures it throws itself, which never have a cause.
-        Throwable t = e instanceof DecoderException && e.getCause() instanceof RedisCodecException ? e.getCause() : e;
-        if (t instanceof RedisCodecException && (t.getCause() == null || isKnownLineFeedBug(t.getCause()))) {
+        if (isValidationException(e)) {
             return;
         }
         super.onException(e);
     }
 
     /**
+     * Whether the exception is a validation failure of {@link RedisDecoder} for invalid input.
+     */
+    static boolean isValidationException(Exception e) {
+        // RedisCodecException is not a DecoderException, so ByteToMessageDecoder wraps it in one. RedisDecoder
+        // also wraps any unexpected exception (NPE, IOOBE, ...) in a RedisCodecException with that cause, so
+        // only ignore the validation failures it throws itself, which never have a cause.
+        Throwable t = e instanceof DecoderException && e.getCause() instanceof RedisCodecException ? e.getCause() : e;
+        return t instanceof RedisCodecException && (t.getCause() == null || isKnownLineFeedBug(t.getCause()));
+    }
+
+    /**
      * RedisDecoder.readLine throws an IllegalArgumentException for a line that starts with LF, because it computes a
      * negative length for the content before the CR. Remove once https://github.com/netty/netty/pull/17793 is released.
      */
-    static boolean isKnownLineFeedBug(Throwable cause) {
+    private static boolean isKnownLineFeedBug(Throwable cause) {
         if (!(cause instanceof IllegalArgumentException)) {
             return false;
         }

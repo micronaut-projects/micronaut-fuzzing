@@ -31,7 +31,9 @@ import io.netty.handler.codec.DecoderException;
 import io.netty.handler.codec.PrematureChannelClosureException;
 import io.netty.util.ReferenceCountUtil;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Fuzzes {@link RedisArrayAggregator} with the output of {@link RedisDecoder} and
@@ -49,27 +51,53 @@ public class RedisArrayAggregatorFuzzer extends HandlerFuzzerBase {
     private static final int MAX_INLINE_MESSAGE_LENGTH = 65536;
     private static final int MAX_ELEMENTS = 65536;
     private static final int MAX_NESTED_ARRAY_DEPTH = 1024;
+    private static final Set<String> AGGREGATOR_VALIDATION_METHODS =
+        Set.of("clearAndCreateException", "decodeRedisArrayHeader", "decode");
 
     /**
-     * Number of aggregated messages that passed the round trip check, for the smoke tests.
+     * Number of aggregated messages that passed the round trip check in the last attempt, for the smoke tests.
      */
     int roundTrips;
+    /**
+     * Kinds of exceptions that {@link #onException} ignored in the last attempt, for the smoke tests.
+     */
+    final List<String> ignoredExceptions = new ArrayList<>();
 
     private final int maxInlineMessageLength;
     private final boolean decodeInlineCommands;
     private final int maxElements;
     private final int maxNestedArrayDepth;
 
+    private EmbeddedChannel oracleEncoder;
+    private EmbeddedChannel oracleDecoder;
+
     public RedisArrayAggregatorFuzzer(FuzzedDataProvider fuzzedDataProvider) {
         maxInlineMessageLength = fuzzedDataProvider.consumeInt(1, MAX_INLINE_MESSAGE_LENGTH);
         decodeInlineCommands = fuzzedDataProvider.consumeBoolean();
         maxElements = fuzzedDataProvider.consumeInt(1, MAX_ELEMENTS);
         maxNestedArrayDepth = fuzzedDataProvider.consumeInt(1, MAX_NESTED_ARRAY_DEPTH);
+        // every aggregated message is encoded and decoded again
+        inputCpuTime *= 4;
     }
 
     @Override
     protected EmbeddedChannel setUp() {
-        return new EmbeddedChannel(
+        roundTrips = 0;
+        ignoredExceptions.clear();
+
+        EmbeddedChannel encoder = new EmbeddedChannel(new RedisEncoder());
+        // The limits are the same as for the original input: an aggregate that passed them once must pass them
+        // again. Re-encoding can make a simple string longer (invalid UTF-8 becomes U+FFFD), so don't limit
+        // the line length.
+        EmbeddedChannel decoder = new EmbeddedChannel(
+            new RedisDecoder(RedisConstants.REDIS_MESSAGE_MAX_LENGTH, FixedRedisMessagePool.INSTANCE, decodeInlineCommands),
+            new RedisBulkStringAggregator(),
+            new RedisArrayAggregator(maxElements, maxNestedArrayDepth)
+        );
+        oracleEncoder = encoder;
+        oracleDecoder = decoder;
+
+        EmbeddedChannel channel = new EmbeddedChannel(
             new RedisDecoder(maxInlineMessageLength, FixedRedisMessagePool.INSTANCE, decodeInlineCommands),
             new RedisBulkStringAggregator(),
             new RedisArrayAggregator(maxElements, maxNestedArrayDepth),
@@ -86,6 +114,16 @@ public class RedisArrayAggregatorFuzzer extends HandlerFuzzerBase {
                 }
             }
         );
+        // The base class finishes the channel after the input. The round trip channels are empty unless a round
+        // trip failed, which has thrown already.
+        channel.closeFuture().addListener(f -> {
+            try {
+                encoder.finishAndReleaseAll();
+            } finally {
+                decoder.finishAndReleaseAll();
+            }
+        });
+        return channel;
     }
 
     private void verify(RedisMessage msg) {
@@ -147,49 +185,32 @@ public class RedisArrayAggregatorFuzzer extends HandlerFuzzerBase {
     }
 
     private void roundTrip(RedisMessage msg) {
-        EmbeddedChannel encoder = new EmbeddedChannel(new RedisEncoder());
         ByteBuf encoded = ByteBufAllocator.DEFAULT.buffer();
         try {
-            encoder.writeOutbound(ReferenceCountUtil.retain(msg));
-            for (ByteBuf part; (part = encoder.readOutbound()) != null; ) {
-                // RedisEncoder passes on the content of bulk strings, which is still part of msg. Don't consume it.
+            oracleEncoder.writeOutbound(ReferenceCountUtil.retain(msg));
+            for (ByteBuf part; (part = oracleEncoder.readOutbound()) != null; ) {
+                // RedisEncoder passes on the content of bulk strings, which is still part of msg. Copy it instead
+                // of handing it to the decoder, which would consume it.
                 encoded.writeBytes(part, part.readerIndex(), part.readableBytes());
                 part.release();
             }
         } catch (Throwable t) {
             encoded.release();
             throw t;
-        } finally {
-            encoder.finishAndReleaseAll();
         }
 
-        // The limits are the same as for the original input: an aggregate that passed them once must pass them
-        // again. Re-encoding can make a simple string longer (invalid UTF-8 becomes U+FFFD), so don't limit
-        // the line length.
-        EmbeddedChannel decoder = new EmbeddedChannel(
-            new RedisDecoder(RedisConstants.REDIS_MESSAGE_MAX_LENGTH, FixedRedisMessagePool.INSTANCE, decodeInlineCommands),
-            new RedisBulkStringAggregator(),
-            new RedisArrayAggregator(maxElements, maxNestedArrayDepth)
-        );
+        oracleDecoder.writeInbound(encoded);
+        RedisMessage decoded = oracleDecoder.readInbound();
         try {
-            String hex = ByteBufUtil.hexDump(encoded);
-            decoder.writeInbound(encoded);
-            decoder.checkException();
-            RedisMessage decoded = decoder.readInbound();
-            try {
-                if (decoded == null) {
-                    throw new AssertionError("Re-encoded message did not decode: " + msg + " encoded=" + hex);
-                }
-                assertSameMessage(msg, decoded);
-                if (decoder.inboundMessages().size() != 0) {
-                    throw new AssertionError("Re-encoded message decoded to multiple messages: " + msg
-                        + " encoded=" + hex);
-                }
-            } finally {
-                ReferenceCountUtil.release(decoded);
+            if (decoded == null) {
+                throw new AssertionError("Re-encoded message did not decode: " + describe(msg));
+            }
+            assertSameMessage(msg, decoded);
+            if (!oracleDecoder.inboundMessages().isEmpty()) {
+                throw new AssertionError("Re-encoded message decoded to multiple messages: " + describe(msg));
             }
         } finally {
-            decoder.finishAndReleaseAll();
+            ReferenceCountUtil.release(decoded);
         }
     }
 
@@ -257,29 +278,36 @@ public class RedisArrayAggregatorFuzzer extends HandlerFuzzerBase {
 
     @Override
     protected void onException(Exception e) {
-        Throwable t = e instanceof DecoderException && e.getCause() instanceof CodecException ? e.getCause() : e;
-        // Validation failures of RedisDecoder (see RedisDecoderFuzzer). Unexpected exceptions have a cause.
-        if (t instanceof RedisCodecException
-            && (t.getCause() == null || RedisDecoderFuzzer.isKnownLineFeedBug(t.getCause()))) {
+        if (RedisDecoderFuzzer.isValidationException(e)) {
+            ignoredExceptions.add("decoder");
             return;
         }
         // Validation failures of RedisArrayAggregator: array too long, nested too deep, or too many outstanding
         // elements. MessageToMessageDecoder wraps them in a DecoderException.
-        if (t != e && t.getClass() == CodecException.class && t.getCause() == null
-            && isThrownBy(t, RedisArrayAggregator.class, "clearAndCreateException")) {
+        if (e instanceof DecoderException && isAggregatorValidationException(e.getCause())) {
+            ignoredExceptions.add("aggregator");
             return;
         }
         // Either aggregator fires this on channel close while an aggregate is incomplete.
         if (e.getClass() == PrematureChannelClosureException.class && e.getCause() == null) {
+            ignoredExceptions.add("premature closure");
             return;
         }
         super.onException(e);
     }
 
-    private static boolean isThrownBy(Throwable t, Class<?> type, String method) {
+    /**
+     * RedisArrayAggregator throws a plain CodecException without a cause when an array header exceeds the limits.
+     * Match the topmost RedisArrayAggregator frame against the methods that handle array headers, so that this
+     * still works if Netty inlines its exception factory.
+     */
+    private static boolean isAggregatorValidationException(Throwable t) {
+        if (t == null || t.getClass() != CodecException.class || t.getCause() != null) {
+            return false;
+        }
         for (StackTraceElement element : t.getStackTrace()) {
-            if (element.getClassName().equals(type.getName())) {
-                return element.getMethodName().equals(method);
+            if (element.getClassName().equals(RedisArrayAggregator.class.getName())) {
+                return AGGREGATOR_VALIDATION_METHODS.contains(element.getMethodName());
             }
         }
         return false;
