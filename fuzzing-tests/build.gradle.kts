@@ -330,6 +330,10 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.netty.handler.codec.compression.JdkZlibDecompressorComparisonFuzzer",
         //"io.netty.handler.codec.compression.Bzip2DecompressorComparisonFuzzer",
         //"io.netty.handler.codec.compression.BrotliDecompressorComparisonFuzzer",
+        //"io.micronaut.fuzzing.lz4.Lz4BlockDecompressorTarget",
+        //"io.micronaut.fuzzing.lz4.Lz4RoundTripTarget",
+        //"io.micronaut.fuzzing.lz4.XxHashTarget",
+        //"io.micronaut.fuzzing.lz4.Lz4StreamTarget",
     ))
     val jvmArgs = mutableListOf(
         "-Xmx512M",

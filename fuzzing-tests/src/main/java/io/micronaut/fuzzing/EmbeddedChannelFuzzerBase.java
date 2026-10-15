@@ -27,9 +27,6 @@ import io.netty.util.LeakPresenceDetector;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.FastThreadLocalThread;
 import io.netty.util.internal.PlatformDependent;
-import jdk.jfr.Enabled;
-import jdk.jfr.Event;
-import jdk.jfr.StackTrace;
 
 /**
  * Base support for fuzz targets that drive an EmbeddedChannel with split byte input.
@@ -38,10 +35,9 @@ import jdk.jfr.StackTrace;
 public abstract class EmbeddedChannelFuzzerBase {
     public static final String SEPARATOR = "SEP";
 
-    private static final long CPU_TIME_FACTOR = 1024;
     private static final ByteSplitter SPLITTER = ByteSplitter.create(SEPARATOR);
 
-    protected long baseCpuTime = 500000;
+    protected long baseCpuTime = CpuBudget.DEFAULT_BASE_CPU_TIME;
     protected long inputCpuTime = 20;
     protected long outputCpuTime = 0;
     protected long exceptionCpuTime = 0;
@@ -58,7 +54,7 @@ public abstract class EmbeddedChannelFuzzerBase {
         byte[] allBytes = provider.consumeRemainingAsBytes();
         try {
             FastThreadLocalThread.runWithFastThreadLocal(() -> test0(allBytes));
-        } catch (CpuLimitException ignored) {
+        } catch (CpuBudget.CpuLimitException ignored) {
             // A fresh JVM can charge one-time Jazzer/Netty class loading to the first input.
             // Retry the same bytes once and only fail if the input is slow after setup is warm.
             FastThreadLocalThread.runWithFastThreadLocal(() -> test0(allBytes));
@@ -129,8 +125,6 @@ public abstract class EmbeddedChannelFuzzerBase {
                 }
         });
 
-        long cpuTimeBudget = baseCpuTime + allBytes.length * inputCpuTime;
-
         ByteSplitter.ChunkIterator itr = SPLITTER.splitIterator(allBytes);
         long start = CpuTimer.currentThreadCpuTimeNanos();
         while (itr.hasNext() && channel.isOpen() && !state.exceptionCaught) {
@@ -156,32 +150,13 @@ public abstract class EmbeddedChannelFuzzerBase {
         channel.releaseOutbound();
 
         long end = CpuTimer.currentThreadCpuTimeNanos();
-        cpuTimeBudget += state.outputBytes * outputCpuTime;
-        if (state.handledException) {
-            cpuTimeBudget += exceptionCpuTime;
-        }
 
         LeakPresenceDetector.check();
         FlagAppender.checkTriggered();
         long actualTime = end - start;
 
-        CpuTimeSample sample = new CpuTimeSample();
-        if (sample.isEnabled()) {
-            sample.factor = CPU_TIME_FACTOR;
-            sample.baseCpuTime = baseCpuTime;
-            sample.inputCpuTime = inputCpuTime;
-            sample.outputCpuTime = outputCpuTime;
-            sample.exceptionCpuTime = exceptionCpuTime;
-            sample.inputSize = allBytes.length;
-            sample.outputSize = state.outputBytes;
-            sample.handledException = state.handledException;
-            sample.actualTime = actualTime;
-            sample.commit();
-        }
-
-        if (actualTime > CPU_TIME_FACTOR * cpuTimeBudget) {
-            throw new CpuLimitException("CPU limit triggered. in=" + allBytes.length + " out=" + state.outputBytes + " actual=" + actualTime);
-        }
+        CpuBudget.check(actualTime, baseCpuTime, inputCpuTime, outputCpuTime, exceptionCpuTime,
+            allBytes.length, state.outputBytes, state.handledException);
     }
 
     private void handleException(AttemptState state, Exception e) {
@@ -189,29 +164,9 @@ public abstract class EmbeddedChannelFuzzerBase {
         state.handledException = true;
     }
 
-    private static final class CpuLimitException extends RuntimeException {
-        CpuLimitException(String message) {
-            super(message);
-        }
-    }
-
     private static final class AttemptState {
         long outputBytes;
         boolean exceptionCaught;
         boolean handledException;
-    }
-
-    @Enabled(false)
-    @StackTrace(false)
-    static final class CpuTimeSample extends Event {
-        long factor;
-        long baseCpuTime;
-        long inputCpuTime;
-        long outputCpuTime;
-        long exceptionCpuTime;
-        int inputSize;
-        long outputSize;
-        boolean handledException;
-        long actualTime;
     }
 }
