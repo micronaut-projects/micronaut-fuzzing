@@ -66,7 +66,7 @@ public class RedisDecoderFuzzer extends HandlerFuzzerBase {
      * RedisDecoder.readLine throws an IllegalArgumentException for a line that starts with LF, because it computes a
      * negative length for the content before the CR. Remove once https://github.com/netty/netty/pull/17793 is released.
      */
-    private static boolean isKnownLineFeedBug(Throwable cause) {
+    static boolean isKnownLineFeedBug(Throwable cause) {
         if (!(cause instanceof IllegalArgumentException)) {
             return false;
         }
