@@ -51,6 +51,20 @@ abstract class AbstractDecompressorComparisonFuzzer extends AbstractDirectDecomp
         return exception instanceof DecompressionException;
     }
 
+    /**
+     * Whether a difference between the outputs is expected, when neither decoder failed and neither output was
+     * truncated by the fuzzer. Only use this to ignore known bugs until they are fixed, and match them as narrowly as
+     * possible.
+     *
+     * @param input  The input, split at {@link EmbeddedChannelFuzzerBase#SEPARATOR}
+     * @param legacy The output of the legacy decoder
+     * @param direct The output of the direct decompressor
+     * @return {@code true} if the difference is expected, {@code false} if it should be reported
+     */
+    protected boolean isExpectedDifference(byte[] input, byte[] legacy, byte[] direct) {
+        return false;
+    }
+
     @Override
     final void fuzz(int size, byte[] input) {
         Result legacy = decompressLegacy(size, input);
@@ -65,7 +79,7 @@ abstract class AbstractDecompressorComparisonFuzzer extends AbstractDirectDecomp
                     + " directFailed=" + direct.failed() + " legacyLength=" + legacyBytes.length
                     + " directLength=" + directBytes.length);
             }
-        } else if (!Arrays.equals(legacyBytes, directBytes)) {
+        } else if (!Arrays.equals(legacyBytes, directBytes) && !isExpectedDifference(input, legacyBytes, directBytes)) {
             throw new AssertionError("Decompressed output differs. legacyLength=" + legacyBytes.length
                 + " directLength=" + directBytes.length);
         }
