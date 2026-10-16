@@ -36,12 +36,18 @@ tasks.named<Test>("test") {
     exclude("io/netty/handler/codec/compression/SnappyFrameEncoderFuzzerTest.class")
     exclude("io/netty/handler/codec/compression/ZstdEncoderFuzzerTest.class")
     exclude("io/netty/handler/codec/compression/Lz4FrameEncoderFuzzerTest.class")
+    exclude("io/netty/handler/codec/compression/JdkZlibDecompressorFuzzerTest.class")
     exclude("io/netty/handler/codec/string/StringEncoderFuzzerTest.class")
     exclude("io/netty/handler/codec/http/websocketx/WebSocketFrameAggregatorFuzzerTest.class")
     exclude("io/netty/handler/codec/http2/CleartextHttp2ServerUpgradeHandlerFuzzerTest.class")
     exclude("io/netty/handler/codec/http2/Http2ConnectionHandlerFuzzerTest.class")
     exclude("io/netty/handler/codec/redis/RedisDecoderFuzzerTest.class")
+    exclude("io/netty/handler/codec/haproxy/HAProxyMessageDecoderFuzzerTest.class")
     exclude("io/netty/handler/codec/redis/RedisArrayAggregatorFuzzerTest.class")
+    exclude("io/netty/handler/codec/http/HttpContentCompressorFuzzerTest.class")
+    exclude("io/netty/buffer/PooledByteBufAllocatorFuzzerTest.class")
+    exclude("io/netty/buffer/AdaptiveByteBufAllocatorFuzzerTest.class")
+    exclude("io/netty/handler/codec/http/HttpResponseEncoderFuzzerTest.class")
     exclude("io/netty/handler/codec/http/HttpRequestEncoderFuzzerTest.class")
 }
 
@@ -61,13 +67,21 @@ val nettyFuzzerTest by tasks.registering(Test::class) {
     include("io/netty/handler/codec/compression/SnappyFrameEncoderFuzzerTest.class")
     include("io/netty/handler/codec/compression/ZstdEncoderFuzzerTest.class")
     include("io/netty/handler/codec/compression/Lz4FrameEncoderFuzzerTest.class")
+    include("io/netty/handler/codec/compression/JdkZlibDecompressorFuzzerTest.class")
     include("io/netty/handler/codec/string/StringEncoderFuzzerTest.class")
     include("io/netty/handler/codec/redis/RedisDecoderFuzzerTest.class")
+    include("io/netty/handler/codec/haproxy/HAProxyMessageDecoderFuzzerTest.class")
     include("io/netty/handler/codec/redis/RedisArrayAggregatorFuzzerTest.class")
+    include("io/netty/handler/codec/http/HttpContentCompressorFuzzerTest.class")
+    include("io/netty/buffer/PooledByteBufAllocatorFuzzerTest.class")
+    include("io/netty/buffer/AdaptiveByteBufAllocatorFuzzerTest.class")
+    include("io/netty/handler/codec/http/HttpResponseEncoderFuzzerTest.class")
     include("io/netty/handler/codec/http/HttpRequestEncoderFuzzerTest.class")
 
     shouldRunAfter(tasks.named("test"))
     forkEvery = 1
+    // same max heap as the jazzer and OSS-Fuzz runs
+    maxHeapSize = "512m"
     jvmArgs("-Dio.netty.customResourceLeakDetector=io.netty.util.LeakPresenceDetector")
 
     extensions.configure<JacocoTaskExtension> {
@@ -244,6 +258,7 @@ dependencies {
     runtimeOnly("com.ning:compress-lzf:1.2.1")
     implementation("at.yawk.lz4:lz4-java:1.12.0")
     runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.86")
+    implementation("io.netty:netty-codec-haproxy")
     implementation("io.netty:netty-codec-redis")
     implementation("io.netty:netty-codec-xml")
 
@@ -316,10 +331,12 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.netty.handler.codec.compression.ZstdEncoderFuzzer",
         //"io.netty.handler.codec.compression.Lz4FrameEncoderFuzzer",
         //"io.netty.handler.codec.redis.RedisDecoderFuzzer",
+        //"io.netty.handler.codec.haproxy.HAProxyMessageDecoderFuzzer",
         //"io.netty.handler.codec.redis.RedisArrayAggregatorFuzzer",
         //"io.netty.handler.codec.base64.Base64EncoderFuzzer",
         //"io.netty.handler.codec.compression.BrotliEncoderFuzzer",
         //"io.netty.handler.codec.string.StringEncoderFuzzer",
+        //"io.netty.handler.codec.http.HttpContentCompressorFuzzer",
         //"io.netty.handler.codec.http.HttpRequestEncoderFuzzer",
         //"io.micronaut.fuzzing.http.MediaTypeTarget",
         //"io.netty.handler.HttpRequestDecoderFuzzer"
@@ -333,6 +350,13 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.netty.handler.codec.compression.JdkZlibDecompressorComparisonFuzzer",
         //"io.netty.handler.codec.compression.Bzip2DecompressorComparisonFuzzer",
         //"io.netty.handler.codec.compression.BrotliDecompressorComparisonFuzzer",
+        //"io.micronaut.fuzzing.lz4.Lz4BlockDecompressorTarget",
+        //"io.micronaut.fuzzing.lz4.Lz4RoundTripTarget",
+        //"io.micronaut.fuzzing.lz4.XxHashTarget",
+        //"io.micronaut.fuzzing.lz4.Lz4StreamTarget",
+        //"io.netty.buffer.PooledByteBufAllocatorFuzzer",
+        //"io.netty.buffer.AdaptiveByteBufAllocatorFuzzer",
+        //"io.netty.handler.codec.http.HttpResponseEncoderFuzzer",
     ))
     val jvmArgs = mutableListOf(
         "-Xmx512M",

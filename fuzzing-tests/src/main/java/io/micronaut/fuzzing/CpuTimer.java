@@ -25,7 +25,7 @@ import java.lang.foreign.ValueLayout;
 
 /**
  * Returns the current thread CPU time using clock_gettime(CLOCK_THREAD_CPUTIME_ID)
- * via the Java Foreign Function & Memory API.
+ * via the Java Foreign Function &amp; Memory API.
  */
 @SuppressWarnings({"Since15", "preview"})
 public final class CpuTimer {
