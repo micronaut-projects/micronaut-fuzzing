@@ -48,6 +48,23 @@ class BrotliEncoderFuzzerTest {
         )));
     }
 
+    @Test
+    void manySmallChunksAtHighQualityStayWithinCpuBudget() {
+        // every chunk is flushed as its own metablock, which is expensive at quality 11
+        ByteArrayOutputStream input = new ByteArrayOutputStream();
+        byte[] separator = SEPARATOR.getBytes(UTF_8);
+        for (int i = 0; input.size() < 17000; i++) {
+            input.writeBytes(String.format("%03d", i % 1000).getBytes(UTF_8));
+            input.writeBytes(separator);
+        }
+        BrotliEncoderFuzzer.fuzzerTestOneInput(CannedFuzzedDataProvider.create(List.of(
+            11,
+            24,
+            0,
+            input.toByteArray()
+        )));
+    }
+
     private static byte[] join(byte[] firstChunk, byte[] secondChunk) {
         byte[] separator = SEPARATOR.getBytes(UTF_8);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
