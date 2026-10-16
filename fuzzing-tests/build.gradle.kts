@@ -42,6 +42,7 @@ tasks.named<Test>("test") {
     exclude("io/netty/handler/codec/http2/CleartextHttp2ServerUpgradeHandlerFuzzerTest.class")
     exclude("io/netty/handler/codec/http2/Http2ConnectionHandlerFuzzerTest.class")
     exclude("io/netty/handler/codec/redis/RedisDecoderFuzzerTest.class")
+    exclude("io/netty/handler/codec/haproxy/HAProxyMessageDecoderFuzzerTest.class")
     exclude("io/netty/handler/codec/redis/RedisArrayAggregatorFuzzerTest.class")
     exclude("io/netty/handler/codec/http/HttpContentCompressorFuzzerTest.class")
 }
@@ -65,6 +66,7 @@ val nettyFuzzerTest by tasks.registering(Test::class) {
     include("io/netty/handler/codec/compression/JdkZlibDecompressorFuzzerTest.class")
     include("io/netty/handler/codec/string/StringEncoderFuzzerTest.class")
     include("io/netty/handler/codec/redis/RedisDecoderFuzzerTest.class")
+    include("io/netty/handler/codec/haproxy/HAProxyMessageDecoderFuzzerTest.class")
     include("io/netty/handler/codec/redis/RedisArrayAggregatorFuzzerTest.class")
     include("io/netty/handler/codec/http/HttpContentCompressorFuzzerTest.class")
 
@@ -246,6 +248,7 @@ dependencies {
     runtimeOnly("com.ning:compress-lzf:1.2.1")
     implementation("at.yawk.lz4:lz4-java:1.12.0")
     runtimeOnly("org.bouncycastle:bcpkix-jdk18on:1.86")
+    implementation("io.netty:netty-codec-haproxy")
     implementation("io.netty:netty-codec-redis")
     implementation("io.netty:netty-codec-xml")
 
@@ -318,6 +321,7 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.netty.handler.codec.compression.ZstdEncoderFuzzer",
         //"io.netty.handler.codec.compression.Lz4FrameEncoderFuzzer",
         //"io.netty.handler.codec.redis.RedisDecoderFuzzer",
+        //"io.netty.handler.codec.haproxy.HAProxyMessageDecoderFuzzer",
         //"io.netty.handler.codec.redis.RedisArrayAggregatorFuzzer",
         //"io.netty.handler.codec.base64.Base64EncoderFuzzer",
         //"io.netty.handler.codec.compression.BrotliEncoderFuzzer",
