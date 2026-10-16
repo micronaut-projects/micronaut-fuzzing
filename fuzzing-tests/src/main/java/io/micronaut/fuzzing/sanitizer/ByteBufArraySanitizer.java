@@ -23,6 +23,10 @@ import io.netty.buffer.ByteBuf;
 import java.lang.ref.SoftReference;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.zip.Checksum;
+import java.util.zip.DataFormatException;
+import java.util.zip.Deflater;
+import java.util.zip.Inflater;
 
 /**
  * Tracks guarded byte arrays and reports out-of-bounds access detected through rewritten bytecode.
@@ -133,6 +137,83 @@ public final class ByteBufArraySanitizer {
             }
         }
         System.arraycopy(src, srcPos, dest, destPos, length);
+    }
+
+    // java.util.zip is not instrumented, so it would read and write the guard array instead of the backing array.
+    // These methods check the range and pass the backing array on.
+
+    public static void inflaterSetInput(Inflater inflater, byte[] array, int off, int len) {
+        inflater.setInput(unwrap(array, off, len), off, len);
+    }
+
+    public static void inflaterSetInput(Inflater inflater, byte[] array) {
+        inflater.setInput(unwrap(array, 0, array.length));
+    }
+
+    public static int inflaterInflate(Inflater inflater, byte[] array, int off, int len) throws DataFormatException {
+        return inflater.inflate(unwrap(array, off, len), off, len);
+    }
+
+    public static int inflaterInflate(Inflater inflater, byte[] array) throws DataFormatException {
+        return inflater.inflate(unwrap(array, 0, array.length));
+    }
+
+    public static void inflaterSetDictionary(Inflater inflater, byte[] array, int off, int len) {
+        inflater.setDictionary(unwrap(array, off, len), off, len);
+    }
+
+    public static void inflaterSetDictionary(Inflater inflater, byte[] array) {
+        inflater.setDictionary(unwrap(array, 0, array.length));
+    }
+
+    public static void deflaterSetInput(Deflater deflater, byte[] array, int off, int len) {
+        deflater.setInput(unwrap(array, off, len), off, len);
+    }
+
+    public static void deflaterSetInput(Deflater deflater, byte[] array) {
+        deflater.setInput(unwrap(array, 0, array.length));
+    }
+
+    public static int deflaterDeflate(Deflater deflater, byte[] array, int off, int len, int flush) {
+        return deflater.deflate(unwrap(array, off, len), off, len, flush);
+    }
+
+    public static int deflaterDeflate(Deflater deflater, byte[] array, int off, int len) {
+        return deflater.deflate(unwrap(array, off, len), off, len);
+    }
+
+    public static int deflaterDeflate(Deflater deflater, byte[] array) {
+        return deflater.deflate(unwrap(array, 0, array.length));
+    }
+
+    public static void deflaterSetDictionary(Deflater deflater, byte[] array, int off, int len) {
+        deflater.setDictionary(unwrap(array, off, len), off, len);
+    }
+
+    public static void deflaterSetDictionary(Deflater deflater, byte[] array) {
+        deflater.setDictionary(unwrap(array, 0, array.length));
+    }
+
+    public static void checksumUpdate(Checksum checksum, byte[] array, int off, int len) {
+        checksum.update(unwrap(array, off, len), off, len);
+    }
+
+    public static void checksumUpdate(Checksum checksum, byte[] array) {
+        checksum.update(unwrap(array, 0, array.length));
+    }
+
+    private static byte[] unwrap(byte[] array, int off, int len) {
+        if (array == null || array.length == 0 || array[0] != PATTERN_B1) {
+            return array;
+        }
+        Slot slot = findSlot(array);
+        if (slot == null) {
+            return array;
+        }
+        if (len > 0 && (off < slot.start || (long) off + (long) len > slot.end)) {
+            Jazzer.reportFindingFromHook(new FuzzerSecurityIssueCritical("Out-of-bounds array access"));
+        }
+        return slot.backing;
     }
 
     private static byte[] checkRangeSlow(byte[] array, int pos, int len) {
