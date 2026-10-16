@@ -49,6 +49,7 @@ tasks.named<Test>("test") {
     exclude("io/netty/buffer/AdaptiveByteBufAllocatorFuzzerTest.class")
     exclude("io/netty/handler/codec/http/HttpResponseEncoderFuzzerTest.class")
     exclude("io/netty/handler/codec/http/HttpRequestEncoderFuzzerTest.class")
+    exclude("io/netty/handler/codec/http/HttpClientUpgradeHandlerFuzzerTest.class")
 }
 
 val nettyFuzzerTest by tasks.registering(Test::class) {
@@ -77,6 +78,7 @@ val nettyFuzzerTest by tasks.registering(Test::class) {
     include("io/netty/buffer/AdaptiveByteBufAllocatorFuzzerTest.class")
     include("io/netty/handler/codec/http/HttpResponseEncoderFuzzerTest.class")
     include("io/netty/handler/codec/http/HttpRequestEncoderFuzzerTest.class")
+    include("io/netty/handler/codec/http/HttpClientUpgradeHandlerFuzzerTest.class")
 
     shouldRunAfter(tasks.named("test"))
     forkEvery = 1
