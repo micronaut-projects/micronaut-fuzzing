@@ -95,7 +95,24 @@ abstract class AbstractDirectDecompressorFuzzer {
             return new Result(output, false);
         } catch (DecompressionException e) {
             return new Result(output, true);
+        } catch (RuntimeException e) {
+            if (isExpectedException(e)) {
+                return new Result(output, true);
+            }
+            throw e;
         }
+    }
+
+    /**
+     * Whether an exception other than {@link DecompressionException} thrown by the decompressor is an expected
+     * decoding failure. Only use this to ignore known bugs until they are fixed, and match them as narrowly as
+     * possible.
+     *
+     * @param exception The exception
+     * @return {@code true} if the exception is expected, {@code false} if it should be reported
+     */
+    protected boolean isExpectedException(RuntimeException exception) {
+        return false;
     }
 
     private static Decompressor.Status drain(Decompressor decompressor, OutputCollector output) {

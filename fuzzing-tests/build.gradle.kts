@@ -36,6 +36,7 @@ tasks.named<Test>("test") {
     exclude("io/netty/handler/codec/compression/SnappyFrameEncoderFuzzerTest.class")
     exclude("io/netty/handler/codec/compression/ZstdEncoderFuzzerTest.class")
     exclude("io/netty/handler/codec/compression/Lz4FrameEncoderFuzzerTest.class")
+    exclude("io/netty/handler/codec/compression/JdkZlibDecompressorFuzzerTest.class")
     exclude("io/netty/handler/codec/string/StringEncoderFuzzerTest.class")
     exclude("io/netty/handler/codec/http/websocketx/WebSocketFrameAggregatorFuzzerTest.class")
     exclude("io/netty/handler/codec/http2/CleartextHttp2ServerUpgradeHandlerFuzzerTest.class")
@@ -62,6 +63,7 @@ val nettyFuzzerTest by tasks.registering(Test::class) {
     include("io/netty/handler/codec/compression/SnappyFrameEncoderFuzzerTest.class")
     include("io/netty/handler/codec/compression/ZstdEncoderFuzzerTest.class")
     include("io/netty/handler/codec/compression/Lz4FrameEncoderFuzzerTest.class")
+    include("io/netty/handler/codec/compression/JdkZlibDecompressorFuzzerTest.class")
     include("io/netty/handler/codec/string/StringEncoderFuzzerTest.class")
     include("io/netty/handler/codec/redis/RedisDecoderFuzzerTest.class")
     include("io/netty/handler/codec/redis/RedisArrayAggregatorFuzzerTest.class")
@@ -336,6 +338,10 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.netty.handler.codec.compression.JdkZlibDecompressorComparisonFuzzer",
         //"io.netty.handler.codec.compression.Bzip2DecompressorComparisonFuzzer",
         //"io.netty.handler.codec.compression.BrotliDecompressorComparisonFuzzer",
+        //"io.micronaut.fuzzing.lz4.Lz4BlockDecompressorTarget",
+        //"io.micronaut.fuzzing.lz4.Lz4RoundTripTarget",
+        //"io.micronaut.fuzzing.lz4.XxHashTarget",
+        //"io.micronaut.fuzzing.lz4.Lz4StreamTarget",
         //"io.netty.buffer.PooledByteBufAllocatorFuzzer",
         //"io.netty.buffer.AdaptiveByteBufAllocatorFuzzer",
     ))
