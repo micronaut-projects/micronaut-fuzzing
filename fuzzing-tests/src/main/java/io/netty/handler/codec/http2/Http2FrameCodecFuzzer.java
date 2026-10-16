@@ -42,10 +42,46 @@ public class Http2FrameCodecFuzzer extends HandlerFuzzerBase {
         if (e instanceof Http2Exception || e instanceof Http2FrameStreamException) {
             return;
         }
+        if (isInvalidPushPromiseContentLength(e) || isDataOnReservedStream(e)) {
+            return;
+        }
         super.onException(e);
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws Exception {
+    /**
+     * A PUSH_PROMISE with an invalid content-length header (e.g. not a number) is not converted to a stream
+     * error. Fixed by https://github.com/netty/netty/pull/17867.
+     */
+    private static boolean isInvalidPushPromiseContentLength(Exception e) {
+        return e.getClass() == IllegalArgumentException.class
+            && thrownBy(e, "io.netty.handler.codec.http.HttpUtil", "normalizeAndGetContentLength",
+            "io.netty.handler.codec.http2.DefaultHttp2ConnectionDecoder$FrameReadListener", "onPushPromiseRead");
+    }
+
+    /**
+     * A DATA frame on a stream in RESERVED_REMOTE state (promised by a PUSH_PROMISE, but no HEADERS yet) reaches
+     * the reduced flow state of the stream, which throws. Fixed by https://github.com/netty/netty/pull/17868.
+     */
+    private static boolean isDataOnReservedStream(Exception e) {
+        if (e.getClass() != UnsupportedOperationException.class) {
+            return false;
+        }
+        String reducedFlowState = "io.netty.handler.codec.http2.DefaultHttp2LocalFlowController$2";
+        String flowController = "io.netty.handler.codec.http2.DefaultHttp2LocalFlowController";
+        return thrownBy(e, reducedFlowState, "endOfStream", flowController, "receiveFlowControlledFrame")
+            || thrownBy(e, reducedFlowState, "receiveFlowControlledFrame", flowController, "receiveFlowControlledFrame");
+    }
+
+    private static boolean thrownBy(Exception e, String className, String methodName, String callerClassName, String callerMethodName) {
+        StackTraceElement[] trace = e.getStackTrace();
+        return trace.length >= 2
+            && trace[0].getClassName().equals(className)
+            && trace[0].getMethodName().equals(methodName)
+            && trace[1].getClassName().equals(callerClassName)
+            && trace[1].getMethodName().equals(callerMethodName);
+    }
+
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
         new Http2FrameCodecFuzzer().test(fuzzedDataProvider);
     }
 
