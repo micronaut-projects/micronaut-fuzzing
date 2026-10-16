@@ -19,8 +19,11 @@ import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.Dict;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.HttpDict;
+import io.micronaut.http.HttpStatus;
+import io.micronaut.http.MediaType;
 import io.micronaut.http.body.stream.BodySizeLimits;
 import io.micronaut.http.exceptions.ContentLengthExceededException;
+import io.micronaut.http.exceptions.HttpStatusException;
 import io.micronaut.http.multipart.RawFormField;
 import io.micronaut.http.netty.body.NettyByteBodyFactory;
 import io.micronaut.http.server.netty.multipart.FormDemuxer;
@@ -79,7 +82,16 @@ public class MultipartTarget {
         }
         body.append("--").append(boundary).append("--\r\n");
 
-        byte[] bodyBytes = body.toString().getBytes(StandardCharsets.ISO_8859_1);
+        decode(boundary, body.toString().getBytes(StandardCharsets.ISO_8859_1));
+    }
+
+    /**
+     * Decode a multipart body, ignoring the failures for a malformed body.
+     *
+     * @param boundary  The boundary
+     * @param bodyBytes The body
+     */
+    static void decode(String boundary, byte[] bodyBytes) {
         PostBodyDecoder decoder = PostBodyDecoder.builder().forMultipartBoundary(boundary);
         try {
             // fields() returns a Publisher since micronaut-core 5.3
@@ -88,8 +100,60 @@ public class MultipartTarget {
                     .fields())
                 .doOnNext(RawFormField::close)
                 .blockLast();
-        } catch (FormDecoderException | ContentLengthExceededException | IllegalArgumentException | IllegalStateException ignored) {
+        } catch (FormDecoderException | ContentLengthExceededException ignored) {
+        } catch (HttpStatusException e) {
+            if (!isMalformedBody(e)) {
+                throw e;
+            }
+        } catch (IllegalArgumentException e) {
+            // FormDemuxer parses the Content-Type and Content-Length of a part with MediaType.of
+            // and Long.parseLong, which throw for an invalid value, instead of refusing the body
+            // as malformed
+            if (!isThrownByHeaderParsing(e, MediaType.class.getName(), "of")
+                && !(e instanceof NumberFormatException && isThrownByHeaderParsing(e, Long.class.getName(), "parseLong"))) {
+                throw e;
+            }
         }
+    }
+
+    /**
+     * Whether the exception is thrown by the given method, called by {@link FormDemuxer} to parse
+     * the header of a part.
+     *
+     * @param e         The exception
+     * @param className The class of the method
+     * @param method    The name of the method
+     * @return {@code true} if the method threw the exception for the header
+     */
+    static boolean isThrownByHeaderParsing(Throwable e, String className, String method) {
+        StackTraceElement[] stackTrace = e.getStackTrace();
+        for (int i = 1; i < stackTrace.length; i++) {
+            if (stackTrace[i].getClassName().equals(FormDemuxer.class.getName() + "$Headers") && stackTrace[i].getMethodName().equals("accept")) {
+                return stackTrace[i - 1].getClassName().equals(className) && stackTrace[i - 1].getMethodName().equals(method);
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Whether the exception is how {@link FormDemuxer} refuses a malformed body: a decoder
+     * failure wrapped in a bad request, or a multipart body that ends before its closing
+     * boundary, which {@link FormDemuxer#complete()} refuses.
+     *
+     * @param e The exception
+     * @return {@code true} if the body is malformed
+     */
+    static boolean isMalformedBody(HttpStatusException e) {
+        if (e.getStatus() != HttpStatus.BAD_REQUEST) {
+            return false;
+        }
+        if (e.getCause() != null) {
+            return e.getCause() instanceof FormDecoderException;
+        }
+        StackTraceElement[] stackTrace = e.getStackTrace();
+        return stackTrace.length > 0
+            && stackTrace[0].getClassName().equals(FormDemuxer.class.getName())
+            && stackTrace[0].getMethodName().equals("complete");
     }
 
     private static String sanitizeBoundary(String raw) {
