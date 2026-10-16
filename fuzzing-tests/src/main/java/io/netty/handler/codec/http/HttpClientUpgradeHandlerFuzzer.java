@@ -65,10 +65,43 @@ public class HttpClientUpgradeHandlerFuzzer extends HandlerFuzzerBase {
     }
 
     private static boolean isExpected(Throwable cause) {
-        return cause instanceof Http2Exception || cause instanceof Http2FrameStreamException || cause instanceof IllegalStateException;
+        if (cause instanceof Http2Exception) {
+            // HTTP/2 protocol errors after the upgrade. An Http2Exception that wraps another
+            // exception may hide a bug, so only accept those whose causes are all Http2Exceptions.
+            return isHttp2ProtocolError(cause);
+        }
+        if (cause instanceof Http2FrameStreamException) {
+            return isHttp2ProtocolError(cause.getCause());
+        }
+        if (cause instanceof TooLongHttpContentException) {
+            // The 101 response is aggregated with the configured maxContentLength.
+            return isThrownBy(cause, HttpObjectAggregator.class, "handleOversizedMessage");
+        }
+        if (cause.getClass() == IllegalStateException.class) {
+            // "Read HTTP response without requesting protocol switch" and
+            // "Switching Protocols response with unexpected UPGRADE protocol"
+            return isThrownBy(cause, HttpClientUpgradeHandler.class, "decode");
+        }
+        return false;
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws Exception {
+    private static boolean isHttp2ProtocolError(Throwable cause) {
+        for (Throwable t = cause; t != null; t = t.getCause()) {
+            if (!(t instanceof Http2Exception)) {
+                return false;
+            }
+        }
+        return cause != null;
+    }
+
+    private static boolean isThrownBy(Throwable cause, Class<?> type, String method) {
+        StackTraceElement[] trace = cause.getStackTrace();
+        return trace.length > 0
+            && trace[0].getClassName().equals(type.getName())
+            && trace[0].getMethodName().equals(method);
+    }
+
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
         new HttpClientUpgradeHandlerFuzzer().test(fuzzedDataProvider);
     }
 
