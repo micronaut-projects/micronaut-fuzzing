@@ -69,10 +69,47 @@ public class CleartextHttp2ServerUpgradeHandlerFuzzer extends HandlerFuzzerBase 
             || e instanceof Http2FrameStreamException
             || e instanceof PrematureChannelClosureException
             || e instanceof ClosedChannelException
-            || (e instanceof DecoderException && e.getCause() instanceof Http2Exception)) {
+            || (e instanceof DecoderException && e.getCause() instanceof Http2Exception)
+            || isUpgradeAfterCloseNpe(e)
+            || isInvalidUpgradeRequestTarget(e)) {
             return;
         }
         super.onException(e);
+    }
+
+    /**
+     * Http2FrameCodec does not find the upgrade stream when the upgrade happens after the channel was
+     * closed, e.g. for a pipelined upgrade request after a request with {@code Connection: close}.
+     * Fixed by <a href="https://github.com/netty/netty/pull/17871">netty#17871</a>.
+     */
+    private static boolean isUpgradeAfterCloseNpe(Exception e) {
+        if (!(e instanceof NullPointerException)) {
+            return false;
+        }
+        StackTraceElement[] trace = e.getStackTrace();
+        return trace.length > 0
+            && trace[0].getClassName().equals(Http2FrameCodec.class.getName())
+            && trace[0].getMethodName().equals("userEventTriggered");
+    }
+
+    /**
+     * The request target of the upgrade request can not always be converted to HTTP/2 headers (invalid
+     * {@code :path} characters, or an absolute URI that {@link java.net.URI} rejects).
+     * Fixed by <a href="https://github.com/netty/netty/pull/17869">netty#17869</a>.
+     */
+    private static boolean isInvalidUpgradeRequestTarget(Exception e) {
+        if (!(e instanceof IllegalArgumentException)) {
+            return false;
+        }
+        StackTraceElement[] trace = e.getStackTrace();
+        for (int i = 0; i < trace.length - 1; i++) {
+            if (trace[i].getClassName().equals(HttpConversionUtil.class.getName())
+                && trace[i].getMethodName().equals("toHttp2Headers")) {
+                return trace[i + 1].getClassName().equals(InboundHttpToHttp2Adapter.class.getName())
+                    && trace[i + 1].getMethodName().equals("handle");
+            }
+        }
+        return false;
     }
 
     public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws Exception {
