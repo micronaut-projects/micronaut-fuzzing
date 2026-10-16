@@ -33,6 +33,13 @@ import io.netty.channel.embedded.EmbeddedChannel;
 })
 public class BrotliEncoderFuzzer extends EmbeddedChannelFuzzerBase {
     private static final BrotliMode[] MODES = BrotliMode.values();
+    /**
+     * At quality 10 and 11, brotli runs zopfli and block splitting for every metablock.
+     * {@link BrotliEncoder} flushes every write as its own metablock, so each small input chunk
+     * costs about 0.3ms. With 3-byte chunks between separators, this is up to about 65 budget
+     * units per input byte. Lower qualities stay below 2 units per input byte.
+     */
+    private static final long HIGH_QUALITY_INPUT_CPU_TIME = 150;
     private final BrotliOptions options;
 
     public BrotliEncoderFuzzer(FuzzedDataProvider fuzzedDataProvider) {
@@ -40,6 +47,9 @@ public class BrotliEncoderFuzzer extends EmbeddedChannelFuzzerBase {
         int window = fuzzedDataProvider.consumeInt(10, 24);
         BrotliMode mode = MODES[fuzzedDataProvider.consumeInt(0, MODES.length - 1)];
         options = StandardCompressionOptions.brotli(quality, window, mode);
+        if (quality >= 10) {
+            inputCpuTime = HIGH_QUALITY_INPUT_CPU_TIME;
+        }
     }
 
     public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
