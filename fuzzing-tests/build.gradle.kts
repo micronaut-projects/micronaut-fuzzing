@@ -45,6 +45,8 @@ tasks.named<Test>("test") {
     exclude("io/netty/handler/codec/haproxy/HAProxyMessageDecoderFuzzerTest.class")
     exclude("io/netty/handler/codec/redis/RedisArrayAggregatorFuzzerTest.class")
     exclude("io/netty/handler/codec/http/HttpContentCompressorFuzzerTest.class")
+    exclude("io/netty/buffer/PooledByteBufAllocatorFuzzerTest.class")
+    exclude("io/netty/buffer/AdaptiveByteBufAllocatorFuzzerTest.class")
 }
 
 val nettyFuzzerTest by tasks.registering(Test::class) {
@@ -69,9 +71,13 @@ val nettyFuzzerTest by tasks.registering(Test::class) {
     include("io/netty/handler/codec/haproxy/HAProxyMessageDecoderFuzzerTest.class")
     include("io/netty/handler/codec/redis/RedisArrayAggregatorFuzzerTest.class")
     include("io/netty/handler/codec/http/HttpContentCompressorFuzzerTest.class")
+    include("io/netty/buffer/PooledByteBufAllocatorFuzzerTest.class")
+    include("io/netty/buffer/AdaptiveByteBufAllocatorFuzzerTest.class")
 
     shouldRunAfter(tasks.named("test"))
     forkEvery = 1
+    // same max heap as the jazzer and OSS-Fuzz runs
+    maxHeapSize = "512m"
     jvmArgs("-Dio.netty.customResourceLeakDetector=io.netty.util.LeakPresenceDetector")
 
     extensions.configure<JacocoTaskExtension> {
@@ -343,6 +349,8 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.micronaut.fuzzing.lz4.Lz4RoundTripTarget",
         //"io.micronaut.fuzzing.lz4.XxHashTarget",
         //"io.micronaut.fuzzing.lz4.Lz4StreamTarget",
+        //"io.netty.buffer.PooledByteBufAllocatorFuzzer",
+        //"io.netty.buffer.AdaptiveByteBufAllocatorFuzzer",
     ))
     val jvmArgs = mutableListOf(
         "-Xmx512M",
