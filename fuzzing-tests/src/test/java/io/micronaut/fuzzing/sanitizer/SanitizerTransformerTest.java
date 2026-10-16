@@ -8,7 +8,12 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.zip.CRC32;
+import java.util.zip.Checksum;
+import java.util.zip.Deflater;
+import java.util.zip.Inflater;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -128,6 +133,42 @@ public class SanitizerTransformerTest {
             });
         } finally {
             buffer.release();
+            parent.release();
+        }
+    }
+
+    @Test
+    public void zipUsesBackingArray() throws Exception {
+        byte[] plain = "hello hello hello world".getBytes(StandardCharsets.UTF_8);
+        Deflater deflater = new Deflater();
+        Inflater inflater = new Inflater();
+        ByteBuf parent = ByteBufAllocator.DEFAULT.heapBuffer(256);
+        ByteBuf compressed = parent.retainedSlice(8, 64); // ensure non-zero arrayOffset -> guard path
+        ByteBuf decompressed = parent.retainedSlice(100, 64);
+        try {
+            deflater.setInput(plain);
+            deflater.finish();
+            int n = deflater.deflate(compressed.array(), compressed.arrayOffset(), compressed.capacity());
+            compressed.writerIndex(n);
+
+            inflater.setInput(compressed.array(), compressed.arrayOffset(), n);
+            int m = inflater.inflate(decompressed.array(), decompressed.arrayOffset(), decompressed.capacity());
+            decompressed.writerIndex(m);
+            assertEquals(new String(plain, StandardCharsets.UTF_8), decompressed.toString(StandardCharsets.UTF_8));
+
+            Checksum crc = new CRC32();
+            crc.update(decompressed.array(), decompressed.arrayOffset(), m);
+            CRC32 expected = new CRC32();
+            expected.update(plain);
+            assertEquals(expected.getValue(), crc.getValue());
+
+            Assertions.assertThrows(FuzzerSecurityIssueCritical.class, () ->
+                inflater.inflate(decompressed.array(), decompressed.arrayOffset(), decompressed.capacity() + 1));
+        } finally {
+            deflater.end();
+            inflater.end();
+            compressed.release();
+            decompressed.release();
             parent.release();
         }
     }

@@ -30,7 +30,17 @@ import net.bytebuddy.jar.asm.Type;
 import net.bytebuddy.pool.TypePool;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.zip.Adler32;
+import java.util.zip.CRC32;
+import java.util.zip.CRC32C;
+import java.util.zip.Checksum;
+import java.util.zip.Deflater;
+import java.util.zip.Inflater;
 
 /**
  * ASM visitor wrapper that redirects selected byte-array operations to sanitizer helpers.
@@ -44,6 +54,10 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
     private static final Method ARRAYS_COPY_OF;
     private static final Method ARRAYS_COPY_OF_RANGE;
     private static final Method SYSTEM_ARRAYCOPY;
+    /**
+     * Redirects for {@code java.util.zip} methods that take a byte array, keyed by owner, name and descriptor.
+     */
+    private static final Map<String, Method> ZIP_REDIRECTS = new HashMap<>();
 
     static {
         try {
@@ -55,6 +69,32 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
             SYSTEM_ARRAYCOPY = ByteBufArraySanitizer.class.getMethod("systemArraycopy", Object.class, int.class, Object.class, int.class, int.class);
         } catch (NoSuchMethodException e) {
             throw new RuntimeException(e);
+        }
+        for (Method method : ByteBufArraySanitizer.class.getMethods()) {
+            Class<?>[] parameterTypes = method.getParameterTypes();
+            if (!Modifier.isStatic(method.getModifiers()) || parameterTypes.length == 0) {
+                continue;
+            }
+            List<Class<?>> owners;
+            String prefix;
+            if (parameterTypes[0] == Inflater.class) {
+                owners = List.of(Inflater.class);
+                prefix = "inflater";
+            } else if (parameterTypes[0] == Deflater.class) {
+                owners = List.of(Deflater.class);
+                prefix = "deflater";
+            } else if (parameterTypes[0] == Checksum.class) {
+                owners = List.of(Checksum.class, CRC32.class, CRC32C.class, Adler32.class);
+                prefix = "checksum";
+            } else {
+                continue;
+            }
+            String name = Character.toLowerCase(method.getName().charAt(prefix.length())) + method.getName().substring(prefix.length() + 1);
+            Type[] argumentTypes = Arrays.stream(parameterTypes).skip(1).map(Type::getType).toArray(Type[]::new);
+            String descriptor = Type.getMethodDescriptor(Type.getType(method.getReturnType()), argumentTypes);
+            for (Class<?> owner : owners) {
+                ZIP_REDIRECTS.put(Type.getInternalName(owner) + '.' + name + descriptor, method);
+            }
         }
     }
 
@@ -177,6 +217,12 @@ final class VisitorWrapperImpl extends AsmVisitorWrapper.AbstractBase {
             } else if (name.equals("array") && owner.equals(Type.getInternalName(ByteBuf.class))) {
                 invokeStatic(BYTE_BUF_ARRAY);
                 return;
+            } else if ((opcode == Opcodes.INVOKEVIRTUAL || opcode == Opcodes.INVOKEINTERFACE) && owner.startsWith("java/util/zip/")) {
+                Method redirect = ZIP_REDIRECTS.get(owner + '.' + name + descriptor);
+                if (redirect != null) {
+                    invokeStatic(redirect);
+                    return;
+                }
             }
             super.visitMethodInsn(opcode, owner, name, descriptor, isInterface);
         }
