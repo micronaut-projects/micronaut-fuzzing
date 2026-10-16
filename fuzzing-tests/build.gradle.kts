@@ -48,6 +48,7 @@ tasks.named<Test>("test") {
     exclude("io/netty/buffer/PooledByteBufAllocatorFuzzerTest.class")
     exclude("io/netty/buffer/AdaptiveByteBufAllocatorFuzzerTest.class")
     exclude("io/netty/handler/codec/http/HttpResponseEncoderFuzzerTest.class")
+    exclude("io/netty/handler/codec/http/HttpRequestEncoderFuzzerTest.class")
 }
 
 val nettyFuzzerTest by tasks.registering(Test::class) {
@@ -75,6 +76,7 @@ val nettyFuzzerTest by tasks.registering(Test::class) {
     include("io/netty/buffer/PooledByteBufAllocatorFuzzerTest.class")
     include("io/netty/buffer/AdaptiveByteBufAllocatorFuzzerTest.class")
     include("io/netty/handler/codec/http/HttpResponseEncoderFuzzerTest.class")
+    include("io/netty/handler/codec/http/HttpRequestEncoderFuzzerTest.class")
 
     shouldRunAfter(tasks.named("test"))
     forkEvery = 1
@@ -335,6 +337,7 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.netty.handler.codec.compression.BrotliEncoderFuzzer",
         //"io.netty.handler.codec.string.StringEncoderFuzzer",
         //"io.netty.handler.codec.http.HttpContentCompressorFuzzer",
+        //"io.netty.handler.codec.http.HttpRequestEncoderFuzzer",
         //"io.micronaut.fuzzing.http.MediaTypeTarget",
         //"io.netty.handler.HttpRequestDecoderFuzzer"
         //"io.micronaut.fuzzing.http.UriMatchTemplateTarget",
