@@ -47,6 +47,7 @@ tasks.named<Test>("test") {
     exclude("io/netty/handler/codec/http/HttpContentCompressorFuzzerTest.class")
     exclude("io/netty/buffer/PooledByteBufAllocatorFuzzerTest.class")
     exclude("io/netty/buffer/AdaptiveByteBufAllocatorFuzzerTest.class")
+    exclude("io/netty/handler/codec/http/HttpResponseEncoderFuzzerTest.class")
 }
 
 val nettyFuzzerTest by tasks.registering(Test::class) {
@@ -73,6 +74,7 @@ val nettyFuzzerTest by tasks.registering(Test::class) {
     include("io/netty/handler/codec/http/HttpContentCompressorFuzzerTest.class")
     include("io/netty/buffer/PooledByteBufAllocatorFuzzerTest.class")
     include("io/netty/buffer/AdaptiveByteBufAllocatorFuzzerTest.class")
+    include("io/netty/handler/codec/http/HttpResponseEncoderFuzzerTest.class")
 
     shouldRunAfter(tasks.named("test"))
     forkEvery = 1
@@ -351,6 +353,7 @@ tasks.named<JazzerTask>("jazzer") {
         //"io.micronaut.fuzzing.lz4.Lz4StreamTarget",
         //"io.netty.buffer.PooledByteBufAllocatorFuzzer",
         //"io.netty.buffer.AdaptiveByteBufAllocatorFuzzer",
+        //"io.netty.handler.codec.http.HttpResponseEncoderFuzzer",
     ))
     val jvmArgs = mutableListOf(
         "-Xmx512M",
