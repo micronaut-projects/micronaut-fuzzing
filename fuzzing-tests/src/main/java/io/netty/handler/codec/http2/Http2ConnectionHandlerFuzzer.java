@@ -46,6 +46,11 @@ public class Http2ConnectionHandlerFuzzer extends HandlerFuzzerBase {
             .addLast(new Http2ConnectionHandlerBuilder()
                 .server(true)
                 .frameListener(new Http2FrameAdapter())
+                // With the default timeout, closing the channel while a stream is still active only
+                // sends GOAWAY and schedules the close. EmbeddedChannel cancels the scheduled task on
+                // finish(), so the channel never becomes inactive and the decoder never releases its
+                // buffers, which the leak detector reports. With 0, the close runs during finish().
+                .gracefulShutdownTimeoutMillis(0)
                 .build());
         return channel;
     }

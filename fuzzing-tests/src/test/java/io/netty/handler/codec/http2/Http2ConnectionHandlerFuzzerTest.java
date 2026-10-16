@@ -28,6 +28,16 @@ class Http2ConnectionHandlerFuzzerTest {
         )));
     }
 
+    @Test
+    void openStreamWithPartialFrameAtEnd() throws Exception {
+        // stream 1 stays open and the decoder holds a partial frame header when the channel is closed
+        byte[] hpack = {(byte) 0x82, (byte) 0x86, (byte) 0x84, 0x41, 0x01, 'a'};
+        byte[] headers = concat(new byte[]{0, 0, 6, 1, 4, 0, 0, 0, 1}, hpack);
+        Http2ConnectionHandlerFuzzer.fuzzerTestOneInput(CannedFuzzedDataProvider.create(List.<Object>of(
+            concat(concat(concat(bytes("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"), EMPTY_SETTINGS_FRAME), headers), new byte[]{0, 0, 5})
+        )));
+    }
+
     private static byte[] bytes(String value) {
         return value.getBytes(StandardCharsets.US_ASCII);
     }
