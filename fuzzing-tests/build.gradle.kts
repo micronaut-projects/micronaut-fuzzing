@@ -279,6 +279,7 @@ dependencies {
     testImplementation(mnTest.junit.jupiter.params)
     testImplementation(mn.micronaut.http.client)
     testImplementation(mnTest.micronaut.test.junit5)
+    testImplementation("com.github.luben:zstd-jni:1.5.7-23")
     testAnnotationProcessor(mn.micronaut.inject.java)
 }
 
