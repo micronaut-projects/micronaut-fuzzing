@@ -71,6 +71,21 @@ class HttpClientUpgradeHandlerFuzzerTest {
     }
 
     @Test
+    void truncatedHeaderBlock() {
+        run("HTTP/1.1 101 Switching Protocols\r\n"
+            + "Connection: Upgrade\r\n"
+            + "Upgrade: h2c\r\n"
+            + "\r\n"
+            + "SEP"
+            // empty SETTINGS frame
+            + "\0\0\0\4\0\0\0\0\0"
+            // HEADERS frame on the upgrade stream with END_HEADERS
+            + "\0\0\5\1\4\0\0\0\1"
+            // literal header with name "a" and a value length of 5, but only one byte of the value
+            + "\u0040\u0001a\u0005x");
+    }
+
+    @Test
     void sameInstanceTwice() {
         HttpClientUpgradeHandlerFuzzer fuzzer = new HttpClientUpgradeHandlerFuzzer();
         fuzzer.test(provider("HTTP/1.1 101 Switching Protocols\r\nUpgrade: h2c\r\nContent-Length: 6101\r\n\r\n"));

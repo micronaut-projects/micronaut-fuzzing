@@ -23,6 +23,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.HandlerFuzzerBase;
+import io.netty.handler.codec.http2.DefaultHttp2HeadersDecoder;
 import io.netty.handler.codec.http2.Http2ClientUpgradeCodec;
 import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2FrameCodecBuilder;
@@ -35,6 +36,11 @@ import io.netty.handler.codec.http2.Http2FrameStreamException;
 @FuzzTarget
 @HttpDict
 public class HttpClientUpgradeHandlerFuzzer extends HandlerFuzzerBase {
+    /**
+     * {@code HpackDecoder} is package-private in {@code io.netty.handler.codec.http2}.
+     */
+    private static final String HPACK_DECODER = "io.netty.handler.codec.http2.HpackDecoder";
+
     @Override
     protected EmbeddedChannel setUp() {
         EmbeddedChannel channel = new EmbeddedChannel();
@@ -90,14 +96,47 @@ public class HttpClientUpgradeHandlerFuzzer extends HandlerFuzzerBase {
             if (!(t instanceof Http2Exception)) {
                 return false;
             }
+            if (isHpackDecodeError(t)) {
+                return true;
+            }
         }
         return cause != null;
     }
 
+    /**
+     * {@link DefaultHttp2HeadersDecoder#decodeHeaders} wraps any exception from HPACK decoding
+     * that is not an {@link Http2Exception} in a COMPRESSION_ERROR. {@code HpackDecoder} throws an
+     * {@link IllegalArgumentException} when a string literal is longer than the rest of the
+     * header block.
+     */
+    private static boolean isHpackDecodeError(Throwable cause) {
+        Throwable hpackCause = cause.getCause();
+        return hpackCause != null
+            && hpackCause.getClass() == IllegalArgumentException.class
+            && hpackCause.getCause() == null
+            && isThrownBy(hpackCause, HPACK_DECODER, "notEnoughDataException")
+            && firstFrameOutside(cause, Http2Exception.class.getName()) instanceof StackTraceElement e
+            && e.getClassName().equals(DefaultHttp2HeadersDecoder.class.getName())
+            && e.getMethodName().equals("decodeHeaders");
+    }
+
+    private static StackTraceElement firstFrameOutside(Throwable cause, String className) {
+        for (StackTraceElement e : cause.getStackTrace()) {
+            if (!e.getClassName().equals(className)) {
+                return e;
+            }
+        }
+        return null;
+    }
+
     private static boolean isThrownBy(Throwable cause, Class<?> type, String method) {
+        return isThrownBy(cause, type.getName(), method);
+    }
+
+    private static boolean isThrownBy(Throwable cause, String className, String method) {
         StackTraceElement[] trace = cause.getStackTrace();
         return trace.length > 0
-            && trace[0].getClassName().equals(type.getName())
+            && trace[0].getClassName().equals(className)
             && trace[0].getMethodName().equals(method);
     }
 
