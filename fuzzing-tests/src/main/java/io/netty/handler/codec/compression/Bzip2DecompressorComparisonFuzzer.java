@@ -18,6 +18,7 @@ package io.netty.handler.codec.compression;
 import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
+import io.micronaut.fuzzing.sanitizer.ByteBufArraySanitizer;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.DecoderException;
@@ -46,7 +47,17 @@ public final class Bzip2DecompressorComparisonFuzzer extends AbstractDecompresso
     protected boolean isExpectedLegacyException(Exception exception) {
         // ByteToMessageDecoder wraps unexpected exceptions in a DecoderException, so look at the cause
         return super.isExpectedLegacyException(exception)
-            || (exception instanceof DecoderException && isUnvalidatedHuffmanCodeLength(exception.getCause()));
+            || (exception instanceof DecoderException && isKnownLegacyBug(exception.getCause()));
+    }
+
+    /**
+     * Whether the cause of a {@link DecoderException} from {@link Bzip2Decoder} is a known bug.
+     *
+     * @param cause The cause
+     * @return {@code true} if this is a known bug
+     */
+    static boolean isKnownLegacyBug(Throwable cause) {
+        return isUnvalidatedHuffmanCodeLength(cause) || isNextSymbolAfterError(cause);
     }
 
     /**
@@ -65,6 +76,31 @@ public final class Bzip2DecompressorComparisonFuzzer extends AbstractDecompresso
         return trace.length > 0
             && trace[0].getClassName().equals(Bzip2HuffmanStageDecoder.class.getName())
             && trace[0].getMethodName().equals("createHuffmanDecodingTables");
+    }
+
+    /**
+     * Netty bug: {@link Bzip2Decoder} does not stop after an error, and continues from its inconsistent state on the
+     * next input or when the channel is closed. After "error decoding block", {@code Bzip2HuffmanStageDecoder.nextSymbol}
+     * reads past the end of the selectors. Fixed by
+     * <a href="https://github.com/netty/netty/pull/18259">netty/netty#18259</a>; remove this once it is released.
+     *
+     * @param exception The exception
+     * @return {@code true} if this is the known bug
+     */
+    static boolean isNextSymbolAfterError(Throwable exception) {
+        if (!(exception instanceof ArrayIndexOutOfBoundsException) || exception.getCause() != null) {
+            return false;
+        }
+        StackTraceElement[] trace = exception.getStackTrace();
+        int i = 0;
+        // the sanitizer replaces the load from the selectors array
+        if (i < trace.length && trace[i].getClassName().equals(ByteBufArraySanitizer.class.getName())
+            && trace[i].getMethodName().equals("baload")) {
+            i++;
+        }
+        return i < trace.length
+            && trace[i].getClassName().equals(Bzip2HuffmanStageDecoder.class.getName())
+            && trace[i].getMethodName().equals("nextSymbol");
     }
 
     public static void fuzzerTestOneInput(FuzzedDataProvider data) {
