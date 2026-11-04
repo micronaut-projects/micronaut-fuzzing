@@ -65,8 +65,14 @@ class MultipartTargetTest {
     }
 
     @Test
+    void invalidExtendedParameterEscape() {
+        MultipartTarget.decode("boundary", "--boundary\r\nContent-Disposition: form-data; name*=UTF-8''%\r\n\r\nvalue\r\n--boundary--\r\n".getBytes(StandardCharsets.ISO_8859_1));
+    }
+
+    @Test
     void otherIllegalArgument() {
         assertFalse(MultipartTarget.isThrownByHeaderParsing(new IllegalArgumentException(), "io.micronaut.http.MediaType", "of"));
+        assertFalse(MultipartTarget.isInvalidExtendedParameterEscape(new IllegalArgumentException()));
     }
 
     @Test
