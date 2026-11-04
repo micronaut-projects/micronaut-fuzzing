@@ -61,6 +61,19 @@ import java.util.List;
 })
 public final class Lz4RoundTripTarget {
     private static final long INPUT_CPU_TIME = 200;
+    /**
+     * For every position, the Java high compressors walk a hash chain of up to
+     * {@code 2^(level-1)} earlier positions (65536 at level 17). On repetitive input, the cost
+     * per input byte therefore grows with {@code min(length, 2^(level-1))}, see
+     * {@link LZ4Factory#highCompressor(int)}. Under Jazzer, the worst inputs we measured (runs of
+     * one byte value, with a random byte on average every 128 to 512 bytes) cost up to 0.07
+     * budget units per input byte and chain entry: 160 units per byte at level 12 and 250 at
+     * level 17, for 8 KiB of input. OSS-Fuzz reported an input of 3039 bytes at a high level that
+     * took 1.18s, about 0.12 units per byte and chain entry. This allows twice that, 0.25 units.
+     */
+    private static final int HC_CHAIN_ENTRIES_PER_CPU_TIME = 4;
+    private static final int DEFAULT_HC_LEVEL = 9;
+    private static final int MAX_HC_LEVEL = 17;
     private static final int DECOMPRESS_SLACK = 16;
 
     private Lz4RoundTripTarget() {
@@ -69,7 +82,19 @@ public final class Lz4RoundTripTarget {
     public static void fuzzerTestOneInput(FuzzedDataProvider provider) {
         Config config = Config.read(provider);
         byte[] data = provider.consumeRemainingAsBytes();
-        Lz4FuzzSupport.runWithCpuLimit(data.length, INPUT_CPU_TIME, () -> run(Lz4FuzzSupport.codecs(), config, data));
+        Lz4FuzzSupport.runWithCpuLimit(data.length, inputCpuTime(config.level(), data.length), () -> run(Lz4FuzzSupport.codecs(), config, data));
+    }
+
+    /**
+     * @param level  The compression level of the high compressors
+     * @param length The input length
+     * @return The CPU budget per input byte, see {@link #HC_CHAIN_ENTRIES_PER_CPU_TIME}
+     */
+    static long inputCpuTime(int level, int length) {
+        // same clamping as LZ4Factory.highCompressor(int)
+        int effectiveLevel = level < 1 ? DEFAULT_HC_LEVEL : Math.min(level, MAX_HC_LEVEL);
+        int maxChainEntries = 1 << (effectiveLevel - 1);
+        return INPUT_CPU_TIME + Math.min(length, maxChainEntries) / HC_CHAIN_ENTRIES_PER_CPU_TIME;
     }
 
     static void run(List<Codec> codecs, Config config, byte[] data) {
