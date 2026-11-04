@@ -38,13 +38,13 @@ public class Bzip2DecoderFuzzer extends DecompressorFuzzerBase {
 
     @Override
     protected void onException(Exception e) {
-        if (e instanceof DecoderException && (e.getCause() instanceof ArrayIndexOutOfBoundsException || e.getCause() instanceof IndexOutOfBoundsException)) {
+        if (e instanceof DecoderException && Bzip2DecompressorComparisonFuzzer.isKnownLegacyBug(e.getCause())) {
             return;
         }
         super.onException(e);
     }
 
-    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) throws Exception {
+    public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
         new Bzip2DecoderFuzzer().test(fuzzedDataProvider);
     }
 

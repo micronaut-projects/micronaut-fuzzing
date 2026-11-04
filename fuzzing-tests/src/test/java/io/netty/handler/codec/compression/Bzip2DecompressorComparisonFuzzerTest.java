@@ -69,18 +69,53 @@ class Bzip2DecompressorComparisonFuzzerTest {
     }
 
     @Test
+    void decodingAfterError() {
+        // on Netty versions without https://github.com/netty/netty/pull/18259 this hits the known bug filter
+        fuzz(1024, tooFewSelectors());
+    }
+
+    @Test
     void unrelatedExceptionsAreNotIgnored() {
         Bzip2DecompressorComparisonFuzzer fuzzer = new Bzip2DecompressorComparisonFuzzer();
         assertFalse(fuzzer.isExpectedLegacyException(new DecoderException(new ArrayIndexOutOfBoundsException())));
         assertFalse(fuzzer.isExpectedLegacyException(new DecoderException(new IllegalStateException())));
         assertFalse(fuzzer.isExpectedException(new ArrayIndexOutOfBoundsException()));
+        assertFalse(Bzip2DecompressorComparisonFuzzer.isKnownLegacyBug(new ArrayIndexOutOfBoundsException()));
+        assertFalse(Bzip2DecompressorComparisonFuzzer.isKnownLegacyBug(new IndexOutOfBoundsException()));
+    }
+
+    /**
+     * Build a bzip2 stream whose first block has a single selector, but more than the 50 Huffman symbols it covers.
+     * The legacy decoder fails with "error decoding block", and decodes more symbols when the channel is closed.
+     */
+    static byte[] tooFewSelectors() {
+        BitWriter bits = new BitWriter();
+        bits.write(0, 1); // not randomised
+        bits.write(0, 24); // BWT start pointer
+        bits.write(1, 16); // symbol map: first range in use
+        bits.write(0x8000, 16); // symbol map: only the first byte value
+        bits.write(2, 3); // Huffman groups
+        bits.write(1, 15); // selectors
+        bits.write(0, 1); // selector MTF 0
+        for (int table = 0; table < 2; table++) {
+            bits.write(1, 5); // code length 1
+            bits.write(0, 1); // RUNA: length 1
+            bits.write(0b10, 2); // increment
+            bits.write(0, 1); // RUNB: length 2
+            bits.write(0, 1); // end of block: length 2
+        }
+        bits.write(0, 64 * 6); // RUNA symbols
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.writeBytes(new byte[] {'B', 'Z', 'h', '1', 0x31, 0x41, 0x59, 0x26, 0x53, 0x59, 0, 0, 0, 0});
+        out.writeBytes(bits.toByteArray());
+        return out.toByteArray();
     }
 
     private static void fuzz(int size, byte[] input) {
         Bzip2DecompressorComparisonFuzzer.fuzzerTestOneInput(CannedFuzzedDataProvider.create(List.of(size, input)));
     }
 
-    private static byte[] compress(byte[] input) {
+    static byte[] compress(byte[] input) {
         EmbeddedChannel channel = new EmbeddedChannel(new Bzip2Encoder());
         channel.writeOutbound(channel.alloc().buffer().writeBytes(input));
         channel.finish();
