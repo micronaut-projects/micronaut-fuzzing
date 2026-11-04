@@ -71,7 +71,8 @@ public class CleartextHttp2ServerUpgradeHandlerFuzzer extends HandlerFuzzerBase 
             || e instanceof ClosedChannelException
             || (e instanceof DecoderException && e.getCause() instanceof Http2Exception)
             || isUpgradeAfterCloseNpe(e)
-            || isInvalidUpgradeRequestTarget(e)) {
+            || isInvalidUpgradeRequest(e)
+            || isInvalidUpgradeRequestCookie(e)) {
             return;
         }
         super.onException(e);
@@ -93,20 +94,44 @@ public class CleartextHttp2ServerUpgradeHandlerFuzzer extends HandlerFuzzerBase 
     }
 
     /**
-     * The request target of the upgrade request can not always be converted to HTTP/2 headers (invalid
-     * {@code :path} characters, or an absolute URI that {@link java.net.URI} rejects).
-     * Fixed by <a href="https://github.com/netty/netty/pull/17869">netty#17869</a>.
+     * The upgrade request can not always be converted to HTTP/2 headers (invalid {@code :path} characters, an
+     * absolute URI that {@link java.net.URI} rejects, or a {@code te} header or trailer that is not valid CSV).
+     * Fixed by <a href="https://github.com/netty/netty/pull/17869">netty#17869</a>, except for the trailers,
+     * which are fixed by <a href="https://github.com/netty/netty/pull/18258">netty#18258</a>.
      */
-    private static boolean isInvalidUpgradeRequestTarget(Exception e) {
-        if (!(e instanceof IllegalArgumentException)) {
+    private static boolean isInvalidUpgradeRequest(Exception e) {
+        return e instanceof IllegalArgumentException && isThrownByUpgradeRequestConversion(e);
+    }
+
+    /**
+     * {@code HttpConversionUtil.splitValidCookieHeader} wraps the {@link IllegalArgumentException} for a cookie
+     * part that fails the HTTP/2 header validation (e.g. {@code cookie: a=b;  c=d}) in an
+     * {@link IllegalStateException}. Fixed by <a href="https://github.com/netty/netty/pull/18258">netty#18258</a>.
+     */
+    private static boolean isInvalidUpgradeRequestCookie(Exception e) {
+        if (!(e instanceof IllegalStateException) || !(e.getCause() instanceof IllegalArgumentException)) {
             return false;
         }
         StackTraceElement[] trace = e.getStackTrace();
+        return trace.length > 0
+            && trace[0].getClassName().equals(HttpConversionUtil.class.getName())
+            && trace[0].getMethodName().equals("splitValidCookieHeader")
+            && isThrownByUpgradeRequestConversion(e);
+    }
+
+    /**
+     * Whether the exception is thrown by {@code HttpConversionUtil.toHttp2Headers} called from
+     * {@code InboundHttpToHttp2Adapter.handle}. The {@code toHttp2Headers} overloads call each other, so the
+     * call from {@code handle} is not necessarily the first {@code toHttp2Headers} frame.
+     */
+    private static boolean isThrownByUpgradeRequestConversion(Exception e) {
+        StackTraceElement[] trace = e.getStackTrace();
         for (int i = 0; i < trace.length - 1; i++) {
             if (trace[i].getClassName().equals(HttpConversionUtil.class.getName())
-                && trace[i].getMethodName().equals("toHttp2Headers")) {
-                return trace[i + 1].getClassName().equals(InboundHttpToHttp2Adapter.class.getName())
-                    && trace[i + 1].getMethodName().equals("handle");
+                && trace[i].getMethodName().equals("toHttp2Headers")
+                && trace[i + 1].getClassName().equals(InboundHttpToHttp2Adapter.class.getName())
+                && trace[i + 1].getMethodName().equals("handle")) {
+                return true;
             }
         }
         return false;

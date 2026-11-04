@@ -61,6 +61,32 @@ class CleartextHttp2ServerUpgradeHandlerFuzzerTest {
     }
 
     @Test
+    void ignoresInvalidTeHeaderInUpgradeRequest() throws Exception {
+        // https://github.com/netty/netty/pull/17869
+        fuzz("GET / HTTP/1.1\r\nte: a,\"b\r\n" + UPGRADE_HEADERS + "\r\n");
+    }
+
+    @Test
+    void ignoresInvalidCookieHeaderInUpgradeRequest() throws Exception {
+        // https://github.com/netty/netty/pull/18258
+        fuzz("GET / HTTP/1.1\r\ncookie: a=b;  c=d\r\n" + UPGRADE_HEADERS + "\r\n");
+    }
+
+    @Test
+    void ignoresInvalidTeTrailerInUpgradeRequest() throws Exception {
+        // https://github.com/netty/netty/pull/18258
+        fuzz("POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n" + UPGRADE_HEADERS + "\r\n"
+            + "3\r\nabc\r\n0\r\nte: a,\"b\r\n\r\n");
+    }
+
+    @Test
+    void ignoresInvalidCookieTrailerInUpgradeRequest() throws Exception {
+        // https://github.com/netty/netty/pull/18258
+        fuzz("POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n" + UPGRADE_HEADERS + "\r\n"
+            + "3\r\nabc\r\n0\r\ncookie: a=b;  c=d\r\n\r\n");
+    }
+
+    @Test
     void reportsSimilarExceptionsFromOtherPlaces() {
         CleartextHttp2ServerUpgradeHandlerFuzzer fuzzer = new CleartextHttp2ServerUpgradeHandlerFuzzer();
 
@@ -77,6 +103,22 @@ class CleartextHttp2ServerUpgradeHandlerFuzzerTest {
             frame(HttpToHttp2ConnectionHandler.class, "write")
         });
         assertThrows(IllegalArgumentException.class, () -> fuzzer.onException(iae));
+
+        IllegalStateException cookieIse = new IllegalStateException(new IllegalArgumentException());
+        cookieIse.setStackTrace(new StackTraceElement[]{
+            frame(HttpConversionUtil.class, "splitValidCookieHeader"),
+            frame(HttpConversionUtil.class, "toHttp2Headers"),
+            frame(HttpToHttp2ConnectionHandler.class, "write")
+        });
+        assertThrows(IllegalStateException.class, () -> fuzzer.onException(cookieIse));
+
+        IllegalStateException otherIse = new IllegalStateException();
+        otherIse.setStackTrace(new StackTraceElement[]{
+            frame(HttpConversionUtil.class, "splitValidCookieHeader"),
+            frame(HttpConversionUtil.class, "toHttp2Headers"),
+            frame(InboundHttpToHttp2Adapter.class, "handle")
+        });
+        assertThrows(IllegalStateException.class, () -> fuzzer.onException(otherIse));
     }
 
     private static StackTraceElement frame(Class<?> cls, String method) {
