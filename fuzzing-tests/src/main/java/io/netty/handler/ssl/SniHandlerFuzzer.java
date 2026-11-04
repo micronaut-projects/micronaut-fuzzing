@@ -30,6 +30,7 @@ import io.netty.util.DomainNameMapping;
 import io.netty.util.DomainNameMappingBuilder;
 
 import javax.net.ssl.SSLException;
+import java.net.IDN;
 import java.security.cert.CertificateException;
 import java.text.ParseException;
 
@@ -59,7 +60,7 @@ public final class SniHandlerFuzzer extends HandlerFuzzerBase {
 
     private final int maxClientHelloLength;
 
-    private SniHandlerFuzzer(int maxClientHelloLength) {
+    SniHandlerFuzzer(int maxClientHelloLength) {
         this.maxClientHelloLength = maxClientHelloLength;
     }
 
@@ -87,6 +88,9 @@ public final class SniHandlerFuzzer extends HandlerFuzzerBase {
     }
 
     private static boolean isExpected(Throwable cause) {
+        if (isInvalidHostName(cause)) {
+            return true;
+        }
         if (cause instanceof TooLongFrameException ||
             cause instanceof SSLException) {
             return true;
@@ -99,6 +103,38 @@ public final class SniHandlerFuzzer extends HandlerFuzzerBase {
         }
         Throwable nested = cause.getCause();
         return nested != null && isExpected(nested);
+    }
+
+    /**
+     * {@link DomainNameMapping} converts a host name with non-ASCII characters (non-ASCII SNI bytes decode to
+     * U+FFFD) with {@link IDN#toASCII(String, int)}, which rejects invalid names such as names with an empty label.
+     * {@link SniHandler} then fails the handshake with a {@link DecoderException}, before any {@link SslContext}
+     * is selected.
+     */
+    private static boolean isInvalidHostName(Throwable cause) {
+        if (cause.getClass() != DecoderException.class
+            || !isTopFrame(cause, SniHandler.class.getName(), "onLookupComplete")) {
+            return false;
+        }
+        Throwable nested = cause.getCause();
+        if (nested == null || nested.getClass() != IllegalArgumentException.class
+            || !isTopFrame(nested, IDN.class.getName(), null)) {
+            return false;
+        }
+        for (StackTraceElement element : nested.getStackTrace()) {
+            if (element.getClassName().equals(DomainNameMapping.class.getName())
+                && element.getMethodName().equals("normalizeHostname")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isTopFrame(Throwable t, String className, String methodName) {
+        StackTraceElement[] trace = t.getStackTrace();
+        return trace.length > 0
+            && trace[0].getClassName().equals(className)
+            && (methodName == null || trace[0].getMethodName().equals(methodName));
     }
 
     public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {

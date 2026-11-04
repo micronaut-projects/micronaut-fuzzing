@@ -54,6 +54,7 @@ tasks.named<Test>("test") {
     exclude("io/netty/handler/codec/http/HttpResponseEncoderFuzzerTest.class")
     exclude("io/netty/handler/codec/http/HttpRequestEncoderFuzzerTest.class")
     exclude("io/netty/handler/codec/http/HttpClientUpgradeHandlerFuzzerTest.class")
+    exclude("io/netty/handler/ssl/SniHandlerFuzzerTest.class")
 }
 
 val nettyFuzzerTest by tasks.registering(Test::class) {
@@ -87,6 +88,7 @@ val nettyFuzzerTest by tasks.registering(Test::class) {
     include("io/netty/handler/codec/http/HttpResponseEncoderFuzzerTest.class")
     include("io/netty/handler/codec/http/HttpRequestEncoderFuzzerTest.class")
     include("io/netty/handler/codec/http/HttpClientUpgradeHandlerFuzzerTest.class")
+    include("io/netty/handler/ssl/SniHandlerFuzzerTest.class")
 
     shouldRunAfter(tasks.named("test"))
     forkEvery = 1
