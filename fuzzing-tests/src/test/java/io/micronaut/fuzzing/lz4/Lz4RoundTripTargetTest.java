@@ -16,6 +16,7 @@
 package io.micronaut.fuzzing.lz4;
 
 import com.code_intelligence.jazzer.api.CannedFuzzedDataProvider;
+import io.micronaut.fuzzing.CpuBudget;
 import io.micronaut.fuzzing.lz4.Lz4FuzzSupport.BufferKind;
 import io.micronaut.fuzzing.lz4.Lz4FuzzSupport.Codec;
 import net.jpountz.lz4.LZ4Compressor;
@@ -28,6 +29,8 @@ import java.nio.ByteOrder;
 import java.util.List;
 import java.util.Random;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -60,6 +63,34 @@ class Lz4RoundTripTargetTest {
                 Lz4RoundTripTarget.run(Lz4FuzzSupport.codecs(), config(3, true, maxDestLen, 0b11_0011), data);
             }
         }
+    }
+
+    @Test
+    void repetitiveInputAtHighLevel() {
+        // long chains of equal 4-byte sequences with short matches, the worst case of the Java high compressors
+        byte[] data = new byte[8192];
+        Random random = new Random(2);
+        for (int i = 0; i < data.length; i++) {
+            data[i] = (byte) (random.nextInt(512) == 0 ? random.nextInt() : 'a');
+        }
+        Lz4RoundTripTarget.fuzzerTestOneInput(CannedFuzzedDataProvider.create(List.of(
+            17, 1, 0, 0, 0, 0, 0, 0, 0, 0, data
+        )));
+    }
+
+    @Test
+    void cpuBudgetGrowsWithLevel() {
+        assertEquals(Lz4RoundTripTarget.inputCpuTime(9, 100_000), Lz4RoundTripTarget.inputCpuTime(-1, 100_000));
+        assertEquals(Lz4RoundTripTarget.inputCpuTime(17, 100_000), Lz4RoundTripTarget.inputCpuTime(18, 100_000));
+        assertTrue(Lz4RoundTripTarget.inputCpuTime(9, 100_000) < Lz4RoundTripTarget.inputCpuTime(12, 100_000));
+        assertEquals(Lz4RoundTripTarget.inputCpuTime(17, 1000), Lz4RoundTripTarget.inputCpuTime(12, 1000));
+        // input of 3039 bytes at a high level that OSS-Fuzz reported with the previous budget of 200 units per byte
+        long actualTime = 1_177_925_687;
+        int length = 3039;
+        assertThrows(CpuBudget.CpuLimitException.class, () -> CpuBudget.check(
+            actualTime, CpuBudget.DEFAULT_BASE_CPU_TIME, 200, 0, 0, length, 0, false));
+        assertDoesNotThrow(() -> CpuBudget.check(
+            actualTime, CpuBudget.DEFAULT_BASE_CPU_TIME, Lz4RoundTripTarget.inputCpuTime(17, length), 0, 0, length, 0, false));
     }
 
     @Test
