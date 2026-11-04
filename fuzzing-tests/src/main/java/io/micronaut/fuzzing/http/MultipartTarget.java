@@ -110,7 +110,8 @@ public class MultipartTarget {
             // and Long.parseLong, which throw for an invalid value, instead of refusing the body
             // as malformed
             if (!isThrownByHeaderParsing(e, MediaType.class.getName(), "of")
-                && !(e instanceof NumberFormatException && isThrownByHeaderParsing(e, Long.class.getName(), "parseLong"))) {
+                && !(e instanceof NumberFormatException && isThrownByHeaderParsing(e, Long.class.getName(), "parseLong"))
+                && !isInvalidExtendedParameterEscape(e)) {
                 throw e;
             }
         }
@@ -130,6 +131,29 @@ public class MultipartTarget {
         for (int i = 1; i < stackTrace.length; i++) {
             if (stackTrace[i].getClassName().equals(FormDemuxer.class.getName() + "$Headers") && stackTrace[i].getMethodName().equals("accept")) {
                 return stackTrace[i - 1].getClassName().equals(className) && stackTrace[i - 1].getMethodName().equals(method);
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Whether the exception is thrown by {@code QueryStringDecoder.decodeComponent} for an invalid
+     * percent escape in an extended parameter of the {@code Content-Disposition} of a part (e.g.
+     * {@code name*=UTF-8''%}). {@code ParmParser} does not catch it. Fixed by
+     * https://github.com/netty-contrib/codec-multipart/pull/68.
+     *
+     * @param e The exception
+     * @return {@code true} if the exception is thrown for an invalid escape in an extended parameter
+     */
+    static boolean isInvalidExtendedParameterEscape(IllegalArgumentException e) {
+        StackTraceElement[] stackTrace = e.getStackTrace();
+        for (int i = 0; i < stackTrace.length; i++) {
+            if (stackTrace[i].getClassName().equals("io.netty.contrib.multipart.ParmParser") && stackTrace[i].getMethodName().equals("run")) {
+                return i > 0;
+            }
+            if (!stackTrace[i].getClassName().equals("io.netty.handler.codec.http.QueryStringDecoder")
+                || !stackTrace[i].getMethodName().equals("decodeComponent")) {
+                return false;
             }
         }
         return false;
