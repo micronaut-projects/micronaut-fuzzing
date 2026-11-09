@@ -1,9 +1,9 @@
 name: OSS-Fuzz integration test
 # Builds the fuzzers the way OSS-Fuzz does and fuzzes briefly. This runs on the runners
-# the Micronaut organization shares, not on Google infrastructure, and takes 30 to 60
-# minutes, so it runs nightly rather than on every push. The build uses micronaut-core
-# master, so it checks this repository against the current core more than it checks any
-# single commit here.
+# the Micronaut organization shares, not on Google infrastructure, and takes 60 to 90
+# minutes, so it runs nightly rather than on every push. The build uses micronaut-core's
+# default branch, so it checks this repository against the current core more than it
+# checks any single commit here.
 on:
   schedule:
     - cron: '0 2 * * *'
@@ -15,7 +15,7 @@ concurrency:
 jobs:
   Run-OSS-Fuzz:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     permissions:
       security-events: write
     steps:
@@ -29,7 +29,9 @@ jobs:
         uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@master
         with:
           oss-fuzz-project-name: micronaut
-          fuzz-seconds: '60'
+          # Split evenly between the targets, rounded down. With fewer seconds than targets,
+          # each target gets 0 seconds and run_fuzzers fails.
+          fuzz-seconds: '300'
           output-sarif: true
           language: 'jvm'
       - name: Upload SARIF
