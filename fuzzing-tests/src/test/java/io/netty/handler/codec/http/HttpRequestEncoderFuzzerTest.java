@@ -89,9 +89,7 @@ class HttpRequestEncoderFuzzerTest {
             new Request(HTTP_1_1, "GET", "/ä€😀?q=Ā").full("x"),
             new Request(CUSTOM_VERSION, "GET", "/custom").version("http/1.1").full(""),
             // the decoder only accepts HTTP/x.y
-            new Request(CUSTOM_VERSION, "GET", "/custom").version("ICAP/01.0").full(""),
-            // whitespace other than SP passes validation but can't round trip
-            new Request(HTTP_1_1, "GET", "/a\tb").full("")
+            new Request(CUSTOM_VERSION, "GET", "/custom").version("ICAP/01.0").full("")
         );
     }
 
@@ -108,6 +106,12 @@ class HttpRequestEncoderFuzzerTest {
             0,
             new Request(HTTP_1_1, "GET", "/a b").full("body"),
             new Request(HTTP_1_1, "GET", "/a\r\nHost: x").chunk(HTTP_CONTENT, "body").emptyLast()
+        );
+        run(
+            0,
+            new Request(HTTP_1_1, "GET", "/a\tb").full(""),
+            new Request(HTTP_1_1, "GET", "/a\u0000b").full(""),
+            new Request(HTTP_1_1, "GET", "/a\u007Fb").full("")
         );
     }
 
