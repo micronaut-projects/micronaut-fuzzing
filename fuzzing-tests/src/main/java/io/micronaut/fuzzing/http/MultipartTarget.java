@@ -139,22 +139,32 @@ public class MultipartTarget {
     /**
      * Whether the exception is thrown by {@code QueryStringDecoder.decodeComponent} for an invalid
      * percent escape in an extended parameter of the {@code Content-Disposition} of a part (e.g.
-     * {@code name*=UTF-8''%}). {@code ParmParser} does not catch it. Fixed by
-     * https://github.com/netty-contrib/codec-multipart/pull/68.
+     * {@code name*=UTF-8''%} or {@code name*=UTF-8''%zz}). {@code decodeComponent} throws it
+     * either itself, for an unterminated escape, or through {@code StringUtil.decodeHexByte}, for
+     * an invalid hex digit. {@code ParmParser} does not catch it. Ignored until
+     * https://github.com/netty-contrib/codec-multipart/pull/68 is released.
      *
      * @param e The exception
      * @return {@code true} if the exception is thrown for an invalid escape in an extended parameter
      */
     static boolean isInvalidExtendedParameterEscape(IllegalArgumentException e) {
         StackTraceElement[] stackTrace = e.getStackTrace();
-        for (int i = 0; i < stackTrace.length; i++) {
+        int i = 0;
+        if (stackTrace.length > 0
+            && stackTrace[0].getClassName().equals("io.netty.util.internal.StringUtil")
+            && stackTrace[0].getMethodName().equals("decodeHexByte")) {
+            i++;
+        }
+        int decodeComponentFrames = 0;
+        for (; i < stackTrace.length; i++) {
             if (stackTrace[i].getClassName().equals("io.netty.contrib.multipart.ParmParser") && stackTrace[i].getMethodName().equals("run")) {
-                return i > 0;
+                return decodeComponentFrames > 0;
             }
             if (!stackTrace[i].getClassName().equals("io.netty.handler.codec.http.QueryStringDecoder")
                 || !stackTrace[i].getMethodName().equals("decodeComponent")) {
                 return false;
             }
+            decodeComponentFrames++;
         }
         return false;
     }

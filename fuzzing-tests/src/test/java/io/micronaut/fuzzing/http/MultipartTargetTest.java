@@ -70,9 +70,21 @@ class MultipartTargetTest {
     }
 
     @Test
+    void invalidExtendedParameterHexEscape() {
+        MultipartTarget.decode("boundary", "--boundary\r\nContent-Disposition: form-data; name*=UTF-8''%Rc\r\n\r\nvalue\r\n--boundary--\r\n".getBytes(StandardCharsets.ISO_8859_1));
+        MultipartTarget.decode("boundary", "--boundary\r\nContent-Disposition: form-data; name*=UTF-8''%zz\r\n\r\nvalue\r\n--boundary--\r\n".getBytes(StandardCharsets.ISO_8859_1));
+    }
+
+    @Test
     void otherIllegalArgument() {
         assertFalse(MultipartTarget.isThrownByHeaderParsing(new IllegalArgumentException(), "io.micronaut.http.MediaType", "of"));
         assertFalse(MultipartTarget.isInvalidExtendedParameterEscape(new IllegalArgumentException()));
+        IllegalArgumentException onlyHexByte = new IllegalArgumentException();
+        onlyHexByte.setStackTrace(new StackTraceElement[]{
+            new StackTraceElement("io.netty.util.internal.StringUtil", "decodeHexByte", null, -1),
+            new StackTraceElement("io.netty.contrib.multipart.ParmParser", "run", null, -1)
+        });
+        assertFalse(MultipartTarget.isInvalidExtendedParameterEscape(onlyHexByte));
     }
 
     @Test
