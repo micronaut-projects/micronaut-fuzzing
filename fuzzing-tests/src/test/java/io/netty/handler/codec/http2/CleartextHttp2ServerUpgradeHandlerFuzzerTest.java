@@ -1,3 +1,18 @@
+/*
+ * Copyright 2017-2026 original authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.netty.handler.codec.http2;
 
 import com.code_intelligence.jazzer.api.CannedFuzzedDataProvider;
@@ -34,8 +49,8 @@ class CleartextHttp2ServerUpgradeHandlerFuzzerTest {
     }
 
     @Test
-    void ignoresUpgradeAfterCloseNpe() throws Exception {
-        // https://github.com/netty/netty/pull/17871
+    void upgradeAfterClose() throws Exception {
+        // before netty/netty#17871, Http2FrameCodec threw a NullPointerException
         fuzz("POST / HTTP/1.1\r\n"
             + "Host: x\r\n"
             + "Upgrade: h2c\r\n"
@@ -49,20 +64,20 @@ class CleartextHttp2ServerUpgradeHandlerFuzzerTest {
     }
 
     @Test
-    void ignoresInvalidPathInUpgradeRequest() throws Exception {
-        // https://github.com/netty/netty/pull/17869
+    void invalidPathInUpgradeRequest() throws Exception {
+        // before netty/netty#17869, HttpConversionUtil.toHttp2Headers threw an IllegalArgumentException
         fuzz("GET /a\u007fb HTTP/1.1\r\n" + UPGRADE_HEADERS + "\r\n");
     }
 
     @Test
-    void ignoresInvalidAuthorityInUpgradeRequest() throws Exception {
-        // https://github.com/netty/netty/pull/17869
+    void invalidAuthorityInUpgradeRequest() throws Exception {
+        // before netty/netty#17869, HttpConversionUtil.toHttp2Headers threw an IllegalArgumentException
         fuzz("GET Upgrade-Insecure-Request:// HTTP/1.1\r\n" + UPGRADE_HEADERS + "\r\n");
     }
 
     @Test
-    void ignoresInvalidTeHeaderInUpgradeRequest() throws Exception {
-        // https://github.com/netty/netty/pull/17869
+    void invalidTeHeaderInUpgradeRequest() throws Exception {
+        // before netty/netty#17869, HttpConversionUtil.toHttp2Headers threw an IllegalArgumentException
         fuzz("GET / HTTP/1.1\r\nte: a,\"b\r\n" + UPGRADE_HEADERS + "\r\n");
     }
 
@@ -89,13 +104,6 @@ class CleartextHttp2ServerUpgradeHandlerFuzzerTest {
     @Test
     void reportsSimilarExceptionsFromOtherPlaces() {
         CleartextHttp2ServerUpgradeHandlerFuzzer fuzzer = new CleartextHttp2ServerUpgradeHandlerFuzzer();
-
-        NullPointerException npe = new NullPointerException();
-        npe.setStackTrace(new StackTraceElement[]{
-            frame(DefaultHttp2Connection.class, "stream"),
-            frame(Http2FrameCodec.class, "userEventTriggered")
-        });
-        assertThrows(NullPointerException.class, () -> fuzzer.onException(npe));
 
         IllegalArgumentException iae = new IllegalArgumentException();
         iae.setStackTrace(new StackTraceElement[]{

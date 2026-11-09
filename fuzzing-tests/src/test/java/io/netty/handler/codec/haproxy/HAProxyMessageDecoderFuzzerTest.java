@@ -16,8 +16,6 @@
 package io.netty.handler.codec.haproxy;
 
 import com.code_intelligence.jazzer.api.CannedFuzzedDataProvider;
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.embedded.EmbeddedChannel;
@@ -140,39 +138,43 @@ class HAProxyMessageDecoderFuzzerTest {
     }
 
     @Test
-    void ignoresKnownRelativeHeaderEndBug() {
-        // a v2 header over the limit, followed by 16 bytes that look like a header with an empty address block
+    void relativeHeaderEnd() {
+        // a v2 header over the limit, followed by 16 bytes that look like a header with an empty address block.
+        // Before netty/netty#17832, the decoder decoded the remaining bytes when the channel was closed, and
+        // HeaderExtractor.extract threw an IllegalArgumentException for the relative header end
         byte[] input = concat(v2(0x21, 0x11, new byte[256]), new byte[16]);
         Decoded decoded = decode(new HAProxyMessageDecoder(0), input);
-        assertTrue(decoded.exceptions.stream().anyMatch(HAProxyMessageDecoderFuzzer::isKnownRelativeHeaderEndBug), decoded.exceptions::toString);
+        assertOnlyExpectedExceptions(decoded);
         run(2, 0, false, input);
     }
 
     @Test
-    void ignoresKnownTlvLengthBug() {
+    void tlvLength() {
+        // before netty/netty#17834, readNextTLV threw an IndexOutOfBoundsException for a TLV longer than the header
         byte[] input = v2(0x21, 0x11, concat(IPV4_ADDRESSES, new byte[] {0x01, 0x00, (byte) 0xFF, 'h'}));
         Decoded decoded = decode(new HAProxyMessageDecoder(), input);
-        assertTrue(decoded.exceptions.stream().anyMatch(HAProxyMessageDecoderFuzzer::isKnownTlvLengthBug), decoded.exceptions::toString);
+        assertOnlyExpectedExceptions(decoded);
         run(0, 0, false, input);
     }
 
     @Test
-    void ignoresKnownDecodeAfterFinishedBug() {
-        // a v2 header over the limit, followed by bytes that decodeLast decodes as a second header
+    void decodeAfterFinished() {
+        // a v2 header over the limit, followed by bytes that look like a second header. Before netty/netty#17832,
+        // the decoder decoded the second header when the channel was closed
         byte[] second = v2(0x21, 0x11, concat(new byte[] {10, 0, 0, 1, 10, 0, 0, 2, 4, 0x57, 8, (byte) 0xAE}, new byte[272]));
         byte[] input = concat(v2(0x21, 0x11, new byte[256]), second);
         Decoded decoded = decode(new HAProxyMessageDecoder(0), input);
-        assertEquals(1, decoded.messagesInChannelInputClosed, decoded.exceptions::toString);
-        assertTrue(decoded.exceptions.getFirst() instanceof HAProxyProtocolException);
+        assertEquals(0, decoded.messages, decoded.exceptions::toString);
+        assertOnlyExpectedExceptions(decoded);
         run(2, 0, false, input);
     }
 
     @Test
-    void ignoresKnownEmptyLastTlvBug() throws Exception {
-        // an empty NOOP TLV followed by one byte, which the decoder reads, but ignores after the round trip
+    void emptyLastTlv() throws Exception {
+        // before netty/netty#17835, the decoder ignored a TLV with an empty value at the end of the header
         EmbeddedChannel channel = new EmbeddedChannel(new HAProxyMessageDecoder());
         assertTrue(channel.writeInbound(channel.alloc().buffer().writeBytes(
-            v2(0x21, 0x11, concat(IPV4_ADDRESSES, new byte[] {0x04, 0x00, 0x00, 0x00})))));
+            v2(0x21, 0x11, concat(IPV4_ADDRESSES, new byte[] {0x04, 0x00, 0x00})))));
         HAProxyMessage message = channel.readInbound();
         assertEquals(1, message.tlvs().size());
         assertFalse(message.tlvs().getFirst().content().isReadable());
@@ -180,28 +182,24 @@ class HAProxyMessageDecoderFuzzerTest {
         assertTrue(message.release());
         assertFalse(channel.finish());
 
+        run(0, 0, false, v2(0x21, 0x11, concat(IPV4_ADDRESSES, new byte[] {0x04, 0x00, 0x00})));
         run(0, 0, false, v2(0x21, 0x11, concat(IPV4_ADDRESSES, new byte[] {0x04, 0x00, 0x00, 0x00})));
         // the same inside an SSL TLV
+        run(0, 0, false, v2(0x21, 0x11, concat(IPV4_ADDRESSES, new byte[] {0x20, 0x00, 0x08, 0x01, 0, 0, 0, 0, 0x21, 0x00, 0x00})));
         run(0, 0, false, v2(0x21, 0x11, concat(IPV4_ADDRESSES, new byte[] {0x20, 0x00, 0x09, 0x01, 0, 0, 0, 0, 0x21, 0x00, 0x00, 0x00})));
     }
 
     @Test
-    void ignoresKnownV1UnknownEncoderBug() {
+    void v1UnknownRoundTrip() throws Exception {
+        // before netty/netty#17837, the encoder threw a NullPointerException for a v1 PROXY UNKNOWN message
         HAProxyMessage message = new HAProxyMessage(
             HAProxyProtocolVersion.V1, HAProxyCommand.PROXY, HAProxyProxiedProtocol.UNKNOWN, null, null, 0, 0);
-        ByteBuf out = ByteBufAllocator.DEFAULT.buffer();
         try {
-            Exception e = assertThrows(Exception.class, () -> HAProxyMessageEncoder.INSTANCE.encode(null, message, out));
-            assertTrue(HAProxyMessageDecoderFuzzer.isKnownV1UnknownEncoderBug(message, e), e::toString);
-            // the JIT omits the stack trace once the exception is thrown often
-            NullPointerException withoutStackTrace = new NullPointerException();
-            withoutStackTrace.setStackTrace(new StackTraceElement[0]);
-            assertTrue(HAProxyMessageDecoderFuzzer.isKnownV1UnknownEncoderBug(message, withoutStackTrace));
-            assertFalse(HAProxyMessageDecoderFuzzer.isKnownV1UnknownEncoderBug(message, new NullPointerException()));
+            HAProxyMessageDecoderFuzzer.checkRoundTrip(message);
         } finally {
-            out.release();
             message.release();
         }
+        run(0, 0, false, ascii("PROXY UNKNOWN\r\n"));
     }
 
     @Test
@@ -262,8 +260,8 @@ class HAProxyMessageDecoderFuzzerTest {
         EmbeddedChannel channel = new EmbeddedChannel(decoder, new ChannelInboundHandlerAdapter() {
             @Override
             public void channelRead(ChannelHandlerContext ctx, Object msg) {
-                if (msg instanceof HAProxyMessage && HAProxyMessageDecoderFuzzer.isKnownDecodeAfterFinishedBug()) {
-                    decoded.messagesInChannelInputClosed++;
+                if (msg instanceof HAProxyMessage) {
+                    decoded.messages++;
                 }
                 ReferenceCountUtil.release(msg);
             }
@@ -278,9 +276,14 @@ class HAProxyMessageDecoderFuzzerTest {
         return decoded;
     }
 
+    private static void assertOnlyExpectedExceptions(Decoded decoded) {
+        assertFalse(decoded.exceptions.isEmpty());
+        assertTrue(decoded.exceptions.stream().allMatch(HAProxyMessageDecoderFuzzer::isExpected), decoded.exceptions::toString);
+    }
+
     private static final class Decoded {
         final List<Throwable> exceptions = new ArrayList<>();
-        int messagesInChannelInputClosed;
+        int messages;
     }
 
     private static byte[] v2(int versionCommand, int family, byte[] addressBlock) {

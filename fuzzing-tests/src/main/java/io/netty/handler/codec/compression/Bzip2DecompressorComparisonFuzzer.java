@@ -39,11 +39,6 @@ public final class Bzip2DecompressorComparisonFuzzer extends AbstractDecompresso
     }
 
     @Override
-    protected boolean isExpectedException(RuntimeException exception) {
-        return isUnvalidatedHuffmanCodeLength(exception);
-    }
-
-    @Override
     protected boolean isExpectedLegacyException(Exception exception) {
         // ByteToMessageDecoder wraps unexpected exceptions in a DecoderException, so look at the cause
         return super.isExpectedLegacyException(exception)
@@ -57,26 +52,7 @@ public final class Bzip2DecompressorComparisonFuzzer extends AbstractDecompresso
      * @return {@code true} if this is a known bug
      */
     static boolean isKnownLegacyBug(Throwable cause) {
-        return isUnvalidatedHuffmanCodeLength(cause) || isNextSymbolAfterError(cause)
-            || isInverseBwtAfterError(cause);
-    }
-
-    /**
-     * Netty bug: Huffman code lengths outside 1..23 are not rejected and make
-     * {@code Bzip2HuffmanStageDecoder.createHuffmanDecodingTables} index out of bounds. Fixed by
-     * <a href="https://github.com/netty/netty/pull/17812">netty/netty#17812</a>; remove this once it is released.
-     *
-     * @param exception The exception
-     * @return {@code true} if this is the known bug
-     */
-    static boolean isUnvalidatedHuffmanCodeLength(Throwable exception) {
-        if (!(exception instanceof ArrayIndexOutOfBoundsException) || exception.getCause() != null) {
-            return false;
-        }
-        StackTraceElement[] trace = exception.getStackTrace();
-        return trace.length > 0
-            && trace[0].getClassName().equals(Bzip2HuffmanStageDecoder.class.getName())
-            && trace[0].getMethodName().equals("createHuffmanDecodingTables");
+        return isNextSymbolAfterError(cause) || isInverseBwtAfterError(cause);
     }
 
     /**

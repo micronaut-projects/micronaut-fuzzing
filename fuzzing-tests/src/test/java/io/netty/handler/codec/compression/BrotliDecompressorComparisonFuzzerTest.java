@@ -31,7 +31,6 @@ import static io.micronaut.fuzzing.EmbeddedChannelFuzzerBase.SEPARATOR;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BrotliDecompressorComparisonFuzzerTest {
     private static final byte[] PLAIN = "hello hello hello world, this is some text to compress. hello world!"
@@ -64,36 +63,25 @@ class BrotliDecompressorComparisonFuzzerTest {
     }
 
     /**
-     * The decoders truncate the output of highly compressible data, see
-     * <a href="https://github.com/netty/netty/pull/17870">netty#17870</a>.
+     * Before <a href="https://github.com/netty/netty/pull/17870">netty/netty#17870</a>, the decoders truncated the
+     * output of highly compressible data.
      */
     @Test
     void highlyCompressible() throws IOException {
-        byte[] large = compress(new byte[524288], 18);
-        byte[] small = compress(new byte[100000], 10);
+        byte[] largePlain = new byte[524288];
+        byte[] smallPlain = new byte[100000];
+        byte[] large = compress(largePlain, 18);
+        byte[] small = compress(smallPlain, 10);
         for (int size : new int[] {1000, 65536}) {
+            BrotliDecompressorComparisonFuzzer fuzzer = new BrotliDecompressorComparisonFuzzer();
+            assertArrayEquals(largePlain,
+                fuzzer.decompress(size, large, ByteBufAllocator.DEFAULT).output().bytes.toByteArray());
+            assertArrayEquals(smallPlain,
+                fuzzer.decompress(size, small, ByteBufAllocator.DEFAULT).output().bytes.toByteArray());
             fuzz(size, large);
             fuzz(size, small);
             fuzz(size, split(small, 3));
         }
-    }
-
-    @Test
-    void unexpectedDifference() throws IOException {
-        BrotliDecompressorComparisonFuzzer fuzzer = new BrotliDecompressorComparisonFuzzer();
-        byte[] input = split(compress(new byte[100000], 10), 3);
-        byte[] direct = new byte[2048];
-        assertTrue(fuzzer.isExpectedDifference(input, new byte[1024], direct));
-        // the legacy output is not a strict prefix of the direct output
-        assertFalse(fuzzer.isExpectedDifference(input, new byte[2048], new byte[1024]));
-        byte[] legacy = new byte[1024];
-        legacy[5] = 1;
-        assertFalse(fuzzer.isExpectedDifference(input, legacy, direct));
-        // the part of the direct output after the legacy output is wrong
-        direct[2000] = 1;
-        assertFalse(fuzzer.isExpectedDifference(input, new byte[1024], direct));
-        // the direct output is longer than the actual output
-        assertFalse(fuzzer.isExpectedDifference(input, new byte[1024], new byte[100001]));
     }
 
     private static void fuzz(int size, byte[] input) {

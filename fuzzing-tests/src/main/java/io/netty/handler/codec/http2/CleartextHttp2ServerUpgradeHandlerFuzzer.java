@@ -70,8 +70,7 @@ public class CleartextHttp2ServerUpgradeHandlerFuzzer extends HandlerFuzzerBase 
             || e instanceof PrematureChannelClosureException
             || e instanceof ClosedChannelException
             || (e instanceof DecoderException && e.getCause() instanceof Http2Exception)
-            || isUpgradeAfterCloseNpe(e)
-            || isInvalidUpgradeRequest(e)
+            || isInvalidUpgradeRequestTrailer(e)
             || isInvalidUpgradeRequestCookie(e)) {
             return;
         }
@@ -79,27 +78,12 @@ public class CleartextHttp2ServerUpgradeHandlerFuzzer extends HandlerFuzzerBase 
     }
 
     /**
-     * Http2FrameCodec does not find the upgrade stream when the upgrade happens after the channel was
-     * closed, e.g. for a pipelined upgrade request after a request with {@code Connection: close}.
-     * Fixed by <a href="https://github.com/netty/netty/pull/17871">netty#17871</a>.
+     * The trailers of the upgrade request can not always be converted to HTTP/2 headers (e.g. a {@code te} trailer
+     * that is not valid CSV). {@code InboundHttpToHttp2Adapter.handle} turns this into a stream error for the
+     * headers, but not yet for the trailers. Fixed by
+     * <a href="https://github.com/netty/netty/pull/18258">netty#18258</a>.
      */
-    private static boolean isUpgradeAfterCloseNpe(Exception e) {
-        if (!(e instanceof NullPointerException)) {
-            return false;
-        }
-        StackTraceElement[] trace = e.getStackTrace();
-        return trace.length > 0
-            && trace[0].getClassName().equals(Http2FrameCodec.class.getName())
-            && trace[0].getMethodName().equals("userEventTriggered");
-    }
-
-    /**
-     * The upgrade request can not always be converted to HTTP/2 headers (invalid {@code :path} characters, an
-     * absolute URI that {@link java.net.URI} rejects, or a {@code te} header or trailer that is not valid CSV).
-     * Fixed by <a href="https://github.com/netty/netty/pull/17869">netty#17869</a>, except for the trailers,
-     * which are fixed by <a href="https://github.com/netty/netty/pull/18258">netty#18258</a>.
-     */
-    private static boolean isInvalidUpgradeRequest(Exception e) {
+    private static boolean isInvalidUpgradeRequestTrailer(Exception e) {
         return e instanceof IllegalArgumentException && isThrownByUpgradeRequestConversion(e);
     }
 
