@@ -57,7 +57,8 @@ public final class Bzip2DecompressorComparisonFuzzer extends AbstractDecompresso
      * @return {@code true} if this is a known bug
      */
     static boolean isKnownLegacyBug(Throwable cause) {
-        return isUnvalidatedHuffmanCodeLength(cause) || isNextSymbolAfterError(cause);
+        return isUnvalidatedHuffmanCodeLength(cause) || isNextSymbolAfterError(cause)
+            || isInverseBwtAfterError(cause);
     }
 
     /**
@@ -101,6 +102,28 @@ public final class Bzip2DecompressorComparisonFuzzer extends AbstractDecompresso
         return i < trace.length
             && trace[i].getClassName().equals(Bzip2HuffmanStageDecoder.class.getName())
             && trace[i].getMethodName().equals("nextSymbol");
+    }
+
+    /**
+     * Netty bug: {@link Bzip2Decoder} does not stop after an error (see {@link #isNextSymbolAfterError}). When
+     * {@code Bzip2BlockDecompressor.decodeHuffmanData} fails, it has already counted the decoded bytes in
+     * {@code bwtByteCounts}, but not stored the block length. When it continues to the end of the block on the next
+     * input or when the channel is closed, the byte counts are larger than the block, and
+     * {@code initialiseInverseBWT} writes past the end of {@code bwtMergedPointers}. Fixed by
+     * <a href="https://github.com/netty/netty/pull/18259">netty/netty#18259</a>; remove this once it is released.
+     *
+     * @param exception The exception
+     * @return {@code true} if this is the known bug
+     */
+    static boolean isInverseBwtAfterError(Throwable exception) {
+        if (!(exception instanceof ArrayIndexOutOfBoundsException) || exception.getCause() != null) {
+            return false;
+        }
+        // the access is to an int array, which the sanitizer does not replace
+        StackTraceElement[] trace = exception.getStackTrace();
+        return trace.length > 0
+            && trace[0].getClassName().equals(Bzip2BlockDecompressor.class.getName())
+            && trace[0].getMethodName().equals("initialiseInverseBWT");
     }
 
     public static void fuzzerTestOneInput(FuzzedDataProvider data) {

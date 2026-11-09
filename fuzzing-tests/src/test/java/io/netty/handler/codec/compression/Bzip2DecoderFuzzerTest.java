@@ -59,6 +59,12 @@ class Bzip2DecoderFuzzerTest {
     }
 
     @Test
+    void inverseBwtAfterError() {
+        // on Netty versions without https://github.com/netty/netty/pull/18259 this hits the known bug filter
+        fuzz(Bzip2DecompressorComparisonFuzzerTest.endOfBlockAfterError());
+    }
+
+    @Test
     void retryOnSameInstance() {
         Bzip2DecoderFuzzer fuzzer = new Bzip2DecoderFuzzer();
         byte[] compressed = Bzip2DecompressorComparisonFuzzerTest.compress(PLAIN);
