@@ -16,10 +16,15 @@
 package io.netty.handler.codec.http;
 
 import com.code_intelligence.jazzer.api.CannedFuzzedDataProvider;
+import io.netty.handler.codec.http2.Http2Error;
+import io.netty.handler.codec.http2.Http2Exception;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HttpClientUpgradeHandlerFuzzerTest {
     @Test
@@ -83,6 +88,70 @@ class HttpClientUpgradeHandlerFuzzerTest {
             + "\0\0\5\1\4\0\0\0\1"
             // literal header with name "a" and a value length of 5, but only one byte of the value
             + "\u0040\u0001a\u0005x");
+    }
+
+    @Test
+    void invalidMaxFrameSize() {
+        run("HTTP/1.1 101 Switching Protocols\r\n"
+            + "Connection: Upgrade\r\n"
+            + "Upgrade: h2c\r\n"
+            + "\r\n"
+            + "SEP"
+            // SETTINGS frame with MAX_FRAME_SIZE = 17235974, above the maximum of 2^24-1
+            + "\0\0\6\4\0\0\0\0\0"
+            + "\0\5\1\7\0\6");
+    }
+
+    @Test
+    void wrappedValidationErrorAccepted() {
+        assertTrue(HttpClientUpgradeHandlerFuzzer.isExpected(
+            wrapped("DefaultHttp2FrameReader", "readSettingsFrame",
+                thrownBy(new IllegalArgumentException(), "io.netty.handler.codec.http2.Http2Settings"))));
+        assertTrue(HttpClientUpgradeHandlerFuzzer.isExpected(
+            wrapped("DefaultHttp2HeadersDecoder", "decodeHeaders",
+                wrapped("HpackDecoder$Http2HeadersSink", "appendToHeaderList",
+                    thrownBy(new IllegalArgumentException(), "io.netty.handler.codec.http2.DefaultHttp2Headers")))));
+    }
+
+    @Test
+    void wrappedBugReported() {
+        // other exception types
+        assertFalse(HttpClientUpgradeHandlerFuzzer.isExpected(
+            wrapped("DefaultHttp2FrameReader", "readSettingsFrame",
+                thrownBy(new NullPointerException(), "io.netty.handler.codec.http2.Http2Settings"))));
+        assertFalse(HttpClientUpgradeHandlerFuzzer.isExpected(
+            wrapped("DefaultHttp2HeadersDecoder", "decodeHeaders",
+                thrownBy(new IndexOutOfBoundsException(), "io.netty.handler.codec.http2.HpackDecoder"))));
+        // IllegalArgumentException from outside the HTTP/2 codec
+        assertFalse(HttpClientUpgradeHandlerFuzzer.isExpected(
+            wrapped("DefaultHttp2HeadersDecoder", "decodeHeaders",
+                thrownBy(new IllegalArgumentException(), "io.netty.buffer.AbstractByteBuf"))));
+        assertFalse(HttpClientUpgradeHandlerFuzzer.isExpected(
+            wrapped("DefaultHttp2HeadersDecoder", "decodeHeaders",
+                thrownBy(new IllegalArgumentException(), "io.netty.handler.codec.http2.foo.Bar"))));
+        // IllegalArgumentException with a cause
+        IllegalArgumentException withCause = new IllegalArgumentException(new NullPointerException());
+        assertFalse(HttpClientUpgradeHandlerFuzzer.isExpected(
+            wrapped("DefaultHttp2FrameReader", "readSettingsFrame",
+                thrownBy(withCause, "io.netty.handler.codec.http2.Http2Settings"))));
+        // Http2Exception created somewhere else
+        assertFalse(HttpClientUpgradeHandlerFuzzer.isExpected(
+            wrapped("DefaultHttp2ConnectionDecoder$FrameReadListener", "onDataRead",
+                thrownBy(new IllegalArgumentException(), "io.netty.handler.codec.http2.Http2Settings"))));
+    }
+
+    private static <T extends Throwable> T thrownBy(T t, String className) {
+        t.setStackTrace(new StackTraceElement[]{new StackTraceElement(className, "check", null, -1)});
+        return t;
+    }
+
+    private static Http2Exception wrapped(String simpleClassName, String method, Throwable cause) {
+        Http2Exception e = Http2Exception.connectionError(Http2Error.PROTOCOL_ERROR, cause, "error");
+        e.setStackTrace(new StackTraceElement[]{
+            new StackTraceElement(Http2Exception.class.getName(), "connectionError", null, -1),
+            new StackTraceElement("io.netty.handler.codec.http2." + simpleClassName, method, null, -1),
+        });
+        return e;
     }
 
     @Test
