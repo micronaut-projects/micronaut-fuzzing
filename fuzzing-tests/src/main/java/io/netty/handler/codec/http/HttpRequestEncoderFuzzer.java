@@ -69,11 +69,6 @@ import java.util.Objects;
  *     CRLF.</li>
  *     <li>Versions that are not of the form {@code HTTP/x.y}, which the decoder rejects.</li>
  *     <li>Requests whose framing headers don't match the body, or that the decoder frames differently.</li>
- *     <li>URIs with control characters or whitespace. This is a deliberate exclusion: request line validation only
- *     rejects SP, CR and LF, but the decoder also splits the request line on HTAB, VT and FF and rejects other
- *     control characters. Such requests are rejected by the decoder, but they cannot make it accept a different
- *     request: the version token runs to the end of the line and then fails strict version parsing. This target
- *     does not detect request line desynchronization through these characters.</li>
  * </ul>
  * <p>
  * Unlike {@code EmbeddedChannelFuzzerBase}, this target has no CPU budget: the number and size of all requests,
@@ -447,8 +442,6 @@ public final class HttpRequestEncoderFuzzer {
         String version = request.protocolVersion().text();
         // the decoder only accepts this version format
         if (!isStrictVersion(version)
-            // see the class javadoc
-            || !hasNoControlOrSpace(request.uri().getBytes(StandardCharsets.UTF_8))
             // with validation off, the header may be anything, including CRLF
             || !allValid(request.headers())) {
             return null;
@@ -771,10 +764,17 @@ public final class HttpRequestEncoderFuzzer {
     }
 
     /**
-     * Netty only rejects the chars that would split the request line.
+     * Netty rejects all control chars, SP and DEL, since a lenient parser may split the request line on any of them
+     * (netty/netty@3da0f5a9e). Non-ASCII chars are allowed.
      */
     private static boolean isSafeRequestTarget(String uri) {
-        return uri.indexOf(' ') == -1 && uri.indexOf('\r') == -1 && uri.indexOf('\n') == -1;
+        for (int i = 0; i < uri.length(); i++) {
+            char c = uri.charAt(i);
+            if (c <= ' ' || c == 0x7F) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -809,15 +809,6 @@ public final class HttpRequestEncoderFuzzer {
     private static boolean isStrictVersion(String text) {
         return text.length() == 8 && text.startsWith("HTTP/") && Character.isDigit(text.charAt(5))
             && text.charAt(6) == '.' && Character.isDigit(text.charAt(7));
-    }
-
-    private static boolean hasNoControlOrSpace(byte[] bytes) {
-        for (byte b : bytes) {
-            if ((b & 0xFF) <= ' ' || b == 0x7F) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private static String escape(CharSequence s) {
