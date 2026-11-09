@@ -29,6 +29,7 @@ import io.netty.handler.codec.http2.Http2Exception;
 import io.netty.handler.codec.http2.Http2FrameCodecBuilder;
 import io.netty.handler.codec.http2.Http2FrameStreamException;
 
+import java.util.Set;
 
 /**
  * Fuzzing support type.
@@ -36,10 +37,18 @@ import io.netty.handler.codec.http2.Http2FrameStreamException;
 @FuzzTarget
 @HttpDict
 public class HttpClientUpgradeHandlerFuzzer extends HandlerFuzzerBase {
+    private static final String HTTP2_PACKAGE = "io.netty.handler.codec.http2.";
+
     /**
-     * {@code HpackDecoder} is package-private in {@code io.netty.handler.codec.http2}.
+     * The methods (as {@code class#method}) that convert an {@link IllegalArgumentException} from
+     * HTTP/2 validation code into an {@link Http2Exception}. See
+     * {@link #isWrappedValidationError(Throwable, Throwable)}.
      */
-    private static final String HPACK_DECODER = "io.netty.handler.codec.http2.HpackDecoder";
+    private static final Set<String> VALIDATION_WRAPPING_SITES = Set.of(
+        HTTP2_PACKAGE + "DefaultHttp2FrameReader#readSettingsFrame",
+        HTTP2_PACKAGE + "DefaultHttp2HeadersDecoder#decodeHeaders",
+        HTTP2_PACKAGE + "HpackDecoder$Http2HeadersSink#appendToHeaderList"
+    );
 
     @Override
     protected EmbeddedChannel setUp() {
@@ -70,10 +79,11 @@ public class HttpClientUpgradeHandlerFuzzer extends HandlerFuzzerBase {
         super.onException(e);
     }
 
-    private static boolean isExpected(Throwable cause) {
+    static boolean isExpected(Throwable cause) {
         if (cause instanceof Http2Exception) {
             // HTTP/2 protocol errors after the upgrade. An Http2Exception that wraps another
-            // exception may hide a bug, so only accept those whose causes are all Http2Exceptions.
+            // exception may hide a bug, so only accept those whose causes are all Http2Exceptions,
+            // except for the validation errors accepted by isWrappedValidationError.
             return isHttp2ProtocolError(cause);
         }
         if (cause instanceof Http2FrameStreamException) {
@@ -96,28 +106,55 @@ public class HttpClientUpgradeHandlerFuzzer extends HandlerFuzzerBase {
             if (!(t instanceof Http2Exception)) {
                 return false;
             }
-            if (isHpackDecodeError(t)) {
-                return true;
+            Throwable next = t.getCause();
+            if (next != null && !(next instanceof Http2Exception)) {
+                return isWrappedValidationError(t, next);
             }
         }
         return cause != null;
     }
 
     /**
-     * {@link DefaultHttp2HeadersDecoder#decodeHeaders} wraps any exception from HPACK decoding
-     * that is not an {@link Http2Exception} in a COMPRESSION_ERROR. {@code HpackDecoder} throws an
-     * {@link IllegalArgumentException} when a string literal is longer than the rest of the
-     * header block.
+     * Netty validates some parts of the input with code that throws an
+     * {@link IllegalArgumentException}, and converts that exception to an HTTP/2 error in a few
+     * places of the read path:
+     *
+     * <ul>
+     *     <li>{@code DefaultHttp2FrameReader.readSettingsFrame}: {@code Http2Settings} rejects an
+     *     invalid setting value (PROTOCOL_ERROR or FLOW_CONTROL_ERROR, RFC 9113 section 6.5.2).</li>
+     *     <li>{@link DefaultHttp2HeadersDecoder#decodeHeaders}: {@code HpackDecoder} rejects an
+     *     invalid header block, e.g. a string literal that is longer than the rest of the block
+     *     (COMPRESSION_ERROR).</li>
+     *     <li>{@code HpackDecoder.Http2HeadersSink.appendToHeaderList}: header validation fails
+     *     (PROTOCOL_ERROR stream error).</li>
+     * </ul>
+     *
+     * <p>Such an {@link Http2Exception} is accepted only if all of these hold:
+     *
+     * <ul>
+     *     <li>The cause is exactly an {@link IllegalArgumentException} without a cause of its own.
+     *     Any other type (e.g. {@link NullPointerException},
+     *     {@link IndexOutOfBoundsException}, {@link IllegalStateException},
+     *     {@link ClassCastException}) is a bug.</li>
+     *     <li>The cause was thrown by a class of the {@code io.netty.handler.codec.http2} package,
+     *     i.e. by Netty's HTTP/2 validation code. An {@link IllegalArgumentException} from the JDK,
+     *     {@code io.netty.buffer} or {@code io.netty.util} is a bug.</li>
+     *     <li>The {@link Http2Exception} was created by one of the methods listed above.</li>
+     * </ul>
      */
-    private static boolean isHpackDecodeError(Throwable cause) {
-        Throwable hpackCause = cause.getCause();
-        return hpackCause != null
-            && hpackCause.getClass() == IllegalArgumentException.class
-            && hpackCause.getCause() == null
-            && isThrownBy(hpackCause, HPACK_DECODER, "notEnoughDataException")
-            && firstFrameOutside(cause, Http2Exception.class.getName()) instanceof StackTraceElement e
-            && e.getClassName().equals(DefaultHttp2HeadersDecoder.class.getName())
-            && e.getMethodName().equals("decodeHeaders");
+    private static boolean isWrappedValidationError(Throwable http2Exception, Throwable cause) {
+        StackTraceElement[] causeTrace = cause.getStackTrace();
+        return cause.getClass() == IllegalArgumentException.class
+            && cause.getCause() == null
+            && causeTrace.length > 0
+            && isHttp2CodecClass(causeTrace[0].getClassName())
+            && firstFrameOutside(http2Exception, Http2Exception.class.getName()) instanceof StackTraceElement e
+            && VALIDATION_WRAPPING_SITES.contains(e.getClassName() + '#' + e.getMethodName());
+    }
+
+    private static boolean isHttp2CodecClass(String className) {
+        return className.startsWith(HTTP2_PACKAGE)
+            && className.indexOf('.', HTTP2_PACKAGE.length()) == -1;
     }
 
     private static StackTraceElement firstFrameOutside(Throwable cause, String className) {
@@ -130,13 +167,9 @@ public class HttpClientUpgradeHandlerFuzzer extends HandlerFuzzerBase {
     }
 
     private static boolean isThrownBy(Throwable cause, Class<?> type, String method) {
-        return isThrownBy(cause, type.getName(), method);
-    }
-
-    private static boolean isThrownBy(Throwable cause, String className, String method) {
         StackTraceElement[] trace = cause.getStackTrace();
         return trace.length > 0
-            && trace[0].getClassName().equals(className)
+            && trace[0].getClassName().equals(type.getName())
             && trace[0].getMethodName().equals(method);
     }
 
