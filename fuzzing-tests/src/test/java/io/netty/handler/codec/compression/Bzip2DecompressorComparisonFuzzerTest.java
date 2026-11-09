@@ -28,6 +28,7 @@ import java.util.List;
 import static io.micronaut.fuzzing.EmbeddedChannelFuzzerBase.SEPARATOR;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class Bzip2DecompressorComparisonFuzzerTest {
     private static final byte[] PLAIN = "hello hello hello world, this is some text to compress. hello world!"
@@ -60,10 +61,19 @@ class Bzip2DecompressorComparisonFuzzerTest {
 
     @Test
     void invalidHuffmanCodeLength() {
-        // lengths that the bzip2 format does not allow; on Netty versions without
-        // https://github.com/netty/netty/pull/17812 these hit the known bug filter
+        // lengths that the bzip2 format does not allow. Before netty/netty#17812, these made
+        // Bzip2HuffmanStageDecoder.createHuffmanDecodingTables throw ArrayIndexOutOfBoundsException
         for (int length : new int[] {0, -1, 24, 27, 31}) {
-            fuzz(1024, huffmanStream(length));
+            byte[] input = huffmanStream(length);
+            fuzz(1024, input);
+            EmbeddedChannel channel = new EmbeddedChannel(new Bzip2Decoder());
+            assertThrows(DecompressionException.class,
+                () -> channel.writeInbound(channel.alloc().buffer().writeBytes(input)));
+            try {
+                channel.finishAndReleaseAll();
+            } catch (DecompressionException e) {
+                // the decoder continues after the error when the channel is closed, see netty/netty#18259
+            }
         }
         fuzz(1024, huffmanStream(23));
     }
@@ -85,9 +95,8 @@ class Bzip2DecompressorComparisonFuzzerTest {
         Bzip2DecompressorComparisonFuzzer fuzzer = new Bzip2DecompressorComparisonFuzzer();
         assertFalse(fuzzer.isExpectedLegacyException(new DecoderException(new ArrayIndexOutOfBoundsException())));
         assertFalse(fuzzer.isExpectedLegacyException(new DecoderException(new IllegalStateException())));
-        assertFalse(fuzzer.isExpectedException(new ArrayIndexOutOfBoundsException()));
-        assertFalse(Bzip2DecompressorComparisonFuzzer.isKnownLegacyBug(new ArrayIndexOutOfBoundsException()));
-        assertFalse(Bzip2DecompressorComparisonFuzzer.isKnownLegacyBug(new IndexOutOfBoundsException()));
+        assertFalse(Bzip2DecompressorComparisonFuzzer.isNextSymbolAfterError(new ArrayIndexOutOfBoundsException()));
+        assertFalse(Bzip2DecompressorComparisonFuzzer.isNextSymbolAfterError(new IndexOutOfBoundsException()));
     }
 
     /**

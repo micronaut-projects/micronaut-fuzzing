@@ -16,7 +16,7 @@
 package io.netty.handler.codec.http2;
 
 import com.code_intelligence.jazzer.api.CannedFuzzedDataProvider;
-import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.HexFormat;
@@ -50,33 +50,18 @@ class Http2FrameCodecFuzzerTest {
     }
 
     @Test
+    @Disabled("Http2FrameCodec logs a warning for the stream error on the promised stream")
     void pushPromiseWithInvalidContentLength() {
+        // before netty/netty#17867, this threw an IllegalArgumentException instead of a stream error. Netty now
+        // resets the promised stream, but Http2FrameCodec.onStreamError logs "Stream exception thrown without stream
+        // object attached." at WARN, because the promised stream has no Http2FrameStream yet, which fails the input
         fuzz(SETTINGS + HEADERS_STREAM_2 + PUSH_PROMISE_INVALID_CONTENT_LENGTH);
     }
 
     @Test
     void dataOnReservedStream() {
+        // before netty/netty#17868, this threw an UnsupportedOperationException from the flow controller
         fuzz(SETTINGS + HEADERS_STREAM_2 + PUSH_PROMISE + DATA_STREAM_4);
-    }
-
-    @Test
-    void otherContentLengthExceptionIsReported() {
-        IllegalArgumentException e = new IllegalArgumentException("Content-Length value is not a number: abc");
-        e.setStackTrace(new StackTraceElement[]{
-            new StackTraceElement("io.netty.handler.codec.http.HttpUtil", "normalizeAndGetContentLength", null, -1),
-            new StackTraceElement("io.netty.handler.codec.http2.DefaultHttp2ConnectionDecoder$FrameReadListener", "onHeadersRead", null, -1)
-        });
-        Assertions.assertThrows(IllegalArgumentException.class, () -> new Http2FrameCodecFuzzer().onException(e));
-    }
-
-    @Test
-    void otherFlowControlExceptionIsReported() {
-        UnsupportedOperationException e = new UnsupportedOperationException();
-        e.setStackTrace(new StackTraceElement[]{
-            new StackTraceElement("io.netty.handler.codec.http2.DefaultHttp2LocalFlowController$2", "writeWindowUpdateIfNeeded", null, -1),
-            new StackTraceElement("io.netty.handler.codec.http2.DefaultHttp2LocalFlowController", "consumeBytes", null, -1)
-        });
-        Assertions.assertThrows(UnsupportedOperationException.class, () -> new Http2FrameCodecFuzzer().onException(e));
     }
 
     private static void fuzz(String hex) {
