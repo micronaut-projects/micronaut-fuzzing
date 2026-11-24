@@ -21,13 +21,11 @@ import net.bytebuddy.description.NamedElement;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.matcher.ElementMatcher;
-import net.bytebuddy.matcher.ElementMatchers;
 import net.bytebuddy.utility.JavaModule;
 
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Method;
 import java.security.ProtectionDomain;
-import java.util.List;
 
 /**
  * Byte Buddy transformer that rewrites byte-array access patterns for sanitizer checks.
@@ -70,21 +68,12 @@ public class SanitizerTransformer implements AgentBuilder.Transformer {
      * @param instrumentation The instrumentation used for modifying classes
      */
     public static void install(Instrumentation instrumentation) {
-        List<String> excludedPackages = List.of(
-            "com.code_intelligence",
-            "com.sun",
-            "net.bytebuddy",
-            "sun",
-            "java",
-            "jdk",
-            "io.netty.buffer" // need to ignore nested calls to .array
-        );
-
-        ElementMatcher.Junction<NamedElement> matcher = ElementMatchers.any()
-            .and(ElementMatchers.not(ElementMatchers.named(ByteBufArraySanitizer.class.getName())));
-        for (String excludedPackage : excludedPackages) {
-            matcher = matcher.and(ElementMatchers.not(ElementMatchers.nameStartsWith(excludedPackage + '.')));
-        }
+        ElementMatcher.Junction<NamedElement> matcher = new ElementMatcher.Junction.AbstractBase<>() {
+            @Override
+            public boolean matches(NamedElement target) {
+                return !ByteBufArraySanitizer.isExcluded(target.getActualName());
+            }
+        };
 
         new AgentBuilder.Default()
             .disableClassFormatChanges()

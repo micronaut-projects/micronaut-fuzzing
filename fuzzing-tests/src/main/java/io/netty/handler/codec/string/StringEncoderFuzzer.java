@@ -19,6 +19,7 @@ import com.code_intelligence.jazzer.api.FuzzedDataProvider;
 import io.micronaut.fuzzing.Dict;
 import io.micronaut.fuzzing.FuzzTarget;
 import io.micronaut.fuzzing.runner.LocalJazzerRunner;
+import io.micronaut.fuzzing.sanitizer.SanitizerTransformer;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.EncoderException;
 import io.netty.util.LeakPresenceDetector;
@@ -40,6 +41,11 @@ import java.nio.charset.UnsupportedCharsetException;
 public class StringEncoderFuzzer {
     private static final int MAX_CHARSET_NAME_CHARS = 64;
     private static final int MAX_INPUT_CHARS = 4096;
+
+    static {
+        // this target does not extend EmbeddedChannelFuzzerBase, which installs the sanitizer
+        SanitizerTransformer.installLocally();
+    }
 
     public static void fuzzerTestOneInput(FuzzedDataProvider fuzzedDataProvider) {
         FastThreadLocalThread.runWithFastThreadLocal(() -> test0(fuzzedDataProvider));
